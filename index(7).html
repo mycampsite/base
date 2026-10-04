@@ -1,0 +1,1455 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hub — Camp</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#17181c">
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --topBarH:58px;
+    --uiBg:#141414; --uiPanel:#1b1b1b; --uiText:#f2f2f2; --uiMuted:#b9b9b9; --uiBorder:#2b2b2b;
+    --accent:#ececf0; --focus:#5b8cff; --ok:#4cd964; --err:#ff8b83; --gold:#f2c94c;
+    --shadow:0 10px 35px rgba(0,0,0,.35);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; background:var(--uiBg); color:var(--uiText); font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
+  .hidden{ display:none !important; }
+  button,input,select{ font:inherit; color:inherit; }
+  a{ color:inherit; }
+
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; height:34px; padding:0 12px; border-radius:10px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); cursor:pointer; font-size:13px; font-weight:600; text-decoration:none; white-space:nowrap; }
+  .btn:hover{ background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.18); }
+  .btn:disabled{ opacity:.5; cursor:wait; }
+  .btn.primary{ background:var(--accent); color:#111; border-color:var(--accent); }
+  .btn.primary:hover{ background:#fff; }
+  .btn.dangerFill{ background:#c4413a; border-color:#c4413a; color:#fff; }
+  .btn.danger{ color:var(--err); }
+  .btn.sm{ height:28px; padding:0 9px; font-size:12px; border-radius:8px; }
+  .btn svg{ width:15px; height:15px; flex:0 0 auto; }
+  .iconBtn{ width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1px solid transparent; background:transparent; color:var(--uiMuted); cursor:pointer; flex:0 0 auto; text-decoration:none; }
+  .iconBtn:hover{ background:rgba(255,255,255,.07); border-color:var(--uiBorder); color:var(--uiText); }
+  .iconBtn svg{ width:17px; height:17px; }
+  :is(.btn,.iconBtn,.project,.tab,.mtab,.srow,select,input):focus-visible{ outline:2px solid var(--focus); outline-offset:2px; }
+  .spin{ width:16px; height:16px; display:inline-block; color:#fff; flex:0 0 auto; }
+  .spin svg{ display:block; width:100%; height:100%; overflow:visible; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* Sign-in gate */
+  #gate{ min-height:100%; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .gateBox{ width:min(380px,100%); background:var(--uiPanel); border:1px solid var(--uiBorder); border-radius:14px; padding:28px 24px; text-align:center; box-shadow:0 18px 55px rgba(0,0,0,.55); }
+  .gateBox img{ height:56px; width:auto; }
+  .gateBox h1{ margin:12px 0 4px; font-size:20px; }
+  .gateBox p{ margin:0 0 18px; color:var(--uiMuted); }
+  .gateBox .row{ display:flex; justify-content:center; align-items:center; gap:10px; color:var(--uiMuted); }
+
+  /* Top bar */
+  .top{ position:fixed; top:0; left:0; right:0; height:var(--topBarH); z-index:20; background:rgba(20,20,20,.985); border-bottom:1px solid var(--uiBorder); display:flex; align-items:center; gap:8px; padding:0 12px; }
+  .brand{ display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:14px; letter-spacing:.2px; white-space:nowrap; color:inherit; text-decoration:none; }
+  .brand img{ height:34px; width:auto; display:block; }
+  .brand span{ color:var(--uiMuted); font-weight:600; }
+  .topTitle{ flex:1; min-width:0; text-align:center; font-weight:700; font-size:13px; letter-spacing:.2px; opacity:.92; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:uppercase; }
+  .userChip{ display:flex; align-items:center; gap:8px; padding:3px 3px 3px 10px; border:1px solid var(--uiBorder); border-radius:14px; font-size:12.5px; color:var(--uiMuted); max-width:280px; }
+  .userChip span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #menuToggle{ display:none; }
+
+  /* Layout */
+  #app{ position:fixed; inset:var(--topBarH) 0 0 0; display:grid; grid-template-columns:260px minmax(0,1fr); gap:12px; padding:12px; }
+  .side, .main{ background:var(--uiPanel); border:1px solid var(--uiBorder); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; min-height:0; display:flex; flex-direction:column; }
+  .sideHead{ padding:12px; border-bottom:1px solid var(--uiBorder); display:flex; align-items:center; justify-content:space-between; }
+  .sideHead b{ font-size:13px; }
+  .sideBody{ flex:1; overflow:auto; padding:10px; }
+  .sideFoot{ padding:10px; border-top:1px solid var(--uiBorder); display:flex; flex-direction:column; gap:6px; }
+  .sideFoot .btn{ width:100%; }
+  .project{ display:block; width:100%; text-align:left; border-radius:12px; padding:10px; margin-bottom:8px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.03); cursor:pointer; }
+  .project:hover{ background:rgba(255,255,255,.06); }
+  .project.active{ background:rgba(255,255,255,.07); outline:1px solid rgba(255,204,0,.55); outline-offset:-1px; }
+  .project .t{ font-size:13px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .project .m{ margin-top:5px; display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--uiMuted); }
+  .badge{ display:inline-flex; align-items:center; height:18px; padding:0 7px; border-radius:999px; border:1px solid; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+  .badge.owner{ color:var(--gold); border-color:rgba(242,201,76,.45); }
+  .badge.editor{ color:#8ab4ff; border-color:rgba(138,180,255,.45); }
+  .badge.viewer{ color:var(--uiMuted); border-color:var(--uiBorder); }
+  .badge.live{ color:#8fe3b0; border-color:rgba(94,211,138,.45); }
+  .sideEmpty{ padding:6px 4px; color:var(--uiMuted); font-size:12.5px; line-height:1.5; }
+
+  /* Project header + tabs */
+  .pHead{ display:flex; align-items:center; gap:8px; padding:12px 14px 0; flex-wrap:wrap; }
+  .pHead h2{ flex:1; min-width:0; margin:0; font-size:17px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mtabs{ display:flex; gap:2px; padding:0 10px; border-bottom:1px solid var(--uiBorder); overflow-x:auto; scrollbar-width:none; margin-top:10px; }
+  .mtabs::-webkit-scrollbar{ display:none; }
+  .mtab{ border:0; background:transparent; cursor:pointer; padding:9px 12px; font-size:13px; font-weight:600; color:var(--uiMuted); border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; display:inline-flex; align-items:center; gap:7px; }
+  .mtab:hover{ color:var(--uiText); }
+  .mtab.on{ color:var(--uiText); border-bottom-color:var(--uiText); }
+  .mtab svg{ width:15px; height:15px; }
+  .mtab .n{ font-size:11px; color:var(--uiMuted); font-weight:600; }
+
+  #banner{ display:flex; gap:10px; align-items:center; padding:9px 12px; background:rgba(224,161,58,.1); border-bottom:1px solid rgba(224,161,58,.25); font-size:12.5px; color:#f1d39a; }
+  #banner span{ flex:1; }
+
+  /* Scripts / Storyboard / Treatment list */
+  #listPane{ flex:1; min-height:0; overflow:auto; padding:14px; }
+  .listHead{ display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .listHead .muted{ flex:1; }
+  .srow{ display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--uiBorder); border-radius:12px; background:rgba(255,255,255,.03); margin-bottom:8px; cursor:pointer; }
+  .srow:hover{ background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.14); }
+  .srow .ico{ width:44px; height:44px; flex:0 0 auto; }
+  .srow .ico svg{ width:44px; height:44px; display:block; }
+  .btn.on{ background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.3); }
+  .tab.dl{ box-shadow:inset 3px 0 0 #fff; } .tab.dr{ box-shadow:inset -3px 0 0 #fff; }
+  .tab[draggable=true]{ cursor:grab; }
+  .srow .tx{ flex:1; min-width:0; }
+  .srow .tx b{ display:block; font-size:13.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .srow .tx span{ display:block; font-size:12px; color:var(--uiMuted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .srow .acts{ display:flex; gap:6px; flex:0 0 auto; }
+  .emptyBox{ border:1px dashed rgba(255,255,255,.17); border-radius:12px; padding:36px 20px; text-align:center; color:var(--uiMuted); display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .emptyBox b{ color:var(--uiText); font-size:15px; }
+  .emptyBox p{ margin:0; max-width:420px; }
+
+  /* Production (Sheets) */
+  #prodPane{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  .bar{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--uiBorder); flex-wrap:wrap; min-height:51px; }
+  .tabs{ display:inline-flex; gap:2px; padding:3px; border-radius:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); overflow-x:auto; max-width:100%; scrollbar-width:none; }
+  .tabs::-webkit-scrollbar{ display:none; }
+  .tabs:empty{ display:none; }
+  .tab{ border:0; background:transparent; cursor:pointer; padding:5px 12px; border-radius:7px; font-size:12.5px; font-weight:600; color:rgba(255,255,255,.6); white-space:nowrap; }
+  .tab:hover{ color:rgba(255,255,255,.9); }
+  .tab.on{ background:rgba(255,255,255,.14); color:#fff; }
+  .actions{ margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  #frames{ position:relative; flex:1; min-height:0; }
+  #frames{ background:#1b1b1b; }
+  #frames iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
+  #frames iframe.dark{ filter:invert(.92) hue-rotate(180deg); }
+  .frameLoad{ position:absolute; inset:0; z-index:1; display:flex; align-items:center; justify-content:center; gap:10px; background:var(--uiPanel); color:var(--uiMuted); font-size:13px; }
+  .empty{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:24px; text-align:center; color:var(--uiMuted); }
+  .empty b{ color:var(--uiText); font-size:15px; }
+  .empty p{ margin:0; max-width:420px; }
+
+  /* Members drawer */
+  #drawer{ position:fixed; top:calc(var(--topBarH) + 12px); right:12px; bottom:12px; width:min(380px, calc(100vw - 24px)); z-index:30; background:var(--uiPanel); border:1px solid var(--uiBorder); border-radius:14px; box-shadow:0 18px 55px rgba(0,0,0,.55); display:flex; flex-direction:column; overflow:hidden; }
+  .dHead{ display:flex; align-items:center; gap:8px; padding:12px; border-bottom:1px solid var(--uiBorder); }
+  .dHead b{ flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dBody{ flex:1; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+  .sec{ font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.5); font-weight:600; margin-top:6px; }
+  .member{ display:flex; align-items:center; gap:8px; padding:9px 10px; border:1px solid var(--uiBorder); border-radius:12px; background:rgba(255,255,255,.03); }
+  .member .e{ flex:1; min-width:0; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  select{ height:28px; padding:0 8px; border-radius:8px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); font-size:12px; }
+  select option{ color:#111; background:#fff; }
+  .invite{ display:grid; grid-template-columns:1fr auto; gap:6px; }
+  .invite input{ grid-column:1 / -1; }
+  input[type=text], input[type=email], input[type=url], input[type=password]{ width:100%; height:38px; padding:0 12px; border-radius:9px; border:1px solid rgba(255,255,255,.2); background:rgba(0,0,0,.25); outline:none; }
+  input:focus{ border-color:rgba(255,255,255,.4); }
+  .note{ margin:0; color:var(--uiMuted); font-size:12px; line-height:1.5; }
+  .muted{ color:var(--uiMuted); font-size:12.5px; }
+
+  /* Dialogs */
+  .shade{ position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:16px; }
+  .box{ width:min(440px,100%); background:#1a1b1f; border:1px solid rgba(255,255,255,.16); border-radius:14px; padding:20px; box-shadow:0 24px 60px rgba(0,0,0,.6); }
+  .box h2{ margin:0 0 4px; font-size:17px; }
+  .box > p{ margin:0 0 12px; color:rgba(255,255,255,.62); font-size:13px; }
+  .fld{ display:block; margin-top:12px; }
+  .fld span{ display:block; font-size:12.5px; color:rgba(255,255,255,.62); margin-bottom:6px; }
+  .box select{ width:100%; height:38px; padding:0 10px; font-size:13px; }
+  .fld2{ display:block; margin-top:12px; }
+  .fld2 > .fl{ display:block; font-size:12.5px; color:rgba(255,255,255,.62); margin-bottom:6px; }
+  .msBtn{ width:100%; height:38px; padding:0 10px; display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:9px; border:1px solid rgba(255,255,255,.2); background:rgba(0,0,0,.25); cursor:pointer; font-size:13px; text-align:left; }
+  .msBtn:hover{ border-color:rgba(255,255,255,.35); }
+  .msBtn .msTxt{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .msBtn svg{ width:14px; height:14px; opacity:.7; flex:0 0 auto; transition:transform .12s ease; }
+  .msBtn[aria-expanded=true] svg{ transform:rotate(180deg); }
+  .msPanel{ margin-top:6px; padding:4px; border-radius:10px; background:#1d1e22; border:1px solid rgba(255,255,255,.17); }
+  .msRow{ display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:7px; cursor:pointer; font-size:13px; margin:0; }
+  .msRow:hover{ background:rgba(255,255,255,.08); }
+  .msRow input{ width:16px; height:16px; margin:0; flex:0 0 auto; accent-color:#ececf0; cursor:pointer; }
+  .msRow.all{ font-weight:600; border-bottom:1px solid var(--uiBorder); border-radius:7px 7px 0 0; margin-bottom:4px; }
+
+  /* Project panel */
+  .sideTools{ display:flex; gap:6px; padding:8px 10px; border-bottom:1px solid var(--uiBorder); }
+  .psearch{ position:relative; flex:1; min-width:0; }
+  .psearch svg{ position:absolute; left:9px; top:8px; width:15px; height:15px; opacity:.5; pointer-events:none; }
+  .psearch input{ height:32px; padding:0 10px 0 30px; font-size:13px; }
+  .sideTools select{ width:104px; }
+  .gl{ display:flex; justify-content:space-between; align-items:center; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.5); font-weight:600; margin:10px 4px 6px; }
+  .rchips{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
+  .rchip{ height:24px; padding:0 9px; border-radius:999px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); font-size:12px; cursor:pointer; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rchip:hover{ background:rgba(255,255,255,.09); }
+  .project{ position:relative; cursor:pointer; }
+  .project .row1{ display:flex; align-items:center; gap:6px; }
+  .project .t{ flex:1; min-width:0; }
+  .project .m{ flex-wrap:wrap; }
+  .project .opened{ color:var(--uiMuted); }
+  .project.archived{ opacity:.6; }
+  .project.dragging{ opacity:.4; }
+  .project.dl{ box-shadow:inset 0 3px 0 #fff; } .project.dr{ box-shadow:inset 0 -3px 0 #fff; }
+  .cdot{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  .pbtn{ width:24px; height:24px; border-radius:7px; border:0; background:transparent; color:var(--uiMuted); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex:0 0 auto; padding:0; }
+  .pbtn:hover{ background:rgba(255,255,255,.1); color:var(--uiText); }
+  .pbtn svg{ width:15px; height:15px; }
+  .pstar:not(.on), .pmore{ opacity:0; }
+  .project:hover .pstar, .project:hover .pmore, .project:focus-within .pstar, .project:focus-within .pmore{ opacity:1; }
+  .pstar.on{ color:#f2c94c; } .pstar.on svg{ fill:currentColor; }
+  @media (hover:none){ .pstar:not(.on), .pmore{ opacity:.7; } }
+  .badge.st{ color:#b6a6ff; border-color:rgba(182,166,255,.45); }
+  .archToggle{ display:block; width:100%; margin:10px 0 4px; padding:6px; border:0; background:transparent; color:var(--uiMuted); font-size:12px; cursor:pointer; text-align:left; }
+  .archToggle:hover{ color:var(--uiText); }
+  .pmenu{ position:fixed; z-index:60; min-width:210px; max-width:260px; padding:6px; border-radius:10px; background:#1d1e22; border:1px solid rgba(255,255,255,.17); box-shadow:0 16px 40px rgba(0,0,0,.55); }
+  .pmenu button{ display:block; width:100%; text-align:left; padding:8px 10px; border:0; background:transparent; border-radius:7px; cursor:pointer; font-size:13px; }
+  .pmenu button:hover{ background:rgba(255,255,255,.08); }
+  .pmenu .mh{ padding:6px 10px 4px; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:rgba(255,255,255,.45); }
+  .pmenu .sep{ height:1px; background:var(--uiBorder); margin:5px 4px; }
+  .pmenu .cwrap{ display:flex; flex-wrap:wrap; gap:6px; padding:2px 10px 8px; }
+  .pmenu .cdotbtn{ width:20px; height:20px; padding:0; border-radius:50%; border:2px solid transparent; font-size:10px; line-height:1; text-align:center; color:#fff; }
+  .pmenu .cdotbtn.none{ background:rgba(255,255,255,.08); }
+  .pmenu .cdotbtn.on{ border-color:#fff; }
+  .pmenu .chipbtn{ width:auto; padding:3px 9px; border:1px solid var(--uiBorder); border-radius:999px; font-size:12px; }
+  .pmenu .chipbtn.on{ background:rgba(255,255,255,.16); border-color:rgba(255,255,255,.4); }
+  .pal{ width:min(520px,100%); padding:12px; }
+  .pal .plist{ margin-top:8px; max-height:50vh; overflow:auto; }
+  .pal .pitem{ display:flex; gap:10px; align-items:center; width:100%; text-align:left; padding:8px 10px; border-radius:8px; border:0; background:transparent; cursor:pointer; }
+  .pal .pitem.on, .pal .pitem:hover{ background:rgba(255,255,255,.09); }
+  .pal .pitem span{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pal .pitem small{ color:var(--uiMuted); font-size:11.5px; flex:0 0 auto; }
+
+  /* Drafts under a script */
+  .drafts{ margin:-2px 0 12px 22px; padding-left:14px; border-left:1px solid var(--uiBorder); }
+  .drafts .dh{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.5); font-weight:600; margin:2px 0 6px; }
+  .drow{ display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:9px; }
+  .drow:hover{ background:rgba(255,255,255,.05); }
+  .drow .pdfi{ flex:0 0 auto; width:34px; height:24px; border-radius:6px; border:1px solid rgba(255,255,255,.2); display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; letter-spacing:.04em; color:var(--uiMuted); }
+  .drow .tx{ flex:1; min-width:0; }
+  .drow .tx b{ display:block; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .drow .tx span{ display:block; font-size:12px; color:var(--uiMuted); }
+  .drow .acts{ display:flex; gap:6px; flex:0 0 auto; align-items:center; }
+  @media (max-width:760px){ .drafts{ margin-left:8px; } .drow{ flex-wrap:wrap; } .drow .acts{ width:100%; justify-content:flex-end; } }
+  .box .err{ min-height:18px; margin-top:10px; font-size:12.5px; color:var(--err); }
+  .acts2{ display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+
+  /* Toast */
+  #toast{ position:fixed; left:16px; bottom:16px; z-index:200; display:flex; align-items:center; gap:8px; max-width:min(520px, calc(100vw - 32px)); padding:10px 12px; border-radius:12px; background:rgba(20,20,20,.94); border:1px solid rgba(255,255,255,.1); box-shadow:0 10px 28px rgba(0,0,0,.35); font-size:13px; opacity:0; transform:translateY(8px); pointer-events:none; transition:opacity .18s ease, transform .18s ease; }
+  #toast.show{ opacity:1; transform:none; }
+  #toast .dot{ width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.45); flex:0 0 auto; }
+  #toast.ok .dot{ background:var(--ok); } #toast.err .dot{ background:#ff3b30; }
+
+  #scrim{ display:none; }
+  @media (max-width: 760px){
+    #app{ grid-template-columns:minmax(0,1fr); padding:8px; gap:8px; }
+    .side{ position:fixed; top:calc(var(--topBarH) + 8px); left:8px; bottom:8px; width:min(300px, 85vw); z-index:26; transform:translateX(-115%); transition:transform .18s ease; }
+    body.sideOpen .side{ transform:none; }
+    body.sideOpen #scrim{ display:block; position:fixed; inset:var(--topBarH) 0 0 0; z-index:25; background:rgba(0,0,0,.45); }
+    #menuToggle{ display:inline-flex; }
+    .brand b, .brand span, .userChip span{ display:none; }
+    .topTitle{ text-align:left; }
+    .lbl{ display:none; }
+    .actions .btn, .pHead .btn{ padding:0 9px; }
+    .srow{ flex-wrap:wrap; }
+    .srow .acts{ width:100%; justify-content:flex-end; }
+  }
+</style>
+</head>
+<body>
+<!-- ===== COMPASS LOADER: paste directly after <body> ===== -->
+<style>
+#cl{position:fixed;inset:0;z-index:99999;background:#000;color:#fff;display:grid;place-items:center;text-align:center;transition:opacity .45s ease}
+#cl.cl-out{opacity:0;pointer-events:none}
+#cl .cl-big{width:min(60vw,220px);height:auto;display:block;margin:0 auto;overflow:visible}
+#cl .cl-cap{margin-top:12px;display:flex;justify-content:center}
+#cl .k{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+#cl .f{fill:currentColor;stroke:currentColor;stroke-linejoin:round}
+</style>
+<noscript><style>#cl{display:none}</style></noscript>
+<div id="cl" role="status" aria-live="polite">
+<div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<filter id="cl-fz" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence id="cl-tbA" type="fractalNoise" baseFrequency="0.035" numOctaves="1" seed="2" result="a"/><feDisplacementMap in="SourceGraphic" in2="a" scale="1.8" result="d0"/><feTurbulence id="cl-tbB" type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="5" result="n"/><feDisplacementMap in="d0" in2="n" scale="2.4" result="d"/><feGaussianBlur in="d" stdDeviation="0.45"/></filter>
+<filter id="cl-fzT" x="-5%" y="-10%" width="110%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="1" seed="3" result="a"/><feDisplacementMap in="SourceGraphic" in2="a" scale="1.6" result="d0"/><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="5" result="n"/><feDisplacementMap in="d0" in2="n" scale="1.2" result="d"/><feGaussianBlur in="d" stdDeviation="0.35"/></filter>
+</svg>
+<svg class="cl-big" viewBox="0 0 100 100" role="img" aria-label="Loading"><g filter="url(#cl-fz)">
+<circle class="k" style="stroke-width:6.5" cx="50" cy="50" r="40"/><circle class="k" style="stroke-width:3.5" cx="51" cy="49" r="38.5"/>
+<path class="k" style="stroke-width:4.5" d="M50 25 L50 17 M75 50 L83 50 M50 75 L50 83 M25 50 L17 50"/>
+<g id="cl-needle"><path class="f" style="stroke-width:2.5" d="M50 20 L56 50 L50 80 L44 50 Z"/><circle cx="50" cy="50" r="2.8" fill="#000"/></g>
+</g></svg>
+<div class="cl-cap" id="cl-word"></div>
+</div>
+</div>
+<script>
+(function(){
+var cl=document.getElementById('cl');if(!cl)return;
+// lettering
+var O2="M9 6 C2 6 1 14 1 19 C1 28 8 31 13 27 C17 22 16 8 9 6 Z";
+var UC={L:["M2 6 L2 30 L13 30",16],O:[O2,20],A:["M1 30 L8 6 L15 30 M4 22 L12 22",20],D:["M2 6 L2 30 M2 6 C15 5 18 28 2 30",20],I:["M2 6 L2 30",9],N:["M2 30 L2 6 L13 30 L13 6",20],G:["M16 11 C10 3 1 8 1 18 C1 29 12 32 16 24 L16 19 L9 19",21],"…":["M0 30 L0.1 30 M7 30 L7.1 30 M14 30 L14.1 30",18]};
+var JY=[0,.6,-.5,.3,.8,-.4,.5],JR=[0,-2,1.5,-1,2,-1.5,1];
+var t="LOADING…",x=0,g="";
+for(var i=0;i<t.length;i++){var c=UC[t[i]];g+='<path d="'+c[0]+'" transform="translate('+x+' '+JY[i%7]+') rotate('+JR[i%7]+' 6 18)"/>';x+=c[1];}
+document.getElementById('cl-word').innerHTML='<svg viewBox="-2 3 '+(x+2)+' 30" height="15" style="display:block;overflow:visible"><g filter="url(#cl-fzT)" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round">'+g+'</g></svg>';
+// animation
+var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var needle=document.getElementById('cl-needle'),tbA=document.getElementById('cl-tbA'),tbB=document.getElementById('cl-tbB');
+var sa=[2,5,9,14],sb=[5,8,12,3];
+var W0=4.0,R=0.32,Q=0.07,LEAD=0.35,th=0.6,last=performance.now(),running=true;
+function speed(a){var x=a+LEAD;return W0*(1-R*Math.cos(x)+Q*Math.sin(2*x));}
+function tick(now){
+  if(!running)return;
+  var dt=Math.min((now-last)/1000,0.033);last=now;
+  for(var i=0;i<3;i++){th+=speed(th)*dt/3;}
+  var f=Math.floor(now/130)%4;
+  if(tbA.getAttribute('seed')!=sa[f]){tbA.setAttribute('seed',sa[f]);tbB.setAttribute('seed',sb[f]);}
+  needle.setAttribute('transform','rotate('+(th*180/Math.PI)+' 50 50)');
+  requestAnimationFrame(tick);
+}
+if(!reduce)requestAnimationFrame(tick);
+// hide: after page load, min 400ms visible, hard cap 8s
+var start=Date.now(),done=false;
+function hide(){
+  if(done)return;done=true;
+  var wait=Math.max(0,400-(Date.now()-start));
+  setTimeout(function(){
+    cl.classList.add('cl-out');
+    setTimeout(function(){running=false;cl.parentNode&&cl.parentNode.removeChild(cl);},500);
+  },wait);
+}
+if(document.readyState==='complete')hide();else window.addEventListener('load',hide);
+setTimeout(hide,8000);
+})();
+</script>
+<!-- ===== END COMPASS LOADER ===== -->
+
+
+<div id="gate">
+  <div class="gateBox">
+    <img alt="Camp" src="camp-logo.png">
+    <h1>Camp</h1>
+    <p id="gateMsg">Your projects, scripts and production docs in one place.</p>
+    <div class="row" id="gateLoading"><span class="spin"></span>Loading…</div>
+    <button id="signIn" class="btn primary hidden" type="button">Sign in with Google</button>
+  </div>
+</div>
+
+<header class="top hidden" id="top">
+  <button id="menuToggle" class="iconBtn" type="button" aria-label="Projects" title="Projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <a class="brand" href="index.html" title="Camp hub" aria-label="Camp hub"><img src="camp-logo.png" alt=""><b>Camp</b><span>Hub</span></a>
+  <div class="topTitle" id="topTitle"></div>
+  <div class="userChip"><span id="who"></span><button id="signOut" class="btn sm" type="button">Sign out</button></div>
+</header>
+
+<div id="app" class="hidden">
+  <aside class="side" id="side">
+    <div class="sideHead"><b>Projects</b><span class="muted" id="projCount"></span></div>
+    <div class="sideTools">
+      <div class="psearch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="projSearch" type="search" placeholder="Search projects  ( / )" autocomplete="off" spellcheck="false" aria-label="Search projects"></div>
+      <select id="projSort" aria-label="Sort projects" title="Sort projects"><option value="manual">Manual</option><option value="az">A–Z</option><option value="opened">Last opened</option><option value="new">Newest</option></select>
+    </div>
+    <div class="sideBody" id="projects"></div>
+    <div class="sideFoot">
+      <button id="newProject" class="btn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New project</button>
+      <a class="btn" href="library.html" title="All scripts, including ones not in a project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Script library</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="noProject" class="empty hidden" style="position:relative;flex:1"></div>
+    <div id="projectView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="pHead">
+        <h2 id="pName"></h2>
+        <span class="badge" id="pRole"></span>
+        <button id="members" class="btn hidden" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span class="lbl" id="membersLbl">Members</span></button>
+        <a id="folder" class="btn" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="lbl">Drive folder</span></a>
+      </div>
+      <div class="mtabs" role="tablist" aria-label="Project sections">
+        <button class="mtab" type="button" role="tab" data-tab="scripts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>Scripts<span class="n" id="nScripts"></span></button>
+        <button class="mtab" type="button" role="tab" data-tab="storyboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l2.2-4h3l-2 4M9 8l2-4h3l-2 4M15 8l2-4h3l-2 4"/><rect x="3" y="8" width="18" height="12" rx="1.5"/></svg>Storyboard</button>
+        <button class="mtab" type="button" role="tab" data-tab="treatment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg>Treatment</button>
+        <button class="mtab" type="button" role="tab" data-tab="production"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>Production<span class="n" id="nSheets"></span></button>
+      </div>
+
+      <div id="listPane"></div>
+
+      <div id="prodPane" class="hidden">
+        <div id="banner">
+          <span>Be signed into the same Google account in this browser that has access to the Sheets, or the tabs will show a login wall.</span>
+          <button id="dismiss" class="iconBtn" type="button" aria-label="Dismiss" title="Dismiss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div class="bar">
+          <div class="tabs" id="tabs" role="tablist" aria-label="Sheets"></div>
+          <div class="actions">
+            <button id="refresh" class="btn" type="button" title="Re-read the Sheets in this project's Drive folder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span class="lbl">Refresh</span></button>
+            <button id="reloadTab" class="btn hidden" type="button" title="Reload this Sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M5 15a7 7 0 0 0 12 3M19 9A7 7 0 0 0 7 6"/></svg><span class="lbl">Reload</span></button>
+            <button id="createDocs" class="btn hidden" type="button" title="Build a budget, schedule, shot list or crew docs from the script"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Create</span></button>
+            <button id="mvL" class="iconBtn hidden" type="button" title="Move this sheet left (or Alt+←)" aria-label="Move sheet left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+            <button id="mvR" class="iconBtn hidden" type="button" title="Move this sheet right (or Alt+→)" aria-label="Move sheet right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+            <button id="darkTog" class="btn" type="button" aria-pressed="true" title="Dark view of the Sheets (approximate colours)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span class="lbl">Dark</span></button>
+            <a id="open" class="btn primary hidden" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><span class="lbl">Open in Google Sheets</span></a>
+          </div>
+        </div>
+        <div id="frames"><div class="empty" id="empty"></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="scrim"></div>
+
+<aside id="drawer" class="hidden" role="dialog" aria-label="Members">
+  <div class="dHead"><b id="drawerTitle"></b><button id="copyLink" class="btn sm" type="button" title="Copy the Hub link to send with an invite">Copy Hub link</button><button id="drawerClose" class="iconBtn" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dBody">
+    <div class="sec">Invite</div>
+    <form class="invite" id="inviteForm">
+      <input id="inviteEmail" type="email" placeholder="friend@gmail.com" autocomplete="off" required>
+      <select id="inviteRole" aria-label="Role"><option value="editor">Editor</option><option value="viewer">Viewer</option></select>
+      <button id="inviteBtn" class="btn primary" type="submit">Invite</button>
+    </form>
+    <p class="note">Editors can edit; viewers can only view. They join by signing in to the Hub with that exact Google account.</p>
+    <div class="sec">Members</div>
+    <div id="memberList"></div>
+    <div class="sec">Pending invites</div>
+    <div id="pendingList"></div>
+  </div>
+</aside>
+
+<div id="toast" role="status" aria-live="polite"><span class="dot"></span><span id="toastMsg"></span></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAPpbdb9bBgSTeo4EPhkH7ns-alSGqXBdE",
+  authDomain: "scripty-91a6e.firebaseapp.com",
+  databaseURL: "https://scripty-91a6e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "scripty-91a6e",
+  storageBucket: "scripty-91a6e.firebasestorage.app",
+  messagingSenderId: "51841618865",
+  appId: "1:51841618865:web:514ade0d98ac1a49e0a390"
+};
+const APPS_URL = "https://script.google.com/macros/s/AKfycbwETI1H3OdX7mA7GXbqUbVAFX7TzA2BMI3nesuNA3rYf7ejM9zwRUh2qRQxOVdKcmaV_g/exec";
+const ERRORS = {
+  UNAUTHENTICATED: "Please sign in again.",
+  FORBIDDEN: "You don't have permission to do that.",
+  BAD_REQUEST: "That request wasn't valid. Check what you entered.",
+  FOLDER_NOT_FOUND: "Couldn't find that Drive folder, or you don't have edit access to it.",
+  NOT_FOUND: "Not found. It may have been removed.",
+  INTERNAL: "Something went wrong on the server. Try again."
+};
+const TABS = ["scripts", "storyboard", "treatment", "production"];
+const LS_LAST = "Camp_HUB_LAST_V2", LS_BANNER = "Camp_HUB_BANNER_HIDDEN_V1";
+// Shared with the Library and editor (don't rename)
+const ENDPOINT_KEYS = ["SCRIPTY_CLOUD_ENDPOINT_V1", "SCRIPTY_CLOUD_ENDPOINT", "SCRIPTY_CLOUD_URL", "CLOUD_ENDPOINT", "SCRIPTY_GAS_ENDPOINT", "SCRIPTY_CLOUD_ENDPOINT_V0"];
+const KEY_KEY = "SCRIPTY_CLOUD_KEY_V1";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+const lsGet = k => { try { return localStorage.getItem(k); } catch (_e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_e) {} };
+
+let me = null;
+let projects = {};
+let projectUnsubs = {};
+let userProjectsUnsub = null;
+let projectsLoaded = false;
+let sheetsByProject = {};   // pid -> { list, state, err }
+let frames = {};            // "pid:sheetId" -> iframe (lazy, kept hidden)
+let current = { pid: null, key: null, tab: "scripts" };
+let lastKey = {};
+let pendingProject = null;
+let firstLoad = true;
+
+// Sheet order and dark view are remembered on this device
+const ORD_KEY = "Camp_HUB_SHEETORDER_V1", DARK_KEY = "Camp_HUB_DARK_V1";
+let sheetOrder = {}; try { sheetOrder = JSON.parse(lsGet(ORD_KEY) || "{}") || {}; } catch (_e) {}
+let DARK = lsGet(DARK_KEY) !== "0";
+let dragSheet = null;
+function applyOrder(pid, list) {
+  const o = sheetOrder[pid] || [];
+  const rank = id => { const i = o.indexOf(id); return i < 0 ? 1e6 : i; };
+  return list.slice().sort((a, b) => rank(a.id) - rank(b.id) || (a.name || "").localeCompare(b.name || ""));
+}
+function moveSheet(pid, fromId, toId, after) {
+  const c = sheetsByProject[pid]; if (!c) return;
+  const ids = c.list.map(s => s.id).filter(id => id !== fromId);
+  let i = ids.indexOf(toId); if (i < 0) return;
+  if (after) i++;
+  ids.splice(i, 0, fromId);
+  sheetOrder[pid] = ids; lsSet(ORD_KEY, JSON.stringify(sheetOrder));
+  c.list = applyOrder(pid, c.list);
+  renderTabs(); showFrame();
+}
+// One icon set: same size, same line style, one glyph per area (used on the tabs and on the rows)
+const GLYPH = {
+  scripts: `<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>`,
+  storyboard: `<rect x="3" y="4" width="8" height="6" rx="1"/><rect x="13" y="4" width="8" height="6" rx="1"/><rect x="3" y="13" width="8" height="6" rx="1"/><rect x="13" y="13" width="8" height="6" rx="1"/>`,
+  treatment: `<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 15l5-5 4 4 3-3 6 6"/>`,
+  production: `<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>`
+};
+const glyphSvg = (k, px) => `<svg width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${GLYPH[k]}</svg>`;
+const ICON = {};
+["scripts", "storyboard", "treatment"].forEach(k => {
+  ICON[k] = `<svg viewBox="0 0 44 44"><rect width="44" height="44" rx="10" fill="rgba(255,255,255,.07)"/><g transform="translate(10 10)" fill="none" stroke="#ececf0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${GLYPH[k]}</g></svg>`;
+});
+
+// URL (?pid=…&tab=…) wins, then what this device remembers
+try { const s = JSON.parse(lsGet(LS_LAST) || "{}"); lastKey = s.keys || {}; current.pid = s.pid || null; if (TABS.includes(s.tab)) current.tab = s.tab; } catch (_e) {}
+{ const q = new URLSearchParams(location.search); if (q.get("pid")) current.pid = q.get("pid"); if (TABS.includes(q.get("tab"))) current.tab = q.get("tab"); }
+
+const sheetUrl = (id, minimal) => `https://docs.google.com/spreadsheets/d/${id}/edit` + (minimal ? "?rm=minimal" : "");
+const liveIds = () => Object.keys(projects).filter(pid => projects[pid] && projects[pid].folderId);
+const sortedIds = () => liveIds().sort((a, b) => (projects[a].name || "").localeCompare(projects[b].name || ""));
+const isOwner = p => !!me && p.owner === me.uid;
+const myRole = p => isOwner(p) ? "owner" : ((p.members && me && p.members[me.uid] && p.members[me.uid].role) || "viewer");
+const scriptIds = p => Object.keys((p && p.scripts) || {});
+function saveLast() {
+  lsSet(LS_LAST, JSON.stringify({ pid: current.pid, tab: current.tab, keys: lastKey }));
+  try {
+    const q = new URLSearchParams(location.search);
+    if (current.pid) q.set("pid", current.pid); else q.delete("pid");
+    q.set("tab", current.tab);
+    history.replaceState(null, "", location.pathname + "?" + q.toString());
+  } catch (_e) {}
+}
+
+// ---------- toast ----------
+let toastTimer;
+function toast(msg, kind = "err", ms) {
+  const t = $("toast");
+  $("toastMsg").textContent = msg;
+  t.className = "show " + kind;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), ms || (kind === "ok" ? 3000 : 6000));
+}
+
+// ---------- dialogs ----------
+function dialog({ title, text = "", fields = [], ok = "OK", danger = false }) {
+  return new Promise(resolve => {
+    const prev = document.activeElement;
+    const shade = document.createElement("div");
+    shade.className = "shade";
+    shade.innerHTML = `<form class="box" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <h2>${esc(title)}</h2>${text ? `<p>${esc(text)}</p>` : ""}
+      ${fields.map(f => f.multi
+        ? `<div class="fld2" data-msel="${esc(f.name)}"><span class="fl">${esc(f.label)}</span><button type="button" class="msBtn" aria-haspopup="true" aria-expanded="false"><span class="msTxt"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg></button><div class="msPanel hidden"><label class="msRow all"><input type="checkbox" data-all><span>Select all</span></label>${f.options.map(o => `<label class="msRow"><input type="checkbox" value="${esc(o.value)}" checked><span>${esc(o.label)}</span></label>`).join("")}</div></div>`
+        : f.options
+        ? `<label class="fld"><span>${esc(f.label)}</span><select name="${esc(f.name)}">${f.options.map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("")}</select></label>`
+        : `<label class="fld"><span>${esc(f.label)}</span><input name="${esc(f.name)}" type="${f.type || "text"}" placeholder="${esc(f.placeholder || "")}" value="${esc(f.value || "")}" autocomplete="off"></label>`).join("")}
+      <div class="err" data-err></div>
+      <div class="acts2"><button type="button" class="btn" data-no>Cancel</button><button type="submit" class="btn ${danger ? "dangerFill" : "primary"}">${esc(ok)}</button></div>
+    </form>`;
+    const form = shade.querySelector("form");
+    form.querySelectorAll("[data-msel]").forEach(ms => {
+      const btn = ms.querySelector(".msBtn"), panel = ms.querySelector(".msPanel"), all = ms.querySelector("[data-all]");
+      const boxes = [...ms.querySelectorAll("input:not([data-all])")];
+      const sync = () => {
+        const on = boxes.filter(b => b.checked);
+        all.checked = on.length === boxes.length; all.indeterminate = on.length > 0 && on.length < boxes.length;
+        ms.querySelector(".msTxt").textContent = !on.length ? "Choose…" : on.length === boxes.length ? "All " + boxes.length + " selected" : on.map(b => b.parentNode.textContent.trim()).join(", ");
+      };
+      btn.onclick = () => { const open = panel.classList.toggle("hidden") === false; btn.setAttribute("aria-expanded", open); };
+      all.onchange = () => { boxes.forEach(b => { b.checked = all.checked; }); sync(); };
+      boxes.forEach(b => { b.onchange = sync; });
+      sync();
+    });
+    const done = v => { shade.remove(); try { prev && prev.focus && prev.focus({ preventScroll: true }); } catch (_e) {} resolve(v); };
+    form.onsubmit = e => {
+      e.preventDefault();
+      const vals = {};
+      for (const f of fields) {
+        if (f.multi) {
+          const picked = [...form.querySelectorAll(`[data-msel="${f.name}"] input:not([data-all]):checked`)].map(i => i.value);
+          if (!picked.length) { shade.querySelector("[data-err]").textContent = "Pick at least one."; form.querySelector(`[data-msel="${f.name}"] .msBtn`).focus(); return; }
+          vals[f.name] = picked; continue;
+        }
+        const v = form.elements[f.name].value.trim();
+        const err = f.check ? f.check(v) : (!v ? "Fill this in." : "");
+        if (err) { shade.querySelector("[data-err]").textContent = err; form.elements[f.name].focus(); return; }
+        vals[f.name] = v;
+      }
+      done(vals);
+    };
+    shade.querySelector("[data-no]").onclick = () => done(null);
+    shade.addEventListener("mousedown", e => { if (e.target === shade) done(null); });
+    shade.addEventListener("keydown", e => { if (e.key === "Escape") { e.stopPropagation(); done(null); } });
+    document.body.appendChild(shade);
+    setTimeout(() => (form.querySelector("input,select,.msBtn") || form.querySelector("[type=submit]")).focus(), 20);
+  });
+}
+const confirmDlg = (title, text, ok, danger = true) => dialog({ title, text, ok, danger }).then(v => !!v);
+
+// ---------- hub backend ----------
+async function api(action, args = {}) {
+  const idToken = await auth.currentUser.getIdToken();
+  let res;
+  try {
+    res = await fetch(APPS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ idToken, action, ...args }) });
+  } catch (_e) { throw new Error("Couldn't reach the server. Check your connection."); }
+  let out;
+  try { out = await res.json(); } catch (_e) { throw new Error("The server's reply couldn't be read."); }
+  if (!out.ok) {
+    if (out.error === "BAD_REQUEST" && ["renameProject", "archiveProject", "setProjectStatus"].indexOf(action) >= 0) throw new Error("Update the hub backend first (new version of hub-backend.gs).");
+    throw new Error(ERRORS[out.error] || out.error || "Request failed");
+  }
+  return out.data;
+}
+async function run(btn, fn) {
+  btn.disabled = true;
+  try { await fn(); } catch (e) { toast(e.message || String(e)); }
+  btn.disabled = false;
+}
+function folderIdFrom(text) {
+  const t = String(text || "").trim();
+  const m = t.match(/\/folders\/([A-Za-z0-9_-]{10,})/) || t.match(/[?&]id=([A-Za-z0-9_-]{10,})/) || t.match(/^([A-Za-z0-9_-]{10,})$/);
+  return m ? m[1] : "";
+}
+function fileIdFrom(text) {
+  const t = String(text || "").trim();
+  const m = t.match(/[?&](?:fileId|id)=([A-Za-z0-9_-]{20,80})/) || t.match(/^([A-Za-z0-9_-]{20,80})$/);
+  return m ? m[1] : "";
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch (_e) {
+    const ta = document.createElement("textarea"); ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (_e2) {}
+    ta.remove(); return ok;
+  }
+}
+
+// ---------- Camp script list (same Apps Script + password the Library uses) ----------
+const RIP = { ep: "", files: null, state: "idle", err: "", tried: new Set(), dr: {}, drBusy: {} };
+const normEp = u => String(u || "").trim().replace(/\s+/g, "").replace(/\/+$/, "");
+async function CampEndpoint() {
+  for (const k of ENDPOINT_KEYS) { const v = normEp(lsGet(k)); if (v) return v; }
+  try { const r = await fetch("config.json?_=" + Date.now(), { cache: "no-store" }); if (r.ok) { const j = await r.json(); return normEp(j.cloudUrl || j.cloudURL || j.cloud || j.endpoint || ""); } } catch (_e) {}
+  return "";
+}
+function jsonp(url, ms = 20000) {
+  return new Promise((resolve, reject) => {
+    const cb = "__rh" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const s = document.createElement("script");
+    const t = setTimeout(() => { cleanup(); reject(new Error("Drive took too long to answer.")); }, ms);
+    function cleanup() { clearTimeout(t); try { delete window[cb]; } catch (_e) {} s.remove(); }
+    window[cb] = d => { cleanup(); resolve(d); };
+    s.onerror = () => { cleanup(); reject(new Error("Couldn't reach Drive.")); };
+    s.src = url + "&callback=" + cb;
+    document.head.appendChild(s);
+  });
+}
+async function loadCamp() {
+  if (RIP.state === "loading") return;
+  RIP.state = "loading"; renderBody();
+  try {
+    if (!RIP.ep) RIP.ep = await CampEndpoint();
+    if (!RIP.ep) throw new Error("The script cloud isn't set up on this device. Open the Script library once to set it up.");
+    const url = RIP.ep + "?" + new URLSearchParams({ action: "list", key: lsGet(KEY_KEY) || "", _: Date.now() });
+    let res;
+    try { res = await (await fetch(url, { cache: "no-store" })).json(); } catch (_e) { res = await jsonp(url); }
+    if (res && res.auth === false) { RIP.state = "locked"; RIP.err = ""; renderBody(); return; }
+    if (!res || res.ok === false) throw new Error((res && res.error) || "Couldn't load your scripts.");
+    RIP.files = {};
+    for (const f of (res.files || res.items || [])) {
+      const id = String(f.id || f.fileId || ""); if (!id) continue;
+      RIP.files[id] = { id, name: String(f.name || "").replace(/\.json$/i, ""), modified: String(f.modified || f.modifiedTime || ""), tp: f.tp || {}, pages: Number(f.pages || (f.tp && f.tp.pages) || 0) || 0, hasStoryboard: !!f.hasStoryboard };
+    }
+    RIP.state = "ok";
+  } catch (e) { RIP.state = "error"; RIP.err = e.message || String(e); }
+  renderBody();
+}
+async function unlockCamp() {
+  const v = await dialog({ title: "Enter your script password", text: "The password you use in the Script library (your own, or the team password). This device will remember it.", ok: "Unlock",
+    fields: [{ name: "pw", label: "Password", type: "password" }] });
+  if (!v) return;
+  lsSet(KEY_KEY, v.pw);
+  RIP.state = "idle"; loadCamp();
+}
+const scriptTitle = id => { const f = RIP.files && RIP.files[id]; return f ? (f.tp.title || f.name || "Untitled script") : "Script"; };
+function fmtWhen(iso) {
+  const d = new Date(iso); if (!iso || isNaN(d)) return "";
+  const s = (Date.now() - d.getTime()) / 1000;
+  if (s < 60) return "edited just now";
+  if (s < 3600) return `edited ${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `edited ${Math.round(s / 3600)} h ago`;
+  if (s < 86400 * 7) { const n = Math.round(s / 86400); return `edited ${n} day${n === 1 ? "" : "s"} ago`; }
+  return "edited " + d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+// Tool links carry ?hub=<pid> so their back arrow can return here
+function toolHref(page, fileId, pid) {
+  const q = new URLSearchParams({ fileId });
+  const f = RIP.files && RIP.files[fileId]; if (f && f.name) q.set("name", f.name);
+  if (RIP.ep) q.set("cloud", RIP.ep);
+  if (pid || current.pid) q.set("hub", pid || current.pid);
+  return page + "?" + q.toString();
+}
+
+// ---------- auth ----------
+onAuthStateChanged(auth, async user => {
+  $("gateLoading").classList.add("hidden");
+  if (!user) {
+    teardown();
+    $("app").classList.add("hidden"); $("top").classList.add("hidden");
+    $("gate").classList.remove("hidden");
+    $("gateMsg").textContent = "Sign in to see your projects.";
+    $("signIn").classList.remove("hidden");
+    return;
+  }
+  me = user;
+  $("who").textContent = user.email;
+  $("gate").classList.add("hidden"); $("top").classList.remove("hidden"); $("app").classList.remove("hidden");
+  render();
+  try { await api("claimInvites"); } catch (e) { toast("Invites: " + e.message); }
+  watchProjects();
+});
+$("signIn").onclick = async () => {
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch (e) { if (!/popup-closed|cancelled/i.test(String(e.code || e.message))) toast("Sign-in failed: " + (e.message || e)); }
+};
+$("signOut").onclick = () => signOut(auth);
+
+function teardown() {
+  if (userProjectsUnsub) userProjectsUnsub();
+  userProjectsUnsub = null;
+  Object.values(projectUnsubs).forEach(u => u());
+  projectUnsubs = {}; projects = {}; sheetsByProject = {};
+  Object.values(frames).forEach(f => { f._loader && f._loader.remove(); f.remove(); });
+  frames = {};
+  projectsLoaded = false; firstLoad = true;
+  $("drawer").classList.add("hidden");
+  me = null;
+}
+
+// ---------- live data ----------
+function watchProjects() {
+  userProjectsUnsub = onValue(ref(db, "userProjects/" + me.uid), snap => {
+    projectsLoaded = true;
+    const ids = Object.keys(snap.val() || {});
+    ids.forEach(pid => {
+      if (projectUnsubs[pid]) return;
+      projectUnsubs[pid] = onValue(ref(db, "projects/" + pid), s => {
+        if (s.exists()) projects[pid] = s.val(); else delete projects[pid];
+        render();
+      }, () => dropProject(pid));
+    });
+    Object.keys(projectUnsubs).forEach(pid => { if (ids.indexOf(pid) < 0) dropProject(pid); });
+    render();
+  }, e => toast("Could not load projects: " + e.message));
+}
+function dropProject(pid) {
+  if (projectUnsubs[pid]) projectUnsubs[pid]();
+  delete projectUnsubs[pid]; delete projects[pid]; delete sheetsByProject[pid];
+  Object.keys(frames).forEach(k => { if (k.startsWith(pid + ":")) { frames[k]._loader && frames[k]._loader.remove(); frames[k].remove(); delete frames[k]; } });
+  render();
+}
+
+// ---------- sheets ----------
+async function loadSheets(pid) {
+  try {
+    const list = await api("listSheets", { pid });
+    sheetsByProject[pid] = { list: applyOrder(pid, list), state: "ok" };
+  } catch (e) { sheetsByProject[pid] = { list: [], state: "error", err: e.message }; }
+  render();
+}
+$("refresh").onclick = () => {
+  const pid = current.pid; if (!pid) return;
+  const old = sheetsByProject[pid];
+  sheetsByProject[pid] = { list: old ? old.list : [], state: "loading" };
+  loadSheets(pid).then(() => { if (sheetsByProject[pid] && sheetsByProject[pid].state === "ok") toast("Sheets refreshed.", "ok"); });
+  render();
+};
+$("reloadTab").onclick = () => {
+  const f = frames[current.pid + ":" + current.key]; if (!f) return;
+  f._loader.classList.remove("hidden"); f.src = f.src;
+};
+
+// ---------- rendering ----------
+function render() {
+  if (!me) return;
+  if (pendingProject && projects[pendingProject]) { current.pid = pendingProject; current.key = null; pendingProject = null; }
+  if (current.pid && !projects[current.pid] && (!firstLoad || (projectsLoaded && !projectUnsubs[current.pid]))) current.pid = null;
+  if (projects[current.pid]) firstLoad = false;
+  if (!current.pid && sortedIds().length && projectsLoaded) { current.pid = sortedIds()[0]; firstLoad = false; }
+
+  const p = projects[current.pid];
+  if (p) {
+    let c = sheetsByProject[current.pid];
+    if (!c) { c = sheetsByProject[current.pid] = { list: [], state: "loading" }; loadSheets(current.pid); }
+    const has = k => c.list.some(s => s.id === k);
+    if (!has(current.key)) current.key = has(lastKey[current.pid]) ? lastKey[current.pid] : (c.list[0] ? c.list[0].id : null);
+    saveLast();
+    if (RIP.state === "idle") loadCamp();
+    // A newly linked script the list doesn't know yet: refresh once
+    else if (RIP.state === "ok" && scriptIds(p).some(id => !RIP.files[id] && !RIP.tried.has(id))) { scriptIds(p).forEach(id => RIP.tried.add(id)); RIP.state = "idle"; loadCamp(); }
+    if (RIP.state === "ok" && current.tab === "scripts") scriptIds(p).forEach(id => { if (!(id in RIP.dr) && !RIP.drBusy[id]) loadDrafts(id); });
+  }
+  $("topTitle").textContent = p ? p.name : "";
+  document.title = (p ? p.name + " — " : "") + "Camp";
+  renderProjects();
+  renderBody();
+  renderMembers();
+}
+
+function renderProjects() { renderProjectList(); }
+
+function renderBody() {
+  const p = projects[current.pid];
+  $("projectView").classList.toggle("hidden", !p);
+  $("projectView").style.display = p ? "flex" : "";
+  $("noProject").classList.toggle("hidden", !!p);
+  Object.values(frames).forEach(f => { f.classList.add("hidden"); f._loader.classList.add("hidden"); });
+  if (!p) {
+    const e = $("noProject");
+    if (!projectsLoaded || (current.pid && !projects[current.pid])) e.innerHTML = `<span class="spin"></span>`;
+    else { e.innerHTML = `<b>Start your first project</b><p>A project links a Google Drive folder to your scripts, storyboard, treatment and production Sheets.</p>`; const b = document.createElement("button"); b.className = "btn primary"; b.textContent = "New project"; b.onclick = () => $("newProject").click(); e.appendChild(b); }
+    return;
+  }
+  const owner = isOwner(p), role = myRole(p);
+  $("pName").textContent = p.name;
+  $("pRole").className = "badge " + role; $("pRole").textContent = role;
+  $("members").classList.toggle("hidden", !owner);
+  if (owner) {
+    const n = Object.keys(p.members || {}).length, pend = Object.keys(p.pending || {}).length;
+    $("membersLbl").textContent = "Members · " + n + (pend ? " (+" + pend + ")" : "");
+  }
+  $("folder").href = "https://drive.google.com/drive/folders/" + p.folderId;
+  const ns = scriptIds(p).length, sh = sheetsByProject[current.pid];
+  $("nScripts").textContent = ns ? String(ns) : "";
+  $("nSheets").textContent = sh && sh.state === "ok" && sh.list.length ? String(sh.list.length) : "";
+  document.querySelectorAll(".mtab").forEach(t => { const on = t.dataset.tab === current.tab; t.classList.toggle("on", on); t.setAttribute("aria-selected", on ? "true" : "false"); });
+
+  const prod = current.tab === "production";
+  $("listPane").classList.toggle("hidden", prod);
+  $("prodPane").classList.toggle("hidden", !prod);
+  if (prod) { renderTabs(); showFrame(); } else renderList(p);
+}
+
+const TOOL = {
+  scripts:    { page: "editor.html",     verb: "Open script" },
+  storyboard: { page: "storyboard.html", verb: "Open storyboard" },
+  treatment:  { page: "treatment.html",  verb: "Open treatment" }
+};
+const HINT = {
+  scripts: "",
+  storyboard: "Each script has its own storyboard, built from its Shot List (export one from the script first).",
+  treatment: "Each script has its own treatment deck, built from the screenplay."
+};
+function renderList(p) {
+  const pane = $("listPane"), tab = current.tab, ids = scriptIds(p), owner = isOwner(p);
+  let head = `<div class="listHead"><span class="muted">${esc(HINT[tab] || (ids.length ? ids.length + " script" + (ids.length === 1 ? "" : "s") : ""))}</span>` +
+    (owner ? `<button class="btn" type="button" data-act="link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span class="lbl">Link script</span></button>` : "") + `</div>`;
+  if (!ids.length) {
+    pane.innerHTML = head + `<div class="emptyBox"><b>No scripts in this project yet</b><p>${owner ? "Link a script from your library to bring its storyboard and treatment in too." : "The owner hasn't linked a script yet."}</p></div>`;
+    wireList(pane); return;
+  }
+  if (RIP.state === "locked") {
+    pane.innerHTML = head + `<div class="emptyBox"><b>Unlock your scripts</b><p>This device needs your script password to show titles and page counts.</p><button class="btn primary" type="button" data-act="unlock">Enter password</button></div>`;
+    wireList(pane); return;
+  }
+  let note = "";
+  if (RIP.state === "loading" && !RIP.files) note = `<div class="muted" style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span class="spin"></span>Loading script details…</div>`;
+  if (RIP.state === "error") note = `<div class="muted" style="margin-bottom:10px">Couldn't load script details: ${esc(RIP.err)} <button class="btn sm" type="button" data-act="retry">Try again</button></div>`;
+  if (tab === "scripts" && RIP.state === "ok") ids.forEach(id => { if (!(id in RIP.dr) && !RIP.drBusy[id]) setTimeout(() => loadDrafts(id), 0); });
+  const rows = ids.slice().sort((a, b) => scriptTitle(a).localeCompare(scriptTitle(b))).map(id => {
+    const f = RIP.files && RIP.files[id];
+    let meta = "";
+    if (!f) meta = RIP.files ? "Not found in your library (deleted, or not shared with you)" : "";
+    else if (tab === "scripts") meta = [f.pages ? f.pages + " page" + (f.pages === 1 ? "" : "s") : "", fmtWhen(f.modified)].filter(Boolean).join(" · ");
+    else if (tab === "storyboard") meta = f.hasStoryboard ? "Sketches started" : "No sketches yet";
+    else meta = "Director's treatment deck";
+    const href = toolHref(TOOL[tab].page, id);
+    const setup = tab === "storyboard" && owner && f && !f.hasStoryboard;
+    return `<div class="srow" tabindex="0" data-href="${esc(href)}"><span class="ico ${tab}" aria-hidden="true">${ICON[tab]}</span><div class="tx"><b>${esc(scriptTitle(id))}</b><span>${esc(meta)}</span></div><div class="acts">${setup ? `<button class="btn sm primary" type="button" data-setup="${esc(id)}">Set up storyboard</button>` : `<a class="btn sm primary" href="${esc(href)}">${TOOL[tab].verb}</a>`}</div></div>${draftsHtml(id, tab, owner)}`;
+  }).join("");
+  const sh0 = sheetsByProject[current.pid];
+  const nudge = (tab === "scripts" && owner && sh0 && sh0.state === "ok" && !sh0.list.length)
+    ? `<div class="emptyBox" style="margin-top:14px;align-items:flex-start;text-align:left"><b>Set up the rest of this project</b><p>Create a budget, schedule, shot list and crew docs from your script. The Storyboard and Treatment tabs set up theirs.</p><button class="btn" type="button" data-act="create">Create production docs…</button></div>` : "";
+  pane.innerHTML = head + note + rows + nudge;
+  wireList(pane);
+}
+function wireList(pane) {
+  pane.querySelector("[data-act=link]")?.addEventListener("click", e => linkScript(e.currentTarget));
+  pane.querySelector("[data-act=unlock]")?.addEventListener("click", unlockCamp);
+  pane.querySelector("[data-act=retry]")?.addEventListener("click", () => { RIP.state = "idle"; loadCamp(); });
+  pane.querySelector("[data-act=create]")?.addEventListener("click", e => createDocsFlow(e.currentTarget));
+  pane.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); openDraft(b.dataset.view, b.dataset.label, false); }));
+  pane.querySelectorAll("[data-dl]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); openDraft(b.dataset.dl, b.dataset.label, true); }));
+  pane.querySelectorAll("[data-deldraft]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); deleteDraft(b.dataset.deldraft, b.dataset.file, b.dataset.label); }));
+  pane.querySelectorAll("[data-more]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); openDrafts[b.dataset.more] = !openDrafts[b.dataset.more]; renderBody(); }));
+  pane.querySelectorAll("[data-setup]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); setupStoryboard(b.dataset.setup, b); }));
+  pane.querySelectorAll(".srow").forEach(r => {
+    r.addEventListener("click", e => { if (!e.target.closest("a,button")) location.href = r.dataset.href; });
+    r.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === r) location.href = r.dataset.href; });
+  });
+}
+document.querySelectorAll(".mtab").forEach(t => t.addEventListener("click", () => { current.tab = t.dataset.tab; saveLast(); renderBody(); }));
+
+function renderTabs() {
+  const box = $("tabs"); box.innerHTML = "";
+  const c = sheetsByProject[current.pid]; if (!c) return;
+  c.list.forEach(s => {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("role", "tab");
+    b.className = "tab" + (s.id === current.key ? " on" : "");
+    b.setAttribute("aria-selected", s.id === current.key ? "true" : "false");
+    b.textContent = s.name;
+    b.draggable = true; b.dataset.id = s.id;
+    b.onclick = () => { current.key = s.id; lastKey[current.pid] = s.id; saveLast(); renderTabs(); showFrame(); };
+    const after = e => { const r = b.getBoundingClientRect(); return e.clientX > r.left + r.width / 2; };
+    b.ondragstart = e => { dragSheet = s.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", s.id); } catch (_e) {} };
+    b.ondragend = () => { dragSheet = null; box.querySelectorAll(".tab").forEach(t => t.classList.remove("dl", "dr")); };
+    b.ondragover = e => { if (!dragSheet || dragSheet === s.id) return; e.preventDefault(); const a = after(e); b.classList.toggle("dr", a); b.classList.toggle("dl", !a); };
+    b.ondragleave = () => b.classList.remove("dl", "dr");
+    b.ondrop = e => { if (!dragSheet || dragSheet === s.id) return; e.preventDefault(); moveSheet(current.pid, dragSheet, s.id, after(e)); };
+    b.onkeydown = e => {
+      if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+      e.preventDefault();
+      const dir = e.key === "ArrowRight" ? 1 : -1, i = c.list.findIndex(x => x.id === s.id), t = c.list[i + dir];
+      if (!t) return;
+      moveSheet(current.pid, s.id, t.id, dir > 0);
+      $("tabs").querySelector(`[data-id="${s.id}"]`)?.focus();
+    };
+    box.appendChild(b);
+  });
+  const on = box.querySelector(".tab.on"); if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+function setEmpty(title, text, btn) {
+  const e = $("empty");
+  e.innerHTML = `<b>${esc(title)}</b>${text ? `<p>${esc(text)}</p>` : ""}`;
+  if (btn) { const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = btn.label; b.onclick = btn.onclick; e.appendChild(b); }
+}
+function showFrame() {
+  Object.values(frames).forEach(f => { f.classList.add("hidden"); f._loader.classList.add("hidden"); });
+  const p = projects[current.pid], c = sheetsByProject[current.pid];
+  const s = c && current.key ? c.list.find(x => x.id === current.key) : null;
+  $("reloadTab").classList.toggle("hidden", !s);
+  $("createDocs").classList.toggle("hidden", !(p && isOwner(p)));
+  $("open").classList.toggle("hidden", !s);
+  $("empty").classList.toggle("hidden", !!s);
+  Object.values(frames).forEach(f => f.classList.toggle("dark", DARK));
+  $("darkTog").classList.toggle("on", DARK); $("darkTog").setAttribute("aria-pressed", DARK ? "true" : "false");
+  { const idx = c ? c.list.findIndex(x => x.id === current.key) : -1, n = c ? c.list.length : 0;
+    $("mvL").classList.toggle("hidden", !s || n < 2); $("mvR").classList.toggle("hidden", !s || n < 2);
+    $("mvL").disabled = idx <= 0; $("mvR").disabled = idx < 0 || idx >= n - 1; }
+  if (!s) {
+    if (!c || c.state === "loading") setEmpty("Loading sheets…", "");
+    else if (c.state === "error") setEmpty("Couldn't load sheets", c.err, { label: "Try again", onclick: () => $("refresh").click() });
+    else if (isOwner(p)) setEmpty("No production docs yet", "Create a budget, schedule, shot list or crew docs from your script. They're saved straight into this project's Drive folder.", { label: "Create production docs…", onclick: () => $("createDocs").click() });
+    else setEmpty("No production docs yet", "The owner hasn't created any yet.");
+    return;
+  }
+  const fk = current.pid + ":" + s.id;
+  if (!frames[fk]) {
+    const loader = document.createElement("div");
+    loader.className = "frameLoad";
+    loader.innerHTML = `<span class="spin"></span>Loading ${esc(s.name)}…`;
+    const f = document.createElement("iframe");
+    f.title = p.name + " - " + s.name;
+    f._loader = loader; f._loading = true;
+    f.addEventListener("load", () => { f._loading = false; loader.classList.add("hidden"); });
+    f.src = sheetUrl(s.id, true);
+    $("frames").appendChild(loader); $("frames").appendChild(f);
+    frames[fk] = f;
+  }
+  frames[fk].classList.remove("hidden");
+  if (frames[fk]._loading) frames[fk]._loader.classList.remove("hidden");
+  $("open").href = s.url || sheetUrl(s.id, false);
+}
+
+// ---------- actions ----------
+$("newProject").onclick = e => run(e.currentTarget, async () => {
+  if (!RIP.files && RIP.state !== "loading") await loadCamp();
+  const linked = new Set(); Object.values(projects).forEach(p => scriptIds(p).forEach(id => linked.add(id)));
+  const opts = [{ value: "", label: "No script yet" }].concat(
+    Object.values(RIP.files || {}).filter(f => !linked.has(f.id))
+      .sort((a, b) => (a.tp.title || a.name).localeCompare(b.tp.title || b.name))
+      .map(f => ({ value: f.id, label: f.tp.title || f.name || "Untitled script" })));
+  const v = await dialog({
+    title: "New project",
+    text: "Pick a script and Camp makes the project's Drive folder for you, then links the script.",
+    ok: "Create project",
+    fields: [
+      { name: "fileId", label: "Script", options: opts, check: () => "" },
+      { name: "name", label: "Project name (optional: defaults to the script title)", placeholder: "Short film 2026", check: () => "" },
+      { name: "link", label: "Or use an existing Drive folder (optional)", placeholder: "https://drive.google.com/drive/folders/…", type: "url",
+        check: t => !t ? "" : (folderIdFrom(t) ? "" : "That doesn't look like a Drive folder link.") }
+    ]
+  });
+  if (!v) return;
+  const name = v.name || (v.fileId ? scriptTitle(v.fileId) : "");
+  if (!name) { toast("Pick a script or type a project name."); return; }
+  toast("Creating project…", "ok", 20000);
+  const args = { name };
+  if (v.link) args.folderId = folderIdFrom(v.link);
+  const r = await api("createProject", args);
+  pendingProject = r.pid; current.tab = "scripts";
+  if (v.fileId) {
+    // ⚠ Camp/sync: linking makes the script's live room members-only
+    try { await api("linkScript", { pid: r.pid, fileId: v.fileId }); toast("Project created and script linked.", "ok"); }
+    catch (err) { toast("Project created, but the script wasn't linked: " + err.message); }
+  } else toast("Project created.", "ok");
+  render();
+});
+
+// ⚠ Camp/sync: linking makes the script's live room members-only
+function linkScript(btn) {
+  return run(btn, async () => {
+    const p = projects[current.pid]; if (!p) return;
+    const v = await dialog({
+      title: "Link a script",
+      text: `This makes the script's live room members-only for "${p.name}". Invite anyone who still needs live access first.`,
+      ok: "Link script",
+      fields: [{ name: "link", label: "Editor link or file id", placeholder: "…/editor.html?fileId=…",
+        check: t => !t ? "Paste the editor link." : (fileIdFrom(t) ? "" : "Couldn't find a file id in that. Paste the editor link.") }]
+    });
+    if (!v) return;
+    const r = await api("linkScript", { pid: current.pid, fileId: fileIdFrom(v.link) });
+    toast("Linked. " + r.rooms + " room key" + (r.rooms === 1 ? "" : "s") + " mapped to " + p.name + ".", "ok");
+  });
+}
+
+// ---------- create production docs (built by Camp's script cloud into this project's Drive folder) ----------
+const DOCS = { budget: "Budget", schedule: "Schedule", shotlist: "Shot list", productiondocs: "Crew, cast & locations" };
+async function exportDoc(kind, fileId, retried) {
+  if (!RIP.ep) RIP.ep = await CampEndpoint();
+  if (!RIP.ep) throw new Error("The script cloud isn't set up on this device. Open the Script library once to set it up.");
+  const p = projects[current.pid]; let tz = "";
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (_e) {}
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 240000);
+  let res;
+  try {
+    const r = await fetch(RIP.ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, cache: "no-store", signal: ctl.signal,
+      body: JSON.stringify({ key: lsGet(KEY_KEY) || "", action: kind, fileId, folderId: p.folderId, tz }) });
+    res = await r.json();
+  } catch (err) {
+    throw new Error(err && err.name === "AbortError" ? "Google took too long. Try again: it may be half made, and trying again finishes it." : "Couldn't reach the script cloud.");
+  } finally { clearTimeout(t); }
+  if (res && res.auth === false) {
+    if (retried) throw new Error("Locked: enter your script password.");
+    await unlockCamp();
+    return exportDoc(kind, fileId, true);
+  }
+  if (!res || res.ok !== true) throw new Error(String((res && res.error) || "Couldn't make it."));
+  return res;
+}
+function createDocsFlow(btn) {
+  return run(btn, async () => {
+    const p = projects[current.pid]; if (!p) return;
+    const ids = scriptIds(p);
+    if (!ids.length) { toast("Link a script to this project first (Scripts tab › Link script)."); return; }
+    if (!RIP.files && RIP.state !== "loading") await loadCamp();
+    const fields = [{ name: "kinds", label: "What to create", multi: true, options: Object.keys(DOCS).map(k => ({ value: k, label: DOCS[k] })) }];
+    if (ids.length > 1) fields.push({ name: "id", label: "Script", check: () => "", options: ids.map(id => ({ value: id, label: scriptTitle(id) })) });
+    const v = await dialog({ title: "Create production docs", ok: "Create", fields,
+      text: "Built from the script and saved in this project's Drive folder. Each takes up to a minute. Running one again updates it and keeps what you've typed." });
+    if (!v) return;
+    const id = v.id || ids[0], kinds = v.kinds;
+    for (let i = 0; i < kinds.length; i++) {
+      toast("Building " + DOCS[kinds[i]].toLowerCase() + " (" + (i + 1) + "/" + kinds.length + ")… this can take a minute.", "ok", 240000);
+      await exportDoc(kinds[i], id);
+    }
+    toast("Done. Saved in the project's Drive folder.", "ok");
+    current.tab = "production"; saveLast();
+    await loadSheets(current.pid);
+  });
+}
+async function setupStoryboard(id, btn) {
+  return run(btn, async () => {
+    toast("Setting up the storyboard from the shot list… this can take a minute.", "ok", 240000);
+    await exportDoc("shotlist", id);
+    location.href = toolHref("storyboard.html", id);
+  });
+}
+$("createDocs").onclick = e => createDocsFlow(e.currentTarget);
+
+// ---------- project panel: search, sort, favourites, recents, drag to rearrange, quick switcher ----------
+const PREF_KEY = "Camp_HUB_PREFS_V1";
+const prefs = { fav: [], order: [], color: {}, opened: {}, sort: "manual", showArchived: false };
+try { Object.assign(prefs, JSON.parse(lsGet(PREF_KEY) || "{}")); } catch (_e) {}
+const savePrefs = () => lsSet(PREF_KEY, JSON.stringify(prefs));
+const COLORS = ["#e5484d", "#f76b15", "#f2c94c", "#30a46c", "#0091ff", "#8e4ec6"];
+const STATUSES = ["", "Prep", "Shoot", "Post", "Done"];
+const STAR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>`;
+const DOTS = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`;
+let projQuery = "", dragPid = null, pMenu = null;
+
+function ago(ts) {
+  const s = (Date.now() - ts) / 1000;
+  if (s < 90) return "just now";
+  if (s < 3600) return Math.round(s / 60) + " min ago";
+  if (s < 86400) return Math.round(s / 3600) + " h ago";
+  const d = Math.round(s / 86400); return d + " day" + (d === 1 ? "" : "s") + " ago";
+}
+function openProject(pid) {
+  current.pid = pid; current.key = null; current.tab = current.tab || "scripts";
+  prefs.opened[pid] = Date.now(); savePrefs();
+  document.body.classList.remove("sideOpen"); render();
+}
+function orderedAll() {
+  const ids = liveIds(), byName = (a, b) => (projects[a].name || "").localeCompare(projects[b].name || "");
+  if (prefs.sort === "az") ids.sort(byName);
+  else if (prefs.sort === "opened") ids.sort((a, b) => (prefs.opened[b] || 0) - (prefs.opened[a] || 0) || byName(a, b));
+  else if (prefs.sort === "new") ids.sort((a, b) => (projects[b].createdAt || 0) - (projects[a].createdAt || 0) || byName(a, b));
+  else { const o = prefs.order; ids.sort((a, b) => { const ia = o.indexOf(a), ib = o.indexOf(b); return (ia < 0 ? 1e6 : ia) - (ib < 0 ? 1e6 : ib) || byName(a, b); }); }
+  return ids;
+}
+function toggleFav(pid) {
+  const i = prefs.fav.indexOf(pid);
+  if (i >= 0) prefs.fav.splice(i, 1); else prefs.fav.push(pid);
+  savePrefs(); renderProjectList();
+}
+function reorder(fromPid, toPid, after) {
+  const ids = orderedAll().filter(x => x !== fromPid);
+  let i = ids.indexOf(toPid); if (i < 0) return;
+  if (after) i++;
+  ids.splice(i, 0, fromPid);
+  prefs.order = ids; prefs.sort = "manual"; savePrefs(); $("projSort").value = "manual"; renderProjectList();
+}
+function nudgeProject(pid, dir) {
+  const ids = orderedAll(), i = ids.indexOf(pid), t = ids[i + dir];
+  if (t) reorder(pid, t, dir > 0);
+}
+function projCard(pid) {
+  const p = projects[pid], role = myRole(p), n = scriptIds(p).length, fav = prefs.fav.includes(pid), col = prefs.color[pid], op = prefs.opened[pid];
+  const d = document.createElement("div");
+  d.className = "project" + (pid === current.pid ? " active" : "") + (p.archived ? " archived" : "");
+  d.tabIndex = 0; d.setAttribute("role", "button"); d.draggable = true; d.dataset.pid = pid;
+  d.innerHTML = `<div class="row1">${col ? `<span class="cdot" style="background:${col}"></span>` : ""}<div class="t"></div>` +
+    `<button class="pbtn pstar${fav ? " on" : ""}" type="button" aria-label="${fav ? "Remove from favourites" : "Add to favourites"}" title="${fav ? "Remove from favourites" : "Favourite"}">${STAR}</button>` +
+    `<button class="pbtn pmore" type="button" aria-label="Project options" title="Options">${DOTS}</button></div>` +
+    `<div class="m"><span class="badge ${role}">${role}</span>${p.status ? `<span class="badge st">${esc(p.status)}</span>` : ""}<span>${n} script${n === 1 ? "" : "s"}</span>${op ? `<span class="opened">· ${ago(op)}</span>` : ""}</div>`;
+  d.querySelector(".t").textContent = p.name;
+  d.onclick = e => {
+    if (e.target.closest(".pstar")) { e.stopPropagation(); toggleFav(pid); return; }
+    if (e.target.closest(".pmore")) { e.stopPropagation(); openMenu(pid, e.target.closest(".pmore")); return; }
+    openProject(pid);
+  };
+  d.onkeydown = e => {
+    if (e.target !== d) return;
+    if (e.key === "Enter") openProject(pid);
+    else if (e.altKey && e.key === "ArrowUp") { e.preventDefault(); nudgeProject(pid, -1); setTimeout(() => $("projects").querySelector(`[data-pid="${pid}"]`)?.focus(), 0); }
+    else if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); nudgeProject(pid, 1); setTimeout(() => $("projects").querySelector(`[data-pid="${pid}"]`)?.focus(), 0); }
+  };
+  d.oncontextmenu = e => { e.preventDefault(); openMenu(pid, d); };
+  const half = e => { const r = d.getBoundingClientRect(); return e.clientY > r.top + r.height / 2; };
+  d.ondragstart = e => { dragPid = pid; d.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", pid); } catch (_e) {} };
+  d.ondragend = () => { dragPid = null; $("projects").querySelectorAll(".project").forEach(c => c.classList.remove("dragging", "dl", "dr")); };
+  d.ondragover = e => { if (!dragPid || dragPid === pid) return; e.preventDefault(); const a = half(e); d.classList.toggle("dr", a); d.classList.toggle("dl", !a); };
+  d.ondragleave = () => d.classList.remove("dl", "dr");
+  d.ondrop = e => { if (!dragPid || dragPid === pid) return; e.preventDefault(); reorder(dragPid, pid, half(e)); };
+  return d;
+}
+function renderProjectList() {
+  const box = $("projects"), all = liveIds();
+  $("projCount").textContent = all.length ? String(all.length) : "";
+  $("projSort").value = prefs.sort;
+  if (!all.length) {
+    box.innerHTML = projectsLoaded
+      ? `<div class="sideEmpty">No projects yet. Create one from a script, or ask an owner to invite you.</div>`
+      : `<div class="sideEmpty" style="display:flex;gap:8px;align-items:center"><span class="spin"></span>Loading projects…</div>`;
+    return;
+  }
+  const q = projQuery.trim().toLowerCase();
+  const ids = orderedAll().filter(pid => !q || (projects[pid].name || "").toLowerCase().includes(q) || (projects[pid].status || "").toLowerCase().includes(q));
+  box.innerHTML = "";
+  if (!ids.length) {
+    box.innerHTML = `<div class="sideEmpty">No projects match “${esc(projQuery)}”.</div>`;
+    return;
+  }
+  const live = ids.filter(pid => !projects[pid].archived), arch = ids.filter(pid => projects[pid].archived);
+  const favs = live.filter(pid => prefs.fav.includes(pid)), rest = live.filter(pid => !prefs.fav.includes(pid));
+  if (!q) {
+    const rec = Object.keys(prefs.opened).filter(pid => projects[pid] && !projects[pid].archived).sort((a, b) => prefs.opened[b] - prefs.opened[a]).slice(0, 5);
+    if (rec.length > 1) {
+      const lab = document.createElement("div"); lab.className = "gl"; lab.textContent = "Recent"; box.appendChild(lab);
+      const row = document.createElement("div"); row.className = "rchips";
+      rec.forEach(pid => { const c = document.createElement("button"); c.type = "button"; c.className = "rchip"; c.textContent = projects[pid].name; c.onclick = () => openProject(pid); row.appendChild(c); });
+      box.appendChild(row);
+    }
+  }
+  const group = (label, list) => {
+    if (!list.length) return;
+    if (label) { const lab = document.createElement("div"); lab.className = "gl"; lab.textContent = label; box.appendChild(lab); }
+    list.forEach(pid => box.appendChild(projCard(pid)));
+  };
+  group(favs.length ? "Favourites" : "", favs);
+  group(favs.length ? "All projects" : "", rest);
+  if (arch.length) {
+    const t = document.createElement("button"); t.type = "button"; t.className = "archToggle";
+    t.textContent = (prefs.showArchived ? "Hide archived" : "Show archived") + " (" + arch.length + ")";
+    t.onclick = () => { prefs.showArchived = !prefs.showArchived; savePrefs(); renderProjectList(); };
+    box.appendChild(t);
+    if (prefs.showArchived) group("", arch);
+  }
+}
+$("projSearch").oninput = e => { projQuery = e.target.value; renderProjectList(); };
+$("projSearch").onkeydown = e => { if (e.key === "Escape") { e.target.value = ""; projQuery = ""; renderProjectList(); e.target.blur(); } };
+$("projSort").onchange = e => { prefs.sort = e.target.value; savePrefs(); renderProjectList(); };
+
+// per-project menu
+function closeMenu() { if (pMenu) { pMenu.remove(); pMenu = null; } }
+function openMenu(pid, anchor) {
+  closeMenu();
+  const p = projects[pid], owner = isOwner(p), fav = prefs.fav.includes(pid), cur = prefs.color[pid] || "";
+  const m = document.createElement("div"); m.className = "pmenu"; pMenu = m;
+  m.innerHTML = `<button data-a="fav">${fav ? "Remove from favourites" : "Add to favourites"}</button>
+    <div class="mh">Colour</div><div class="cwrap">${COLORS.map(c => `<button class="cdotbtn${cur === c ? " on" : ""}" data-c="${c}" style="background:${c}" aria-label="Colour"></button>`).join("")}<button class="cdotbtn none${!cur ? " on" : ""}" data-c="" aria-label="No colour">✕</button></div>
+    <div class="sep"></div><button data-a="up">Move up</button><button data-a="down">Move down</button>` +
+    (owner ? `<div class="sep"></div><div class="mh">Status</div><div class="cwrap">${STATUSES.map(s => `<button class="chipbtn${(p.status || "") === s ? " on" : ""}" data-s="${s}">${s || "None"}</button>`).join("")}</div>
+      <button data-a="rename">Rename…</button><button data-a="archive">${p.archived ? "Restore from archive" : "Archive"}</button>` : "");
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
+  m.style.top = Math.max(8, Math.min(r.bottom + 4, window.innerHeight - h - 8)) + "px";
+  m.onclick = async e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.c !== undefined) { if (b.dataset.c) prefs.color[pid] = b.dataset.c; else delete prefs.color[pid]; savePrefs(); closeMenu(); renderProjectList(); return; }
+    if (b.dataset.s !== undefined) { closeMenu(); try { await api("setProjectStatus", { pid, status: b.dataset.s }); } catch (err) { toast(err.message); } return; }
+    const a = b.dataset.a; closeMenu();
+    if (a === "fav") toggleFav(pid); else if (a === "up") nudgeProject(pid, -1); else if (a === "down") nudgeProject(pid, 1);
+    else if (a === "rename") renameProject(pid); else if (a === "archive") archiveProject(pid);
+  };
+}
+document.addEventListener("mousedown", e => { if (pMenu && !e.target.closest(".pmenu") && !e.target.closest(".pmore")) closeMenu(); });
+document.addEventListener("scroll", closeMenu, true);
+async function renameProject(pid) {
+  const p = projects[pid];
+  const v = await dialog({ title: "Rename project", ok: "Rename", fields: [{ name: "name", label: "Project name", value: p.name }] });
+  if (!v || v.name === p.name) return;
+  try { await api("renameProject", { pid, name: v.name }); toast("Renamed.", "ok"); } catch (e) { toast(e.message); }
+}
+async function archiveProject(pid) {
+  const p = projects[pid], to = !p.archived;
+  if (to && !(await confirmDlg("Archive project?", "“" + p.name + "” moves to Archived. Nothing is deleted: the Drive folder and scripts stay as they are, and you can restore it any time.", "Archive", false))) return;
+  try { await api("archiveProject", { pid, archived: to }); toast(to ? "Archived." : "Restored.", "ok"); } catch (e) { toast(e.message); }
+}
+
+// quick switcher: Ctrl/Cmd+K
+function openPalette() {
+  if (!me || document.querySelector(".shade")) return;
+  const shade = document.createElement("div"); shade.className = "shade"; shade.style.alignItems = "flex-start"; shade.style.paddingTop = "12vh";
+  shade.innerHTML = `<div class="box pal" role="dialog" aria-label="Quick switcher"><input type="text" placeholder="Jump to a project or script…" autocomplete="off" spellcheck="false"><div class="plist"></div></div>`;
+  const input = shade.querySelector("input"), list = shade.querySelector(".plist");
+  const items = [];
+  liveIds().forEach(pid => items.push({ label: projects[pid].name, sub: "Project", go: () => openProject(pid) }));
+  if (RIP.files) liveIds().forEach(pid => scriptIds(projects[pid]).forEach(id => items.push({ label: scriptTitle(id), sub: "Script · " + projects[pid].name, go: () => { location.href = toolHref("editor.html", id, pid); } })));
+  let shown = [], sel = 0;
+  const draw = () => {
+    const q = input.value.trim().toLowerCase();
+    shown = items.filter(i => !q || i.label.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q)).slice(0, 30);
+    sel = Math.min(sel, Math.max(0, shown.length - 1));
+    list.innerHTML = shown.length ? shown.map((i, n) => `<button class="pitem${n === sel ? " on" : ""}" data-n="${n}"><span>${esc(i.label)}</span><small>${esc(i.sub)}</small></button>`).join("") : `<div class="sideEmpty">Nothing matches.</div>`;
+  };
+  const close = () => shade.remove();
+  const go = n => { const it = shown[n]; if (it) { close(); it.go(); } };
+  input.oninput = () => { sel = 0; draw(); };
+  input.onkeydown = e => {
+    e.stopPropagation();
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowDown") { e.preventDefault(); sel = Math.min(shown.length - 1, sel + 1); draw(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(0, sel - 1); draw(); }
+    else if (e.key === "Enter") { e.preventDefault(); go(sel); }
+  };
+  list.onclick = e => { const b = e.target.closest(".pitem"); if (b) go(Number(b.dataset.n)); };
+  shade.addEventListener("mousedown", e => { if (e.target === shade) close(); });
+  document.body.appendChild(shade); draw(); input.focus();
+}
+document.addEventListener("keydown", e => {
+  if (!me) return;
+  const typing = /^(input|textarea|select)$/i.test(e.target.tagName || "") || e.target.isContentEditable;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); return; }
+  if (e.key === "/" && !typing && !document.querySelector(".shade")) { e.preventDefault(); document.body.classList.add("sideOpen"); $("projSearch").focus(); }
+});
+
+// ---------- drafts: exported PDFs kept under their script (served by Camp's script cloud) ----------
+const openDrafts = {};
+async function ripGet(params, ms) {
+  if (!RIP.ep) RIP.ep = await CampEndpoint();
+  if (!RIP.ep) throw new Error("The script cloud isn't set up on this device.");
+  const url = RIP.ep + "?" + new URLSearchParams(Object.assign({}, params, { key: lsGet(KEY_KEY) || "", _: Date.now() }));
+  try { return await (await fetch(url, { cache: "no-store" })).json(); } catch (_e) { return await jsonp(url, ms || 20000); }
+}
+async function ripPost(body) {
+  if (!RIP.ep) RIP.ep = await CampEndpoint();
+  if (!RIP.ep) throw new Error("The script cloud isn't set up on this device.");
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 60000);
+  try {
+    const r = await fetch(RIP.ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, cache: "no-store", signal: ctl.signal, body: JSON.stringify(Object.assign({ key: lsGet(KEY_KEY) || "" }, body)) });
+    const res = await r.json();
+    if (res && res.auth === false) throw new Error("Locked: enter your script password.");
+    return res;
+  } catch (err) { throw new Error(err && err.message && !/fetch|abort/i.test(err.message) ? err.message : "Couldn't reach the script cloud."); }
+  finally { clearTimeout(t); }
+}
+async function loadDrafts(id) {
+  RIP.drBusy[id] = true;
+  try {
+    const res = await ripGet({ action: "drafts", fileId: id });
+    if (res && res.ok === true && Array.isArray(res.drafts)) RIP.dr[id] = res.drafts;
+    else { RIP.dr[id] = []; console.warn("Drafts for " + id + ":", (res && res.error) || res); }
+  } catch (e) { RIP.dr[id] = []; console.warn("Drafts for " + id + ":", e && e.message); }
+  RIP.drBusy[id] = false;
+  if (current.tab === "scripts") renderBody();
+}
+function draftsHtml(id, tab, owner) {
+  const dl = (RIP.dr && RIP.dr[id]) || [];
+  if (tab !== "scripts" || !dl.length) return "";
+  const shown = openDrafts[id] ? dl : dl.slice(0, 3);
+  const when = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); };
+  const x = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+  return `<div class="drafts"><div class="dh">Drafts · ${dl.length}</div>` + shown.map(d =>
+    `<div class="drow"><span class="pdfi">PDF</span><div class="tx"><b>${esc(d.label)}</b><span>${esc([d.pages ? d.pages + " page" + (d.pages === 1 ? "" : "s") : "", when(d.savedAt)].filter(Boolean).join(" · "))}</span></div>` +
+    `<div class="acts"><button class="btn sm" type="button" data-view="${esc(d.id)}" data-label="${esc(d.label)}">View</button><button class="btn sm" type="button" data-dl="${esc(d.id)}" data-label="${esc(d.label)}">Download</button>` +
+    (owner ? `<button class="iconBtn" type="button" data-deldraft="${esc(d.id)}" data-file="${esc(id)}" data-label="${esc(d.label)}" title="Delete draft" aria-label="Delete draft">${x}</button>` : "") + `</div></div>`).join("") +
+    (dl.length > 3 ? `<button class="archToggle" type="button" data-more="${esc(id)}">${openDrafts[id] ? "Show fewer" : "Show all " + dl.length}</button>` : "") + `</div>`;
+}
+async function openDraft(id, label, download) {
+  const w = download ? null : window.open("", "_blank");
+  if (w) { try { w.document.write("<p style='font:14px system-ui;color:#555;padding:24px'>Opening draft…</p>"); } catch (_e) {} }
+  try {
+    const res = await ripGet({ action: "draft", draftId: id }, 60000);
+    if (res && res.auth === false) throw new Error("Locked: enter your script password.");
+    if (!res || res.ok !== true) throw new Error(String((res && res.error) || "Couldn't open the draft."));
+    const bin = atob(res.dataB64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    if (download) { const a = document.createElement("a"); a.href = url; a.download = (label || "Draft").replace(/[\\/:*?"<>|]+/g, " ") + ".pdf"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+    else if (w) w.location.href = url; else window.open(url, "_blank");
+  } catch (err) { if (w) w.close(); toast(err.message || String(err)); }
+}
+async function deleteDraft(draftId, fileId, label) {
+  if (!(await confirmDlg("Delete draft?", "Delete “" + label + "”? The PDF moves to your Drive trash.", "Delete"))) return;
+  try {
+    const res = await ripPost({ action: "deletedraft", fileId, draftId });
+    if (!res || res.ok !== true) throw new Error(String((res && res.error) || "Couldn't delete it."));
+    RIP.dr[fileId] = (RIP.dr[fileId] || []).filter(d => d.id !== draftId);
+    renderBody(); toast("Draft deleted.", "ok");
+  } catch (e) { toast(e.message); }
+}
+
+// ---------- members drawer (owner only) ----------
+$("members").onclick = () => { $("drawer").classList.toggle("hidden"); renderMembers(); if (!$("drawer").classList.contains("hidden")) $("inviteEmail").focus(); };
+$("drawerClose").onclick = () => $("drawer").classList.add("hidden");
+$("copyLink").onclick = async () => {
+  const url = location.origin + location.pathname;
+  const ok = await copyText(url);
+  toast(ok ? "Hub link copied." : "Couldn't copy. The link is " + url, ok ? "ok" : "err");
+};
+function row(emailText, tagText, tagClass) {
+  const r = document.createElement("div"); r.className = "member";
+  const who = document.createElement("span"); who.className = "e"; who.textContent = emailText; who.title = emailText;
+  r.appendChild(who);
+  if (tagText) { const t = document.createElement("span"); t.className = "badge " + (tagClass || "viewer"); t.textContent = tagText; r.appendChild(t); }
+  return r;
+}
+function renderMembers() {
+  const p = projects[current.pid];
+  if (!p || !isOwner(p)) { $("drawer").classList.add("hidden"); return; }
+  if ($("drawer").classList.contains("hidden")) return;
+  $("drawerTitle").textContent = p.name;
+  const list = $("memberList"); list.innerHTML = "";
+  const entries = Object.entries(p.members || {}).sort((a, b) => (a[1].role === "owner" ? -1 : b[1].role === "owner" ? 1 : (a[1].email || "").localeCompare(b[1].email || "")));
+  entries.forEach(([uid, m]) => {
+    if (m.role === "owner") { list.appendChild(row(m.email, "owner", "owner")); return; }
+    const r = row(m.email);
+    const sel = document.createElement("select");
+    sel.setAttribute("aria-label", "Role for " + m.email);
+    ["editor", "viewer"].forEach(role => { const o = document.createElement("option"); o.value = role; o.textContent = role[0].toUpperCase() + role.slice(1); o.selected = role === m.role; sel.appendChild(o); });
+    sel.onchange = async () => { await run(sel, async () => { await api("changeRole", { pid: current.pid, uid, role: sel.value }); toast(m.email + " is now " + sel.value + ".", "ok"); }); renderMembers(); };
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn sm danger"; del.textContent = "Remove";
+    del.onclick = async () => {
+      if (await confirmDlg("Remove member?", "Remove " + m.email + " from " + p.name + "? They lose access to its Sheets and linked scripts.", "Remove"))
+        run(del, async () => { await api("removeMember", { pid: current.pid, uid }); toast("Removed " + m.email + ".", "ok"); });
+    };
+    r.appendChild(sel); r.appendChild(del); list.appendChild(r);
+  });
+  const pend = $("pendingList"); pend.innerHTML = "";
+  const pe = Object.entries(p.pending || {});
+  if (!pe.length) pend.innerHTML = `<p class="note">None.</p>`;
+  pe.forEach(([emailKey, x]) => {
+    const r = row(x.email, x.role, x.role);
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn sm danger"; del.textContent = "Revoke";
+    del.onclick = async () => {
+      if (await confirmDlg("Revoke invite?", "Revoke the invite for " + x.email + "?", "Revoke"))
+        run(del, async () => { await api("removeMember", { pid: current.pid, emailKey }); toast("Invite revoked.", "ok"); });
+    };
+    r.appendChild(del); pend.appendChild(r);
+  });
+}
+$("inviteForm").onsubmit = e => {
+  e.preventDefault();
+  run($("inviteBtn"), async () => {
+    const email = $("inviteEmail").value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("Enter a valid email address."); return; }
+    const p = projects[current.pid];
+    const already = Object.values((p && p.members) || {}).some(m => (m.email || "").toLowerCase() === email) || Object.values((p && p.pending) || {}).some(x => (x.email || "").toLowerCase() === email);
+    if (already) { toast(email + " is already a member or invited."); return; }
+    await api("inviteMember", { pid: current.pid, email, role: $("inviteRole").value });
+    $("inviteEmail").value = "";
+    toast("Invited " + email + ". Send them the Hub link (Copy Hub link).", "ok");
+  });
+};
+
+document.querySelectorAll(".mtab").forEach(t => { const old = t.querySelector("svg"); if (old && GLYPH[t.dataset.tab]) old.outerHTML = glyphSvg(t.dataset.tab, 15); });
+$("darkTog").onclick = () => { DARK = !DARK; lsSet(DARK_KEY, DARK ? "1" : "0"); showFrame(); };
+const moveCurrent = dir => {
+  const c = sheetsByProject[current.pid]; if (!c) return;
+  const i = c.list.findIndex(s => s.id === current.key), t = c.list[i + dir];
+  if (i >= 0 && t) moveSheet(current.pid, current.key, t.id, dir > 0);
+};
+$("mvL").onclick = () => moveCurrent(-1);
+$("mvR").onclick = () => moveCurrent(1);
+
+// ---------- banner, phone sidebar, keyboard ----------
+if (lsGet(LS_BANNER) === "1") $("banner").classList.add("hidden");
+$("dismiss").onclick = () => { $("banner").classList.add("hidden"); lsSet(LS_BANNER, "1"); };
+$("menuToggle").onclick = () => document.body.classList.toggle("sideOpen");
+$("scrim").onclick = () => document.body.classList.remove("sideOpen");
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape" || document.querySelector(".shade")) return;
+  if (!$("drawer").classList.contains("hidden")) { $("drawer").classList.add("hidden"); $("members").focus(); }
+  else document.body.classList.remove("sideOpen");
+});
+// Coming back from a tool: refresh page counts and "edited" times
+window.addEventListener("pageshow", e => { if (e.persisted && RIP.state !== "loading") { RIP.state = "idle"; RIP.dr = {}; if (me) render(); } });
+</script>
+<script>
+/* COMPASS SPINNER: fills every .spin span with the compass (same size/markup), needle driven by one shared loop */
+(function(){
+  var NS="http://www.w3.org/2000/svg";
+  var defs=document.createElementNS(NS,"svg");
+  defs.setAttribute("width","0");defs.setAttribute("height","0");defs.setAttribute("aria-hidden","true");defs.style.position="absolute";
+  defs.innerHTML='<filter id="sp-fz" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence id="sp-tbA" type="fractalNoise" baseFrequency="0.035" numOctaves="1" seed="2" result="a"/><feDisplacementMap in="SourceGraphic" in2="a" scale="1.8" result="d0"/><feTurbulence id="sp-tbB" type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="5" result="n"/><feDisplacementMap in="d0" in2="n" scale="2.4" result="d"/><feGaussianBlur in="d" stdDeviation="0.45"/></filter>';
+  document.body.appendChild(defs);
+  var tbA=document.getElementById("sp-tbA"),tbB=document.getElementById("sp-tbB");
+  var ICON='<svg viewBox="0 0 100 100" aria-hidden="true"><g filter="url(#sp-fz)" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle style="stroke-width:8" cx="50" cy="50" r="40"/><circle style="stroke-width:4.5" cx="51" cy="49" r="38.5"/><path style="stroke-width:7" d="M50 25 L50 17 M75 50 L83 50 M50 75 L50 83 M25 50 L17 50"/><g class="sn"><path d="M50 20 L56 50 L50 80 L44 50 Z" fill="currentColor" style="stroke-width:4"/><circle cx="50" cy="50" r="3.2" fill="#000" stroke="none"/></g></g></svg>';
+  var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var sa=[2,5,9,14],sb=[5,8,12,3],W0=4.0,R=0.32,Q=0.07,LEAD=0.35,th=0.6,last=0,running=false;
+  function speed(a){var x=a+LEAD;return W0*(1-R*Math.cos(x)+Q*Math.sin(2*x));}
+  function tick(now){
+    var ns=document.querySelectorAll(".spin .sn");
+    if(!ns.length){running=false;return;}
+    var dt=Math.min((now-last)/1000,0.033);last=now;
+    for(var i=0;i<3;i++){th+=speed(th)*dt/3;}
+    var f=Math.floor(now/130)%4;
+    if(tbA.getAttribute("seed")!=sa[f]){tbA.setAttribute("seed",sa[f]);tbB.setAttribute("seed",sb[f]);}
+    var a="rotate("+(th*180/Math.PI)+" 50 50)";
+    for(var j=0;j<ns.length;j++)ns[j].setAttribute("transform",a);
+    requestAnimationFrame(tick);
+  }
+  function start(){if(running||reduce)return;running=true;last=performance.now();requestAnimationFrame(tick);}
+  function fill(root){
+    var list=root.classList&&root.classList.contains("spin")?[root]:(root.querySelectorAll?root.querySelectorAll(".spin"):[]);
+    for(var i=0;i<list.length;i++){var el=list[i];if(!el.firstChild){el.innerHTML=ICON;el.setAttribute("role","img");el.setAttribute("aria-label","Loading");}}
+    if(list.length)start();
+  }
+  fill(document.body);
+  new MutationObserver(function(ms){
+    for(var i=0;i<ms.length;i++)for(var j=0;j<ms[i].addedNodes.length;j++){var n=ms[i].addedNodes[j];if(n.nodeType===1)fill(n);}
+  }).observe(document.body,{childList:true,subtree:true});
+})();
+</script>
+</body>
+</html>
