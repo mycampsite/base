@@ -14,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sed -i "s|__API_KEY__|${{ secrets.GOOGLE_API_KEY }}|" config.json
+      - run: grep -c "__API_KEY__" config.json || echo "replaced"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
