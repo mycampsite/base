@@ -2,7 +2,7 @@
   "hubUrl": "https://script.google.com/macros/s/AKfycbwETI1H3OdX7mA7GXbqUbVAFX7TzA2BMI3nesuNA3rYf7ejM9zwRUh2qRQxOVdKcmaV_g/exec",
   "cloudUrl": "https://script.google.com/macros/s/AKfycbytkVJiD76tPZFEE-C1Tw_ehIIUMvAB664IqZqkQPfqe92P9A58eORuqZV7wt2EFNZh2g/exec",
   "firebase": {
-    "apiKey": "AIzaSyBRjoo_AoLmt3ow1zvuBlFhJoojlsW-4t4",
+    "apiKey": "",
     "authDomain": "scripty-91a6e.firebaseapp.com",
     "databaseURL": "https://scripty-91a6e-default-rtdb.asia-southeast1.firebasedatabase.app",
     "projectId": "scripty-91a6e",
