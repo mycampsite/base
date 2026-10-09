@@ -200,6 +200,11 @@
   #stage .tpage .el{ cursor:move; }
   #stage .tpage .el:hover{ outline:calc(1px / var(--s, 1)) dashed rgba(90,150,255,.7); }
   #stage .tpage .el.editing{ cursor:text; outline:calc(1.5px / var(--s, 1)) solid var(--sel); filter:none !important; }
+  .sizeRow{ display:flex; align-items:center; gap:6px; }
+  .sizeRow span{ font-size:11px; color:var(--muted, #9a9a9a); }
+  .sizeRow input{ flex:1; min-width:0; }
+  .lockBtn{ width:28px; height:28px; border-radius:7px; border:1px solid var(--uiBorder); background:transparent; color:inherit; cursor:pointer; font-size:12px; line-height:1; padding:0; opacity:.6; }
+  .lockBtn.on{ opacity:1; border-color:var(--sel); }
   #selBox{ position:absolute; outline:1.5px solid var(--sel); pointer-events:none; z-index:10; }
   #selBox .h{ position:absolute; width:9px; height:9px; margin:-5px 0 0 -5px; background:#fff; border:1.5px solid var(--sel); border-radius:1px; pointer-events:auto; }
   #selBox .h::before{ content:""; position:absolute; inset:-7px; }
@@ -2167,7 +2172,13 @@
       if(hasE) w = r0.w + dx; if(hasW) w = r0.w - dx;
       if(hasS) h = r0.h + dy; if(hasN) h = r0.h - dy;
       prop = corner && el.t !== "divider" && !ev.shiftKey;
-      if(prop){ const a = w / r0.w, b = h / r0.h, sc = Math.abs(a - 1) >= Math.abs(b - 1) ? a : b; w = r0.w * sc; h = r0.h * sc; }
+      if(prop){
+        // Like Photoshop: project the pointer onto the box's diagonal, so the corner tracks the cursor
+        // smoothly instead of jumping between "width wins" and "height wins".
+        const gx = hasE ? dx : -dx, gy = hasS ? dy : -dy;
+        const sc = Math.max(0.01, 1 + (gx * r0.w + gy * r0.h) / (r0.w * r0.w + r0.h * r0.h));
+        w = r0.w * sc; h = r0.h * sc;
+      }
       const place = () => ({ x:ev.altKey ? cx0 - w / 2 : hasW ? r0.x + r0.w - w : r0.x, y:ev.altKey ? cy0 - h / 2 : hasN ? r0.y + r0.h - h : r0.y });
       let { x, y } = place();
       if(!(ev.ctrlKey || ev.metaKey) && !ev.altKey){
@@ -2198,7 +2209,7 @@
         if(!prop && node.dataset.fit){ placeLive(node, r); fitText(stagePage()); }
       }
       placeLive(node, r); showGuides(gx, gy);
-      tip(ev, f1(r.w) + " × " + f1(r.h) + " mm" + (isText && prop && mm0 ? "  ·  " + (Math.round(mm0 * scaleT * 2.835 * 2) / 2) + " pt" : ""));
+      tip(ev, f1(r.w) + " × " + f1(r.h) + " mm" + (prop ? "  ·  " + Math.round(r.w / r0.w * 100) + "%" : "") + (isText && prop && mm0 ? "  ·  " + (Math.round(mm0 * scaleT * 2.835 * 2) / 2) + " pt" : ""));
     };
     const up = () => {
       window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
@@ -2721,24 +2732,35 @@
     try{ bmp = await createImageBitmap(file, { imageOrientation:"from-image" }); }
     catch(_e){ bmp = await new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => no(new Error("Couldn't read that image.")); im.src = URL.createObjectURL(file); }); }
     const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight;
-    // 2600px on the long edge is ~220 dpi on A4: sharp in the PDF, small enough to upload fast
-    return { dataUrl: drawJpeg(bmp, w, h, 2600, 0.9), thumb: drawJpeg(bmp, w, h, 240, 0.72), w, h };
+    // 2200px on the long edge is ~265 dpi across a full A4 width: still sharp in print, but about
+    // half the bytes of the old 2600px/q90 files, so uploads take roughly half as long.
+    return { dataUrl: drawJpeg(bmp, w, h, 2200, 0.86), thumb: drawJpeg(bmp, w, h, 240, 0.72), w, h };
   }
+  // Uploads up to 3 photos at once (one at a time made a batch take the sum of every upload).
+  // The ids come back in the order the files were chosen, whichever finishes first.
   async function uploadFiles(files){
-    const ids = []; let i = 0;
-    for(const f of files){
-      i++; photoActivity("Uploading photo" + (files.length > 1 ? " " + i + " of " + files.length : "") + "…");
-      try{
-        const { dataUrl, thumb, w, h } = await prepImage(f);
-        const res = await apiPost("uploadimage", { fileId:T.fileId, name:f.name, dataUrl });
-        if(!res || res.ok === false) throw new Error((res && res.error) || "Upload failed.");
-        T.images.push({ id:res.imageId, name:res.name || f.name });
-        const blob = dataUrlBlob(dataUrl), tb = dataUrlBlob(thumb);
-        if(blob){ const rec = { blob, thumb:tb, w, h, t:Date.now() }; IDB.put(res.imageId, rec); adoptImage(res.imageId, rec); }
-        else IMG[res.imageId] = { src:dataUrl, thumb, w, h };
-        ids.push(res.imageId);
-      }catch(err){ notify(f.name + ": " + String((err && err.message) || err), true); }
-    }
+    files = Array.from(files || []);
+    const out = new Array(files.length).fill(null); let next = 0, done = 0;
+    const say = () => photoActivity(files.length > 1 ? "Uploading photos… " + done + " of " + files.length + " done" : "Uploading photo…");
+    say();
+    const worker = async () => {
+      while(next < files.length){
+        const idx = next++, f = files[idx];
+        try{
+          const { dataUrl, thumb, w, h } = await prepImage(f);
+          const res = await apiPost("uploadimage", { fileId:T.fileId, name:f.name, dataUrl });
+          if(!res || res.ok === false) throw new Error((res && res.error) || "Upload failed.");
+          T.images.push({ id:res.imageId, name:res.name || f.name });
+          const blob = dataUrlBlob(dataUrl), tb = dataUrlBlob(thumb);
+          if(blob){ const rec = { blob, thumb:tb, w, h, t:Date.now() }; IDB.put(res.imageId, rec); adoptImage(res.imageId, rec); }
+          else IMG[res.imageId] = { src:dataUrl, thumb, w, h };
+          out[idx] = res.imageId;
+        }catch(err){ notify(f.name + ": " + String((err && err.message) || err), true); }
+        done++; say();
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, files.length) }, worker));
+    const ids = out.filter(Boolean);
     photoActivity(null);
     if(ids.length){ markDirty(); renderRight(); notify(ids.length === 1 ? "Photo uploaded" : ids.length + " photos uploaded"); } else updateSaveState();
     return ids;
@@ -3228,6 +3250,10 @@
       const has = !!el.img, z = el.zoom || 1, crop = CROPPING === el.id, dtype = !el.dim ? "none" : el.dimc === "light" ? "light" : "dark";
       h += `<div class="row2"><button class="btn sm" type="button" id="epUp">${has ? "Replace…" : "Upload…"}</button><button class="btn sm" type="button" id="epClear"${has ? "" : " disabled"}>Remove photo</button></div>
         <input type="file" id="epFile" accept="image/*" style="display:none">
+        <label>Size (mm)</label>
+        <div class="sizeRow"><span>W</span><input type="number" id="epW" min="2" max="600" step="0.5" value="${Math.round(el.w * 10) / 10}">
+          <button type="button" id="epLock" class="lockBtn on" title="Keep proportions" aria-pressed="true">🔒</button>
+          <span>H</span><input type="number" id="epH" min="2" max="600" step="0.5" value="${Math.round(el.h * 10) / 10}"></div>
 
         ${slider("epZoom", "Zoom", arOf(el) ? 0.2 : 1, 5, 0.01, z, (v) => Math.round(v * 100) + "%")}
         <div class="row2" style="margin-top:10px"><button class="btn sm${crop ? " primary" : ""}" type="button" id="epCrop"${has ? "" : " disabled"}>${crop ? "Done" : "Reposition"}</button><button class="btn sm" type="button" id="epCropReset"${has ? "" : " disabled"}>Reset crop</button></div>
@@ -3387,6 +3413,26 @@
       }, "Overlay", true); });
       live("epDim", (v) => { el.dim = v || 0.4; }, "Overlay", (v) => Math.round(v * 100) + "%");
       $("epShape").querySelectorAll("button").forEach((b) => { b.onclick = () => set(() => { if(b.dataset.r === "1") el.round = 1; else delete el.round; }, "Shape", true); });
+      // Exact size, like Photoshop's W/H fields: locked keeps the frame's proportions and scales the photo with it
+      {
+        const lockKey = "treatLockAR";
+        let locked = true; try{ locked = localStorage.getItem(lockKey) !== "0"; }catch(_e){}
+        const lb = $("epLock"), wi = $("epW"), hi = $("epH");
+        const paint = () => { lb.classList.toggle("on", locked); lb.textContent = locked ? "🔒" : "🔓"; lb.setAttribute("aria-pressed", String(locked)); };
+        paint();
+        lb.onclick = () => { locked = !locked; try{ localStorage.setItem(lockKey, locked ? "1" : "0"); }catch(_e){} paint(); };
+        const apply = (which) => {
+          const v = parseFloat((which === "w" ? wi : hi).value); if(!(v >= 2)) return;
+          const ratio = el.w / el.h;
+          set(() => {
+            if(which === "w"){ el.w = rd(v); if(locked) el.h = rd(v / ratio); }
+            else{ el.h = rd(v); if(locked) el.w = rd(v * ratio); }
+          }, "Resize", false);
+          wi.value = Math.round(el.w * 10) / 10; hi.value = Math.round(el.h * 10) / 10; drawSel();
+        };
+        wi.onchange = () => apply("w"); hi.onchange = () => apply("h");
+        [wi, hi].forEach((inp) => inp.onkeydown = (e) => { e.stopPropagation(); if(e.key === "Enter") inp.blur(); });
+      }
       $("epFit").onclick = async () => { const d = await imgDims(el.img); if(!d) return; set(() => { const ar = d.w / d.h, cx = el.x + el.w / 2, cy = el.y + el.h / 2; if(el.w / el.h > ar) el.w = rd(el.h * ar); else el.h = rd(el.w / ar); el.x = rd(cx - el.w / 2); el.y = rd(cy - el.h / 2); el.fx = 50; el.fy = 50; delete el.zoom; delete el.round; }, "Fit frame", true); };
       $("epFull").onclick = () => set(() => {
         Object.assign(el, { x:0, y:0, w:PAGE_W, h:PAGE_H, bleed:1 }); delete el.round;
