@@ -145,7 +145,7 @@
   .layer-row .eye{ background:none; border:none; padding:0; display:flex; }
   .layer-row .name{ flex:1; cursor:pointer; }
 
-  #toolbar{ min-height:50px; flex-shrink:0; display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; padding:8px 16px; border-bottom:1px solid var(--border); }
+  #toolbar{ min-height:50px; flex-shrink:0; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--border); }
   #zoomResetBtn #zoomLabel{ min-width:34px; display:inline-block; color:inherit; }
   /* Shot details form (right rail) — same look as the dialogs */
   #rightRail label{ display:block; font-size:11.5px; color:var(--muted); margin:10px 0 5px; }
@@ -203,6 +203,20 @@
   .b3dRow{ display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px; font-size:12.5px; }
   .railBack{ width:100%; margin-bottom:12px; text-align:left; }
   .tbBack{ display:none; }
+  /* Undo / Redo / Clear stay together; if the toolbar must wrap they move down as one group, right-aligned */
+  .tbActs{ display:flex; gap:6px; margin-left:auto; }
+  #toolbar > .grow{ display:none; }
+  /* Laptop widths: two tidy rows instead of a ragged wrap (tools, size, zoom, actions / colours) */
+  @media (min-width: 761px) and (max-width: 1439px){
+    #toolbar #colorGroup{ order:5; flex:1 1 100%; }
+    #toolbar #colorGroup + .vsep{ display:none; }
+    #toolbar #toolGroup + .vsep{ order:1; }
+    #toolbar > label{ order:2; }
+    #toolbar #zoomGroup{ order:3; }
+    #toolbar .tbActs{ order:4; }
+    #toolbar > .vsep:nth-of-type(n+3){ display:none; }
+  }
+  .btn.ib{ display:inline-flex; align-items:center; justify-content:center; width:36px; height:34px; padding:0; }
   .b3dCard{ border:1px solid var(--border); border-radius:10px; background:var(--panel2); margin-bottom:16px; overflow:hidden; }
   .b3dCard.on{ border-color:#7a2a2e; background:#231a1a; }
   .b3dBig{ width:100%; display:flex; align-items:center; gap:10px; padding:12px; border:none; background:none; color:#d8d6d0; text-align:left; }
@@ -333,15 +347,12 @@
     #toolbar .vsep, #toolbar .grow{ display:none; }
     #toolbar .tbBack{ display:inline-flex; order:0; padding:8px 10px; }
     #toolbar #toolGroup{ order:1; }
-    #toolbar #undoBtn{ order:2; margin-left:auto; }
-    #toolbar #redoBtn{ order:3; }
-    #toolbar #clearBtn{ order:8; }
+    #toolbar .tbActs{ order:2; margin-left:auto; }
     #toolbar #colorGroup{ order:5; flex:1 1 100%; flex-wrap:nowrap !important; overflow-x:auto; scrollbar-width:none; padding:3px; }
     #toolbar #colorGroup::-webkit-scrollbar{ display:none; }
     #toolbar > label{ order:6; flex:1 1 auto; }
     #toolbar > label input{ flex:1; width:auto !important; }
     #toolbar #zoomGroup{ order:7; }
-    #toolbar #undoBtn, #toolbar #redoBtn, #toolbar #clearBtn{ padding:8px 10px; }
     #canvasWrap{ padding:12px; min-height:0; }
     body.focusView .railBack{ display:none; }
   }
@@ -2034,9 +2045,11 @@ window.SB3D={
           <button class="btn" id="zoomInBtn" type="button" title="Zoom in" aria-label="Zoom in">+</button>
         </div>
         <div class="grow" style="flex:1;"></div>
-        <button class="btn" id="undoBtn" type="button" title="Undo last stroke (Ctrl/Cmd+Z)">Undo</button>
-        <button class="btn" id="redoBtn" type="button" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
-        <button class="btn" id="clearBtn" type="button" title="Clear this shot: all drawing and the 3D blocking (Undo brings it back)">Clear</button>
+        <div class="tbActs">
+          <button class="btn ib" id="undoBtn" type="button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></svg></button>
+          <button class="btn ib" id="redoBtn" type="button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/></svg></button>
+          <button class="btn ib" id="clearBtn" type="button" title="Clear this shot: all drawing and the 3D blocking (Undo brings it back)" aria-label="Clear this shot"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+        </div>
       </div>
       <div id="canvasWrap"><div id="panelStack"></div></div>`;
 
