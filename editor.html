@@ -765,6 +765,7 @@
   .pageSpacer{
     height: 0;
   }
+  .line.pgTopBlank{ height: 0 !important; min-height: 0 !important; overflow: hidden; }
   .pageSpacer[data-kind="top"]{
     height: calc(var(--m-top-mm) * 1mm);
   }
@@ -851,17 +852,18 @@
   .line[data-type="parenthetical"]{
     width: calc((var(--a4w-mm) - var(--x-paren-L-mm) - var(--x-paren-R-mm) + var(--wrap-cal-mm)) * 1mm);
     margin-left: calc((var(--x-paren-L-mm) - var(--m-left-mm)) * 1mm);
+    text-indent: -1ch;   /* Final Draft hangs the opening "(" one character left of the text */
   }
   .line[data-type="transition"]{
-    width: calc((var(--a4w-mm) - var(--x-action-L-mm) - var(--x-action-R-mm) + var(--wrap-cal-mm)) * 1mm);
+    width: calc((var(--a4w-mm) - var(--x-action-L-mm) - var(--x-trans-R-mm) + var(--wrap-cal-mm)) * 1mm);
     margin-left: 0;
     text-align:right;
   }
 
   /* Dual Dialogue (side-by-side, Final Draft-style) */
   :root{
-    --dual-gap-mm: 8;   /* gutter between columns */
-    --dual-pad-mm: 4;   /* inner padding per column */
+    --dual-gap-mm: 6.35;   /* Final Draft: 0.25" gutter between the two 2.875" columns */
+    --dual-pad-mm: 0;      /* dialogue starts flush with each column, like Final Draft */
   }
   .line[data-type="dual"]{
     width: calc((var(--a4w-mm) - var(--x-action-L-mm) - var(--x-action-R-mm) + var(--wrap-cal-mm)) * 1mm);
@@ -3902,26 +3904,34 @@ const $ = (sel, el=document) => el.querySelector(sel);
   };
   // ---------- Geometry (Final Draft inch-based reference) ----------
   // Uses inch-based Final Draft positions (converted to mm) against the current page width.
-  // Mapping uses inch-based Final Draft positions; for A4 we map proportionally to the current page width.
-  GEO.actionL = 38.0;
-  GEO.actionR = 25.5;
-  GEO.characterL = 94.0;
-  GEO.characterR = 25.5;
-  GEO.dialogueL = 63.5;
-  GEO.dialogueR = 63.5;
-  GEO.parenL = 78.5;
-  GEO.parenR = 63.5;
-  GEO.transR = 25.5;
-
-  root.style.setProperty('--x-action-L-mm', GEO.actionL);
-  root.style.setProperty('--x-action-R-mm', GEO.actionR);
-  root.style.setProperty('--x-character-L-mm', GEO.characterL);
-  root.style.setProperty('--x-character-R-mm', GEO.characterR);
-  root.style.setProperty('--x-dialogue-L-mm', GEO.dialogueL);
-  root.style.setProperty('--x-dialogue-R-mm', GEO.dialogueR);
-  root.style.setProperty('--x-paren-L-mm', GEO.parenL);
-  root.style.setProperty('--x-paren-R-mm', GEO.parenR);
-  root.style.setProperty('--x-trans-R-mm', GEO.transR);
+  // Final Draft's default Screenplay element positions, in inches from the LEFT page edge (measured
+  // against a Final Draft PDF). Text columns keep the same width on A4 and US Letter, exactly like
+  // Final Draft, so lines wrap at the same words; only the right margin changes with the paper.
+  // Right edges carry half a character of slack so a line holds exactly what Final Draft's does:
+  // 61 characters of action, 35 of dialogue, 25 of parenthetical (measured from a Final Draft PDF).
+  const FD_IN = { actionL:1.5, actionR:7.65, characterL:3.5, characterR:7.3, dialogueL:2.5, dialogueR:6.05, parenL:3.0, parenR:5.55, transR:7.1, pageR:7.5 };
+  function applyGeo(){
+    const pw = parseFloat(getComputedStyle(root).getPropertyValue('--a4w-mm')) || 215.9;
+    const fromL = (inch) => +(inch * 25.4).toFixed(2);
+    const fromR = (inch) => +(pw - inch * 25.4).toFixed(2);
+    GEO.actionL = fromL(FD_IN.actionL);       GEO.actionR = fromR(FD_IN.actionR);
+    GEO.characterL = fromL(FD_IN.characterL); GEO.characterR = fromR(FD_IN.characterR);
+    GEO.dialogueL = fromL(FD_IN.dialogueL);   GEO.dialogueR = fromR(FD_IN.dialogueR);
+    GEO.parenL = fromL(FD_IN.parenL);         GEO.parenR = fromR(FD_IN.parenR);
+    GEO.transR = fromR(FD_IN.transR);
+    root.style.setProperty('--x-action-L-mm', GEO.actionL);
+    root.style.setProperty('--x-action-R-mm', GEO.actionR);
+    root.style.setProperty('--x-character-L-mm', GEO.characterL);
+    root.style.setProperty('--x-character-R-mm', GEO.characterR);
+    root.style.setProperty('--x-dialogue-L-mm', GEO.dialogueL);
+    root.style.setProperty('--x-dialogue-R-mm', GEO.dialogueR);
+    root.style.setProperty('--x-paren-L-mm', GEO.parenL);
+    root.style.setProperty('--x-paren-R-mm', GEO.parenR);
+    root.style.setProperty('--x-trans-R-mm', GEO.transR);
+    root.style.setProperty('--m-right-mm', fromR(FD_IN.pageR));   // 1" right page margin on Letter
+  }
+  applyGeo();
+  document.addEventListener("scripty:pageSizeChanged", () => { applyGeo(); try{ if(typeof schedulePaginate === "function") schedulePaginate(); }catch(_e){} });
 
   // ---------- Model ----------
   const DEFAULTS = {
@@ -5377,6 +5387,13 @@ function snapshot(reason="edit"){
     if(stack) stack.style.minHeight = stack.offsetHeight + "px";
     if(stageIn) stageIn.style.minHeight = stageIn.offsetHeight + "px";
     const holdScroll = () => { if(window.scrollX !== keepX || window.scrollY !== keepY) window.scrollTo(keepX, keepY); };
+    // While the page is rebuilt the browser chases the caret to the top of the script for a frame.
+    // Snap back inside the scroll event (it runs before the frame is painted), so the view never jumps.
+    let pinOn = true;
+    const pin = () => { if(pinOn) holdScroll(); };
+    window.addEventListener("scroll", pin, { passive: true });
+    const unpin = () => { if(!pinOn) return; pinOn = false; window.removeEventListener("scroll", pin); };
+    setTimeout(unpin, 400);   // safety: never hold the view longer than this
     HISTORY_LOCK = true;
     try{ __pendingSelectionOverride = null; }catch(_e){}   // never restore a stale typing caret
     setTimeout(() => { try{ if(typeof scheduleScenesRefresh === "function") scheduleScenesRefresh(); }catch(_e){} }, 60);
@@ -5406,6 +5423,7 @@ function snapshot(reason="edit"){
             if(r && (r.top < top + 8 || r.bottom > window.innerHeight - 90)) y = Math.max(0, keepY + r.top - top - (window.innerHeight - top) * 0.35);
           }
         }catch(_e){}
+        unpin();
         const hold = () => { if(window.scrollX !== keepX || window.scrollY !== y) window.scrollTo(keepX, y); };
         hold(); setTimeout(hold, 160);
       });
@@ -5523,14 +5541,16 @@ function snapshot(reason="edit"){
 
   function ensureLeadingTopSpacer(){
     const editor = $("#scriptEditor");
-    const first = editor.firstElementChild;
-    if(!(first && first.classList.contains("pageSpacer") && first.dataset.kind==="top")){
-      const top = document.createElement("div");
-      top.className = "pageSpacer";
-      top.dataset.kind = "top";
-      top.contentEditable = "false";
-      editor.prepend(top);
-    }
+    // The hidden caret anchor sits before the top spacer; look past it, or a second top spacer
+    // gets added and every page's text slides 1" down into the bottom margin.
+    const anchor = editor.firstElementChild && editor.firstElementChild.id === "caretAnchor" ? editor.firstElementChild : null;
+    const first = anchor ? anchor.nextElementSibling : editor.firstElementChild;
+    if(first && first.classList.contains("pageSpacer") && first.dataset.kind==="top") return;
+    const top = document.createElement("div");
+    top.className = "pageSpacer";
+    top.dataset.kind = "top";
+    top.contentEditable = "false";
+    if(anchor) anchor.after(top); else editor.prepend(top);
   }
 
   // If the browser collapses the caret onto the editor root element (common after large deletes),
@@ -5751,6 +5771,7 @@ function snapshot(reason="edit"){
     const ed = document.getElementById("scriptEditor"); if(!ed) return "";
     let out = (root.dataset.pagesize || "") + "#";
     for(const n of ed.children){
+      if(n.classList && n.classList.contains("pageSpacer") && n.dataset.kind === "top"){ out += "T|"; continue; }   // a stray extra top spacer must force a re-layout
       if(!n.classList || !n.classList.contains("line")) continue;
       const t = n.dataset.type || "action";
       out += (n.dataset.id || "") + ":" + t + ":" + n.offsetHeight + (n.dataset.cont === "1" ? "c" : "") + (t === "character" ? ":" + n.textContent : "") + "|";
@@ -5792,6 +5813,8 @@ function snapshot(reason="edit"){
 
     // Gather real lines in order (ignore spacers)
     const lines = $$(".line", editor);
+    // Blank lines folded away at the top of a page last time: show them again before measuring
+    for(const l of lines) if(l.classList.contains("pgTopBlank")) l.classList.remove("pgTopBlank");
 
     // Remove all spacers, we'll re-insert deterministically
     for(const sp of $$(".pageSpacer", editor)) sp.remove();
@@ -5923,6 +5946,16 @@ function snapshot(reason="edit"){
         remaining = writingH - used;
       }
 
+      // Final Draft never starts a page with a blank line: a blank that lands at the top of a
+      // page is folded to zero height (it's still there, and comes back if text moves).
+      if(used <= 0.5 && queue.length && frag.lastChild && frag.lastChild.classList && frag.lastChild.classList.contains("pageSpacer")
+         && frag.lastChild.dataset.kind === "between" && !(selDesc && (selDesc.lineIdStart === line.dataset.id || selDesc.lineIdEnd === line.dataset.id))
+         && (line.dataset.type || "action") === "action" && !line.dataset.cont && !(line.textContent || "").replace(/[\u200B\s]/g, "")){
+        line.classList.add("pgTopBlank");
+        placeLine(line, 0);
+        continue;
+      }
+
       const extra = gapAbove(line, used);
       let h = measureLine(line) + extra;
       const ltype = line.dataset.type || "action";
@@ -5933,7 +5966,14 @@ function snapshot(reason="edit"){
       // Keep scene headings and character names with what follows them
       // (don't leave them stranded at the bottom of a page).
       const keepWithNext = (ltype === "scene" || ltype === "character") && queue.length > 0 && used > 0.5;
-      const needAfter = keepWithNext ? (ltype === "scene" ? 2 : 1) * lineStepPx : moreReserve;
+      // A scene heading needs the blank line after it plus the first two lines of what follows
+      // (Final Draft won't leave a single orphaned line under a heading at the bottom of a page).
+      let needAfter = keepWithNext ? lineStepPx : moreReserve;
+      if(keepWithNext && ltype === "scene"){
+        const nextText = queue.find(q => q && q.classList && (q.textContent || "").replace(/[\u200B\s]/g, ""));
+        const nextH = nextText ? measureLine(nextText) : lineStepPx;
+        needAfter = lineStepPx + Math.min(nextH, 2 * lineStepPx);
+      }
 
       // If it fits, place it
       if(h + needAfter <= remaining + 0.5){
@@ -8094,36 +8134,7 @@ if(!e.shiftKey && !e.altKey){
     }
 
 
-    // CAPS-LOCK assist: when switching into Dialogue/Parenthetical, don't force ALL CAPS just because Caps Lock is on.
-    // If CapsLock is active and we're in dialogue/paren, normalize typed letters to lower-case.
-    // Hold Shift to force uppercase.
-    if(!meta && !e.altKey){
-      const line0 = getActiveLine();
-      const inDialogue = line0 && (line0.dataset.type === "dialogue" || line0.dataset.type === "parenthetical");
-      if(inDialogue && e.key && e.key.length === 1){
-        const capsOn = (typeof e.getModifierState === "function") ? e.getModifierState("CapsLock") : false;
-        if(capsOn && /^[A-Za-z]$/.test(e.key)){
-          e.preventDefault();
-          const ch = e.shiftKey ? e.key.toUpperCase() : e.key.toLowerCase();
-          const sel2 = window.getSelection();
-          if(sel2 && sel2.rangeCount && !sel2.isCollapsed){
-            scheduleSnapshot("replace-selection");
-            const handled = deleteSelectionWordlike();
-            if(!handled){
-              // Safer fallback: do a native delete (don't wipe the doc)
-              try{ document.execCommand && document.execCommand("delete", false, null); }catch(_e){}
-              try{ normalizeEditorStructure(); }catch(_e){}
-              try{ paginateWhenReady_();
-      }catch(_e){}
-            }
-          }
-          insertTextAtCaretPlain(ch);
-          normalizeEditorStructure();
-          paginateWhenReady_();
-      return;
-        }
-      }
-    }
+    // Caps Lock is respected in every element (dialogue included), like Final Draft.
 
 
     // Typing over a non-collapsed selection (including Cmd/Ctrl+A) should behave like Word/Final Draft:
@@ -8853,9 +8864,8 @@ function parseClipboardHTMLToLines(htmlText){
         if(lineLooksLikeCharacterName(tTrim)) type = "character";
       }
       if((prevType === "character" || prevType === "parenthetical") && type === "action" && tTrim){
-        if(!lineLooksLikeSceneHeading(tTrim) && !looksLikeTransition(tTrim) && !lineLooksLikeCharacterName(tTrim)){
-          if(!looksLikeNarrationAction(tTrim)) type = "dialogue";
-        }
+        // The line under a character cue is always their dialogue (Final Draft never puts action there)
+        if(!lineLooksLikeSceneHeading(tTrim) && !looksLikeTransition(tTrim) && !lineLooksLikeCharacterName(tTrim)) type = "dialogue";
       }
 
       out.push({ type, runs: rl });
@@ -8943,44 +8953,160 @@ function looksHardWrappedLines(lines){
 }
 
 function parsePlainScreenplayTextToLines(text){
+  // Screenplay-aware plain-text paste. Handles three common clipboard shapes:
+  //  1) Final Draft / Fountain style: one element per line, blank lines between elements
+  //  2) PDF copies WITH indentation (character, dialogue, parenthetical columns kept as spaces)
+  //  3) PDF copies WITHOUT indentation or blank lines (every visual line hard-wrapped)
+  // Wrapped lines are rejoined into paragraphs, and the line after a CHARACTER cue is always dialogue.
   let t = normalizePastedText(text||"");
   t = expandFlatScreenplayText(t);
-  const rawLines = t.split("\n");
+  const R = (s) => [{t:s,b:false,i:false,u:false,s:false,c:false}];
+  const isParen = (s) => /^\(/.test(s);
+  const nameOf = (s) => s.replace(/\s*\([^)]*\)\s*$/g, "").replace(/\s*\([^)]*\)\s*$/g, "").trim();
+  const looksName = (s) => {
+    const b = nameOf(s);
+    if(!b || b.length > 35 || /[.:,;!?]/.test(b.replace(/\bMR?S?\.|\bDR\./g, ""))) return false;
+    if(b.split(/\s+/).length > 4) return false;
+    return isMostlyUpper(b);
+  };
 
+  // ---- 1) Read lines (keep indent), drop PDF page furniture ----
+  const src = [];
+  let afterMore = false;
+  for(const raw of t.split("\n")){
+    const exp = raw.replace(/\t/g, "    ");
+    let s = exp.trim();
+    if(!s){ src.push({ ind:0, s:"" }); continue; }
+    if(/^\d{1,3}\.$/.test(s)) continue;                                   // page numbers
+    if(/^\(MORE\)$/i.test(s)){ afterMore = true; continue; }              // dialogue split across pages
+    if(/^\(?CONTINUED\)?:?(\s*\(\d+\))?$/i.test(s)) continue;
+    const sn = s.match(/^(\d+[A-Z]?)\s+(.*?)\s+\1$/);                      // scene numbers both sides
+    if(sn && lineLooksLikeSceneHeading(sn[2])) s = sn[2];
+    src.push({ ind: exp.length - exp.replace(/^\s+/, "").length, s, afterMore });
+    afterMore = false;
+  }
+  while(src.length && !src[0].s) src.shift();
+  while(src.length && !src[src.length-1].s) src.pop();
+  if(!src.length) return [{ type:"action", runs:R("") }];
+
+  const filled = src.filter(x => x.s);
+  const base = Math.min(...filled.map(x => x.ind));
+  const useIndent = filled.filter(x => x.ind - base >= 6).length >= 2;
+  // Blank lines that only mark PDF page breaks don't count: real element gaps are frequent.
+  const hasBlanks = src.filter(x => !x.s).length >= Math.max(1, filled.length * 0.12);
+  // A PDF wraps every line at ~61 chars. Typed text has longer lines. Allow a few garbled long lines.
+  const hardWrapped = filled.length >= 4 && filled.filter(x => x.s.length > 72).length <= Math.max(1, filled.length * 0.03);
+
+  // ---- 2) Classify each line ----
+  const items = [];   // { type, s, blankBefore }
+  let prev = "", blank = false, dual = null;
+  const DUAL_COL = 31;   // right column of Final Draft dual dialogue starts ~3.1" right of the action margin
+  for(let i = 0; i < src.length; i++){
+    const x = src[i], s = x.s;
+    if(!s){ blank = true; dual = null; continue; }
+    const rel = x.ind - base;
+    let type;
+
+    // Dual dialogue (indented PDF copies): two speaker columns side by side
+    if(useIndent){
+      const line = " ".repeat(rel) + s;
+      const L = line.slice(0, DUAL_COL).trim(), Rt = line.slice(DUAL_COL).trim();
+      const isHead = L && Rt && rel >= 8 && looksName(L) && looksName(Rt) && /\s{3,}/.test(line.trim());
+      if(isHead){
+        dual = { left:{ c:[L], d:[] }, right:{ c:[Rt], d:[] } };
+        items.push({ type:"dual", dual, blankBefore: blank });
+        prev = "dual"; blank = false; continue;
+      }
+      // A line running across both columns (no wide gap) is ordinary text again: the dual block is over.
+      if(dual && prev === "dual" && L && Rt && !/\S\s{3,}\S/.test(line.trim())){ dual = null; prev = "action"; blank = true; }
+      if(dual && prev === "dual"){
+        const sides = [["left", L], ["right", Rt]];
+        for(const [k, v] of sides){
+          if(!v) continue;
+          if(/^\((?:CONT['’]D|V\.?O\.?|O\.?S\.?|O\.?C\.?)\)$/i.test(v) && !dual[k].d.length) dual[k].c.push(v);
+          else dual[k].d.push(v);
+        }
+        continue;
+      }
+    }
+
+    // A "NAME (CONT'D)" straight after (MORE) just continues the same speech: skip it
+    if(x.afterMore && looksName(s) && (prev === "dialogue" || prev === "parenthetical")){ continue; }
+
+    if(lineLooksLikeSceneHeading(s)) type = "scene";
+    else if(useIndent){
+      if(rel >= 30) type = (looksLikeTransition(s) || isMostlyUpper(s)) ? "transition" : "dialogue";
+      else if(rel >= 17) type = isParen(s) ? "parenthetical" : (looksName(s) ? "character" : "dialogue");
+      else if(rel >= 6) type = (isParen(s) || (prev === "parenthetical" && !blank && !/\)$/.test(items[items.length-1].s))) ? "parenthetical" : "dialogue";
+      else type = looksLikeTransition(s) ? "transition" : "action";
+      // Indented text right after a blank that isn't under a speaker is still dialogue only if a cue precedes it
+      if((type === "dialogue" || type === "parenthetical") && blank && prev !== "character") type = "action";
+    } else {
+      const inSpeech = prev === "character" || prev === "parenthetical" || prev === "dialogue";
+      if(looksLikeTransition(s)) type = "transition";
+      else if(prev === "parenthetical" && !blank && !/\)\s*$/.test(items[items.length-1].s)) type = "parenthetical";
+      else if(isParen(s) && inSpeech && !blank) type = "parenthetical";
+      else if(looksName(s) && prev !== "character" && prev !== "parenthetical" &&
+              (blank || !hasBlanks || (src[i+1] && src[i+1].s && !looksName(src[i+1].s) && !lineLooksLikeSceneHeading(src[i+1].s)))) type = "character";
+      else if((prev === "character" || prev === "parenthetical") && !blank) type = "dialogue";   // always dialogue under a cue
+      else if(prev === "dialogue" && !blank){
+        // Line right after dialogue with no gap: either the speech wraps on, or (PDF copies) action resumes.
+        const last = items[items.length-1].s;
+        if(hasBlanks) type = (/[.!?…"]$/.test(last) && looksLikeNarrationAction(s)) ? "action" : "dialogue";
+        else {
+          // A finished sentence followed by narration or a NAME in caps is action resuming, even if the line was full.
+          const ended = /[.!?…"]$/.test(last);
+          const actionish = looksLikeNarrationAction(s) || /^[A-Z][A-Z'’\-]{1,}\b/.test(s);
+          type = (__wraps(last, s, "dialogue") && !(ended && actionish)) ? "dialogue" : "action";
+        }
+      }
+      else type = "action";
+    }
+    items.push({ type, s, blankBefore: blank });
+    prev = type; blank = false;
+  }
+
+  // ---- 3) Rejoin hard-wrapped lines into paragraphs ----
+  // Standard screenplay column widths in characters (Courier 12, 10 chars per inch)
+  function __width(type){ return { action:61, scene:61, dialogue:35, parenthetical:26, transition:20 }[type] || 61; }
+  function __wraps(prevLine, nextLine, type){
+    if(!hardWrapped) return false;
+    const w = (nextLine.match(/^\S+/) || [""])[0].length;
+    return prevLine.length + 1 + w > __width(type) - 2;
+  }
+  const els = [];
+  for(const it of items){
+    const last = els[els.length-1];
+    const joinable = last && !it.blankBefore && last.type === it.type &&
+      (it.type === "action" || it.type === "dialogue" || it.type === "parenthetical");
+    if(joinable){
+      const tail = last.lines[last.lines.length-1];
+      // Parentheticals rejoin until the closing ")". Others rejoin when the previous line was full.
+      const cont = it.type === "parenthetical" ? !/\)\s*$/.test(tail) : (hasBlanks && it.type === "dialogue" ? true : __wraps(tail, it.s, it.type));
+      if(cont){ last.lines.push(it.s); continue; }
+    }
+    els.push({ type: it.type, lines: [it.s], dual: it.dual, blankBefore: it.blankBefore });
+  }
+
+  // ---- 4) Emit lines with Final Draft spacing (one blank line between blocks) ----
   const out = [];
-  let prevType = "action";
-
-  for(const raw of rawLines){
-    const line = raw.replace(/\r/g,"");
-    if(line.trim()===""){
-      out.push({ type:"action", runs:[{t:"",b:false,i:false,u:false,s:false,c:false}] });
-      prevType = "action";
+  const speech = (t) => t === "dialogue" || t === "parenthetical";
+  const push = (ln) => out.push(ln);
+  const blankLine = () => { if(out.length && !(out[out.length-1].type === "action" && out[out.length-1].runs[0].t === "")) push({ type:"action", runs:R("") }); };
+  for(let i = 0; i < els.length; i++){
+    const e = els[i], p = els[i-1];
+    const sameBlock = p && (speech(e.type) && (p.type === "character" || speech(p.type)));
+    if(p && !sameBlock) blankLine();
+    if(e.type === "dual"){
+      const side = (d) => ({ characterRuns: R(d.c.join(" ").replace(/\s+/g, " ")), dialogueRuns: R(d.d.join(" ").replace(/\s+/g, " ")) });
+      push({ type:"dual", dual:{ left: side(e.dual.left), right: side(e.dual.right) }, runs: R("") });
       continue;
     }
-
-    const type = classifyByHeuristics(line, prevType);
-    out.push({ type, runs:[{t:line,b:false,i:false,u:false,s:false,c:false}] });
-
-    // Dialogue chaining: once character occurs, next non-blank becomes dialogue until blank / scene / transition / new character
-    if(type==="scene" || type==="transition" || type==="action") prevType = type;
-    else prevType = type;
+    push({ type: e.type, runs: R(e.lines.join(" ").replace(/\s{2,}/g, " ")) });
   }
-
-  // Reduce accidental multiple blanks
-  const cleaned = [];
-  for(const ln of out){
-    const isBlank = ln.runs.every(r => (r.t||"").trim()==="");
-    if(isBlank && cleaned.length){
-      const prevBlank = cleaned[cleaned.length-1].runs.every(r => (r.t||"").trim()==="");
-      if(prevBlank) continue;
-    }
-    cleaned.push(ln);
-  }
-  // PDF copy/paste often hard-wraps every visual line and strips blank lines/indent.
-  // Try to reflow wrapped lines back into paragraphs within the same block.
-  const shouldReflow = looksHardWrappedLines(cleaned);
-  const post = shouldReflow ? reflowWrappedPlainPaste(cleaned) : cleaned;
-  return ensureBlankAfterDialogueBlock(ensureBlankAfterScene(post));
+  if(out.length && out[out.length-1].type === "dual") push({ type:"action", runs:R("") });
+  if(out.length && out[0].type === "dual") out.unshift({ type:"action", runs:R("") });
+  return out;
 }
 
 function reflowWrappedPlainPaste(lines){
@@ -9159,7 +9285,9 @@ function pasteLinesModelAtCaret(lines){
       const pastedLen = runsTextLength(runs);
       placeCaretAtLineIndex(endLine.dataset.id, pastedLen);
     } else {
-      const nl = makeLine(item.type || (line.dataset.type||"action"), runs);
+      const nl = item.type === "dual"
+        ? makeLineFromModel({ type:"dual", dual:item.dual })
+        : makeLine(item.type || (line.dataset.type||"action"), runs);
       insertAfter.parentElement.insertBefore(nl, insertAfter.nextSibling);
       insertAfter = nl;
       touched.push(nl);
@@ -17747,6 +17875,51 @@ function clearHighlights(){
   // File › Library goes to the same place
   const ml = document.getElementById("mLibrary");
   if(ml){ const c = ml.cloneNode(true); ml.replaceWith(c); c.textContent = fromHub ? "Back to Project" : "Library"; c.addEventListener("click", (e) => { try{ window.closeMenus && window.closeMenus(); }catch(_e){} go(e); }); }
+})();
+</script>
+<style>
+  /* Dual dialogue: show which box is which while writing (never printed or exported) */
+  .line[data-type="dual"] .dualField{ position: relative; }
+  .line[data-type="dual"] .dualField[data-empty="1"]::before{ content: attr(data-ph); position: absolute; left: 0; right: 0; top: 0; color: rgba(0,0,0,.32); pointer-events: none; }
+  .line[data-type="dual"].dualActive .dualCol{ box-shadow: 0 0 0 1px rgba(91,140,255,.45); border-radius: 3px; }
+  .line[data-type="dual"].dualActive .dualCol[data-side="L"]::after,
+  .line[data-type="dual"].dualActive .dualCol[data-side="R"]::after{
+    position: absolute; top: -1.15em; font: 600 9px/1 Inter, system-ui, sans-serif; letter-spacing: .4px; color: rgba(91,140,255,.9); text-transform: uppercase;
+  }
+  .line[data-type="dual"] .dualCol{ position: relative; }
+  .line[data-type="dual"].dualActive .dualCol[data-side="L"]::after{ content: "Left speaker"; left: 0; }
+  .line[data-type="dual"].dualActive .dualCol[data-side="R"]::after{ content: "Right speaker"; left: 0; }
+  @media print{
+    .line[data-type="dual"] .dualField[data-empty="1"]::before,
+    .line[data-type="dual"] .dualCol::after{ content: none !important; }
+    .line[data-type="dual"] .dualCol{ box-shadow: none !important; }
+  }
+</style>
+<script>
+(function(){
+  const PH = { L_CHAR:"CHARACTER", L_DLG:"Dialogue", R_CHAR:"CHARACTER", R_DLG:"Dialogue" };
+  const ed = document.getElementById("scriptEditor");
+  if(!ed) return;
+  let raf = 0;
+  function refresh(){
+    raf = 0;
+    const sel = window.getSelection();
+    let n = sel && sel.rangeCount ? sel.anchorNode : null;
+    while(n && n !== ed && !(n.classList && n.classList.contains("line"))) n = n.parentNode;
+    const active = (n && n !== ed && n.dataset && n.dataset.type === "dual") ? n : null;
+    for(const l of ed.querySelectorAll(".line.dualActive")) if(l !== active) l.classList.remove("dualActive");
+    if(active) active.classList.add("dualActive");
+    for(const f of ed.querySelectorAll('.line[data-type="dual"] .dualField')){
+      const empty = !(f.textContent || "").replace(/[\u200B\u00A0\s]/g, "");
+      if(empty){ if(f.dataset.empty !== "1"){ f.dataset.empty = "1"; f.dataset.ph = PH[f.dataset.part] || ""; } }
+      else if(f.dataset.empty) delete f.dataset.empty;
+    }
+  }
+  const later = () => { if(!raf) raf = requestAnimationFrame(refresh); };
+  document.addEventListener("selectionchange", later);
+  ed.addEventListener("input", later);
+  new MutationObserver(later).observe(ed, { childList: true });
+  later();
 })();
 </script>
 </body>
