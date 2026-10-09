@@ -385,6 +385,7 @@
       <div id="listPane"></div>
 
       <div id="prodPane" class="hidden">
+        <div id="ctl"></div>
         <div id="banner">
           <span>Be signed into the same Google account in this browser that has access to the Sheets, or the tabs will show a login wall.</span>
           <button id="dismiss" class="iconBtn" type="button" aria-label="Dismiss" title="Dismiss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
@@ -430,10 +431,13 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 } catch (_e) {}
 </script>
 
+<script src="breakdown.js" defer></script>
+<script src="production.js" defer></script>
+<script src="prodpanel.js" defer></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "__API_KEY__",
@@ -886,7 +890,7 @@ function renderBody() {
   const prod = current.tab === "production";
   $("listPane").classList.toggle("hidden", prod);
   $("prodPane").classList.toggle("hidden", !prod);
-  if (prod) { renderTabs(); showFrame(); } else renderList(p);
+  if (prod) { renderTabs(); showFrame(); try { window.CampProdPanel && window.CampProdPanel.render(current.pid); } catch (e) { console.error(e); } } else renderList(p);
 }
 
 const TOOL = {
@@ -1674,6 +1678,20 @@ document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); return; }
   if (e.key === "/" && !typing && !document.querySelector(".shade")) { e.preventDefault(); document.body.classList.add("sideOpen"); $("projSearch").focus(); }
 });
+
+// ---------- Production control panel (prodpanel.js) gets what it needs from the hub here ----------
+window.__CampHub = {
+  project: pid => projects[pid],
+  canEdit: p => myRole(p) !== "viewer",
+  scriptIds: p => scriptIds(p),
+  scriptTitle: id => scriptTitle(id),
+  scriptModified: id => (RIP.files && RIP.files[id] && RIP.files[id].modified) || null,
+  ripGet: params => ripGet(params, 30000),
+  // The plan lives with the project, so every member sees changes live. ⚠ needs the production rule.
+  writeProduction: (pid, plan) => set(ref(db, "projects/" + pid + "/production"), Object.assign({}, plan, { updatedAt: Date.now(), by: (me && me.email) || "" })),
+  toast: m => toast(m),
+  layoutChanged: () => {}
+};
 
 // ---------- drafts: exported PDFs kept under their script (served by Camp's script cloud) ----------
 const openDrafts = {};
