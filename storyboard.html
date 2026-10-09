@@ -55,9 +55,16 @@
   .scene-item.active{ background:var(--panel2); font-weight:600; color:#f2f0ec; border-left:2px solid var(--accent); padding-left:6px; }
   .scene-item .dot{ width:6px; height:6px; border-radius:50%; background:#4a4a44; flex-shrink:0; }
   .scene-item .dot.hasInk{ background:var(--good); }
-  .scene-item.inView:not(.active){ background:#1f1f1c; box-shadow:inset 2px 0 0 #5a3a3c; }
-  .sceneSection.flash .sceneHead .h{ animation:sbflash 1.1s ease; }
-  @keyframes sbflash{ 0%,40%{ color:var(--accent); } 100%{ color:inherit; } }
+  /* Only the current scene is highlighted (other on-screen scenes used to be tinted too, which read as a multi-select) */
+  .sceneSection{ border-radius:10px; }
+  .sceneSection.flash{ animation:sbSecFlash 2.8s ease-out; outline:2px solid transparent; outline-offset:10px; }
+  .sceneSection.flash .sceneHead .h{ animation:sbflash 2.8s ease-out; }
+  @keyframes sbflash{ 0%,55%{ color:var(--accent); } 100%{ color:inherit; } }
+  @keyframes sbSecFlash{
+    0%,45%{ box-shadow:0 0 0 10px color-mix(in srgb, var(--accent) 9%, transparent); outline-color:var(--accent); background:color-mix(in srgb, var(--accent) 9%, transparent); }
+    100%{ box-shadow:0 0 0 10px transparent; outline-color:transparent; background:transparent; }
+  }
+  @media (prefers-reduced-motion: reduce){ .sceneSection.flash, .sceneSection.flash .sceneHead .h{ animation-duration:.01s; } }
   .scene-item .txt{ flex:1; min-width:0; }
   .scene-item .num{ display:block; }
   .scene-item .sub{ display:block; font-size:11px; color:var(--muted); font-weight:400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1200,6 +1207,11 @@ window.SB3D={
       showFatal("Open the Storyboard from a script in the Library (the ⋯ menu on any script, or File › Storyboard in the editor).");
       return;
     }
+    // Start downloading the live-sync library now; it's needed a few steps later.
+    try{ for(const f of ["firebase-app-compat.js", "firebase-auth-compat.js", "firebase-database-compat.js"]){
+      const l = document.createElement("link"); l.rel = "preload"; l.as = "script"; l.href = LIVE_SDK + f; document.head.appendChild(l); } }catch(_e){}
+    // The script and its shot list don't depend on each other: ask for both at once.
+    const slEarly = S.fileId ? apiGet("shotlistdata", { fileId: S.fileId }) : null;
     const loadRes = await apiGet("load", S.fileId ? { fileId: S.fileId } : { pid: r.pid });
     if(!loadRes || loadRes.ok === false){ showFatal((loadRes && loadRes.error) || "Couldn't open that script."); return; }
     S.fileId = loadRes.fileId || S.fileId;
@@ -1224,7 +1236,7 @@ window.SB3D={
       };
     }
 
-    const sl = await apiGet("shotlistdata", { fileId: S.fileId });
+    const sl = (slEarly && S.fileId === r.fileId) ? await slEarly : await apiGet("shotlistdata", { fileId: S.fileId });
     if(!sl || sl.ok === false){
       if(sl && sl.error && !sl.reason){ showFatal(sl.error); return; }
       showEmptyBoard(sl && sl.reason);
@@ -1346,14 +1358,28 @@ window.SB3D={
   }
   // Scrolls the board (not the page) so the scene's header sits at the top, and holds the highlight
   // on that scene while the scroll settles — even for the last scenes, which can't reach the top.
-  let __spyHoldUntil = 0;
+  let __spyHoldUntil = 0, __arriveTimer = 0, __arriveCleanup = null;
   function scrollToScene(sceneN){
     const el = document.getElementById("scene-" + sceneN), sc = document.getElementById("gridScroll");
     if(!el || !sc) return;
-    S.curScene = sceneN; __spyHoldUntil = Date.now() + 900;
-    const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 16;
-    sc.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+    if(__arriveCleanup) __arriveCleanup();   // a newer click replaces an unfinished one
+    S.curScene = sceneN; __spyHoldUntil = Infinity;   // released once the scroll settles
+    const top = Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 16));
+    el.classList.remove("flash");
+    const onMove = () => { clearTimeout(__arriveTimer); __arriveTimer = setTimeout(arrive, 120); };
+    const cleanup = () => { clearTimeout(__arriveTimer); sc.removeEventListener("scroll", onMove); __arriveCleanup = null; };
+    function arrive(){
+      cleanup();
+      __spyHoldUntil = Date.now() + 250;
+      void el.offsetWidth; el.classList.add("flash");   // flash once the scene is actually on screen
+      syncRailActive();
+    }
+    __arriveCleanup = cleanup;
+    if(Math.abs(sc.scrollTop - top) < 2){ arrive(); return; }
+    // Settled = no scroll movement for 120ms (works in every browser, unlike "scrollend")
+    sc.addEventListener("scroll", onMove, { passive: true });
+    __arriveTimer = setTimeout(arrive, 1500);   // fallback if the browser never scrolls
+    sc.scrollTo({ top, behavior: "smooth" });
     syncRailActive();
   }
 
@@ -1786,7 +1812,7 @@ window.SB3D={
       const cv = document.createElement("canvas");
       cv.width = 480; cv.height = Math.round(480 / S.ratio);
       frame.appendChild(cv);
-      renderComposite(sh.key, cv);
+      __lazyComposite(sh.key, cv);
     }else{
       frame.innerHTML = `<div class="empty-state">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 3L21 9L9 21H3V15L15 3Z" stroke="#a39d86" stroke-width="1.4" stroke-linejoin="round"/></svg>
@@ -2664,6 +2690,26 @@ window.SB3D={
   const __offInk = document.createElement("canvas"), __offBlk = document.createElement("canvas");
   let __thumb3dQueued = false;
   function panelHasContent(shotKey){ return panelHasInk(shotKey) || blockingOn(shotKey); }
+  // Thumbnails on the overview are drawn when they scroll near the screen, not all up front.
+  let __lazyIO = null, __lazyRoot = null;
+  function __lazyComposite(key, cv){
+    const root = document.getElementById("gridScroll");
+    if(!root || !("IntersectionObserver" in window)){ renderComposite(key, cv); return; }
+    if(!__lazyIO || __lazyRoot !== root){
+      if(__lazyIO) __lazyIO.disconnect();
+      __lazyRoot = root;
+      __lazyIO = new IntersectionObserver((ents) => {
+        for(const e of ents){
+          if(!e.isIntersecting) continue;
+          __lazyIO.unobserve(e.target);
+          const k = e.target.dataset.lazyKey;
+          if(k && e.target.isConnected) renderComposite(k, e.target);
+        }
+      }, { root, rootMargin: "1200px 0px" });
+    }
+    cv.dataset.lazyKey = key;
+    __lazyIO.observe(cv);
+  }
   function renderComposite(shotKey, canvas){
     const w = canvas.width, h = canvas.height, ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, w, h);
