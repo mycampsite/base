@@ -200,6 +200,49 @@
   #stage .tpage .el{ cursor:move; }
   #stage .tpage .el:hover{ outline:calc(1px / var(--s, 1)) dashed rgba(90,150,255,.7); }
   #stage .tpage .el.editing{ cursor:text; outline:calc(1.5px / var(--s, 1)) solid var(--sel); filter:none !important; }
+  .palStudioBtn{ gap:8px; }
+  .palShade{ position:fixed; inset:0; z-index:900; background:rgba(0,0,0,.62); display:flex; align-items:center; justify-content:center; padding:20px; }
+  .palBox{ width:min(1180px, 100%); height:min(760px, 100%); display:flex; flex-direction:column; background:#18191c; border:1px solid var(--uiBorder); border-radius:16px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  .palHead{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-bottom:1px solid var(--uiBorder); flex-wrap:wrap; }
+  .palHead b{ font-size:15px; margin-right:10px; }
+  .palHint{ font-size:12px; color:var(--uiMuted); }
+  .palHeadActs{ display:flex; align-items:center; gap:8px; }
+  .palHeadActs select{ height:28px; border-radius:8px; border:1px solid var(--uiBorder); background:#111; color:inherit; font:inherit; font-size:12.5px; padding:0 8px; }
+  .palHeadActs kbd{ font:600 10px Inter,sans-serif; opacity:.6; margin-left:6px; border:1px solid currentColor; border-radius:4px; padding:0 4px; }
+  .palCols{ flex:1; display:flex; min-height:0; }
+  .palCol{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 8px 26px; min-width:0; cursor:grab; transition:flex .18s ease; }
+  .palCol.dragging{ opacity:.45; }
+  .palCol.locked{ box-shadow:inset 0 -4px 0 rgba(255,255,255,.35); }
+  .palTools{ display:flex; flex-direction:column; gap:6px; margin-bottom:auto; margin-top:22px; opacity:0; transition:opacity .15s; }
+  .palCol:hover .palTools, .palCol.locked .palTools, .palCol:focus-within .palTools{ opacity:1; }
+  .palCol.locked .palTools button:not([data-a="lock"]){ opacity:.0; }
+  .palCol:hover.locked .palTools button{ opacity:1; }
+  .palTools button{ width:34px; height:34px; border-radius:9px; border:0; background:rgba(127,127,127,.18); color:inherit; font-size:14px; cursor:pointer; }
+  .palTools button:hover{ background:rgba(127,127,127,.32); }
+  .palPick{ width:46px; height:46px; border-radius:50%; border:2px solid currentColor; opacity:.55; cursor:pointer; overflow:hidden; margin-bottom:14px; }
+  .palPick:hover{ opacity:1; }
+  .palPick input{ opacity:0; width:100%; height:100%; cursor:pointer; }
+  .palHex{ width:100%; text-align:center; background:transparent; border:0; color:inherit; font:700 clamp(14px, 1.7vw, 22px) "JetBrains Mono", ui-monospace, monospace; letter-spacing:.04em; outline:none; padding:4px 0; border-radius:6px; }
+  .palHex:focus, .palName:focus{ background:rgba(127,127,127,.18); }
+  .palName{ width:100%; text-align:center; background:transparent; border:0; color:inherit; font:500 12.5px Inter,sans-serif; opacity:.8; outline:none; padding:4px 0; border-radius:6px; }
+  .palAdd{ position:absolute; left:-15px; top:50%; transform:translateY(-50%); z-index:2; width:30px; height:30px; border-radius:50%; border:0; background:#fff; color:#111; font:700 16px/1 Inter,sans-serif; cursor:pointer; opacity:0; box-shadow:0 4px 14px rgba(0,0,0,.35); transition:opacity .12s; }
+  .palCol:first-child .palAdd{ left:6px; }
+  .palCol:hover .palAdd{ opacity:1; }
+  .palFoot{ display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 16px; padding:12px 14px; border-top:1px solid var(--uiBorder); }
+  .palOpt{ display:flex; flex-direction:column; gap:5px; }
+  .palOpt > span{ font-size:11px; color:var(--uiMuted); text-transform:uppercase; letter-spacing:.06em; }
+  .palApply{ margin-left:auto; display:flex; gap:8px; }
+  @media (pointer:coarse){ .palTools, .palAdd{ opacity:1; } .palCol{ cursor:default; } }
+  @media (max-width:760px){
+    .palCols{ flex-direction:column; }
+    .palCol{ flex-direction:row; justify-content:flex-start; gap:8px; padding:6px 10px; }
+    .palTools{ flex-direction:row; margin:0; order:3; opacity:1; }
+    .palPick{ width:30px; height:30px; margin:0; }
+    .palHex{ width:auto; flex:1; text-align:left; font-size:15px; }
+    .palName{ width:90px; text-align:left; }
+    .palAdd{ display:none; }
+    .palHint{ display:none; }
+  }
   .sizeRow{ display:flex; align-items:center; gap:6px; }
   .sizeRow span{ font-size:11px; color:var(--muted, #9a9a9a); }
   .sizeRow input{ flex:1; min-width:0; }
@@ -1230,10 +1273,44 @@
   ], { slots:4 });
 
   // ---- Palette
+  // Options (set in the Palette Studio): n 2–10, pl layout, ps shape, sz size, lb labels, gap spacing
   VAR("palette", "pa-swatch", "Swatches", (h, d, o) => {
-    const n = Math.max(3, Math.min(6, o.n || 5)), g = 16, w = (1644 - g * (n - 1)) / n;
-    return [...DH(h, "Colour palette"), ...range(n).flatMap((i) => { const x = 138 + i * (w + g); return [h.sw(i, x, 315, w, 420), h.t("hex" + i, "meta", x, 752, w, 36, "", "#HEX", { pall:i }), h.t("pn" + i, "caption", x, 795, w, 36, "", "Name", { paln:i })]; }),
-      h.t("body", "body", 138, 860, 1100, 150, "", "Notes on colour, grade and light…")];
+    const n = Math.max(2, Math.min(10, o.n || 5)), pl = o.pl || "cols", sz = o.sz || "m", lb = o.lb || "both";
+    const g = o.gap == null ? 16 : Math.max(0, Math.min(80, Number(o.gap) || 0));
+    const shp = o.ps === "circle" ? { round:1 } : o.ps === "soft" ? { rr:3 } : {};
+    const X0 = 138, W = 1644, Y0 = 315, BOT = 1010, out = [...DH(h, "Colour palette")];
+    const showHex = lb === "both" || lb === "hex", showName = lb === "both" || lb === "name", LH = 43, labH = (showHex ? LH : 0) + (showName ? LH : 0);
+    const labels = (i, x, y, w, align) => {
+      const a = align ? { align } : {}, r = [];
+      if(showHex) r.push(h.t("hex" + i, "meta", x, y, w, 36, "", "#HEX", Object.assign({ pall:i }, a)));
+      if(showName) r.push(h.t("pn" + i, "caption", x, y + (showHex ? LH : 0), w, 36, "", "Name", Object.assign({ paln:i }, a)));
+      return r;
+    };
+    let bodyY;
+    if(pl === "circles"){
+      const dmax = { s:150, m:220, l:300 }[sz] || 220, dm = Math.min(dmax, (W - g * (n - 1)) / n), tot = n * dm + g * (n - 1), x0 = X0 + (W - tot) / 2;
+      range(n).forEach((i) => { const x = x0 + i * (dm + g); out.push(h.sw(i, x, Y0, dm, SQ(dm), { round:1 }), ...labels(i, x - 20, Y0 + SQ(dm) + 20, dm + 40, "center")); });
+      bodyY = Y0 + SQ(dm) + 20 + labH + 20;
+    }else if(pl === "bands"){
+      const avail = { s:400, m:540, l:650 }[sz] || 540, bh = (avail - g * (n - 1)) / n, lw = labH ? 380 : 0;
+      range(n).forEach((i) => { const y = Y0 + i * (bh + g); out.push(h.sw(i, X0, y, W - (lw ? lw + 30 : 0), bh, shp)); if(lw) out.push(...labels(i, X0 + W - lw, y + Math.max(0, (bh - labH) / 2), lw)); });
+      bodyY = Y0 + avail + 24;
+    }else if(pl === "grid"){
+      const per = Math.ceil(n / 2), cw = (W - g * (per - 1)) / per, ch = { s:150, m:200, l:250 }[sz] || 200, rowH = ch + 14 + labH + Math.max(g, 18);
+      range(n).forEach((i) => { const r = Math.floor(i / per), c = i % per, x = X0 + c * (cw + g), y = Y0 + r * rowH; out.push(h.sw(i, x, y, cw, ch, shp), ...labels(i, x, y + ch + 14, cw)); });
+      bodyY = Y0 + 2 * rowH;
+    }else if(pl === "hero" && n > 1){
+      const hh = { s:440, m:560, l:660 }[sz] || 560, hw = 760, rx = X0 + hw + Math.max(g, 30), rw = W - hw - Math.max(g, 30), rest = n - 1, bh = (hh - g * (rest - 1)) / rest, lw = labH ? 330 : 0;
+      out.push(h.sw(0, X0, Y0, hw, hh, shp), ...labels(0, X0, Y0 + hh + 16, hw));
+      range(rest).forEach((k) => { const i = k + 1, y = Y0 + k * (bh + g); out.push(h.sw(i, rx, y, rw - (lw ? lw + 24 : 0), bh, shp)); if(lw) out.push(...labels(i, rx + rw - lw, y + Math.max(0, (bh - labH) / 2), lw)); });
+      bodyY = Y0 + hh + 16 + labH + 16;
+    }else{
+      const hh = { s:260, m:420, l:520 }[sz] || 420, w = (W - g * (n - 1)) / n;
+      range(n).forEach((i) => { const x = X0 + i * (w + g), sh = o.ps === "circle" ? { round:1 } : shp, hgt = o.ps === "circle" ? SQ(w) : hh; out.push(h.sw(i, x, Y0, w, hgt, sh), ...labels(i, x, Y0 + hgt + 17, w)); });
+      bodyY = Y0 + (o.ps === "circle" ? SQ((W - g * (n - 1)) / n) : hh) + 17 + labH + 20;
+    }
+    if(bodyY < BOT - 50) out.push(h.t("body", "body", X0, bodyY, 1100, Math.min(150, BOT - bodyY), "", "Notes on colour, grade and light…"));
+    return out;
   });
 
   // ---- Locations
@@ -1698,6 +1775,7 @@
     }else if(el.t === "shape"){
       d.style.background = shapeFill(el, th, V);
       if(el.round) d.style.borderRadius = "50%";
+      else if(el.rr) d.style.borderRadius = el.rr + "mm";
       if(el.pal != null) d.style.boxShadow = "inset 0 0 0 .2mm rgba(128,128,128,.35)";
     }else if(el.t === "wave"){
       d.style.color = colOf(V, "acc");
@@ -2805,6 +2883,7 @@
     return `<div><div class="section-title">PHOTOS${T.images.length ? " · " + T.images.length : ""}</div>
       <button class="btn sm primary" type="button" id="libUp" style="width:100%">${ICON.upload} Upload photos…</button>
       <input type="file" id="libFile" accept="image/*" multiple style="display:none">
+      ${T.images.length ? `<button class="btn sm palStudioBtn" type="button" id="libPal" style="width:100%;margin-top:8px">🎨 Make a palette from these photos</button>` : ""}
       <div class="libNote${toFrame ? " on" : ""}">${toFrame ? "Click a photo to put it in the selected frame." : "Click to add to the page, or drag onto a frame."}</div>
       ${T.images.length ? `<div class="libGrid">${items}</div>` : `<div class="libEmpty">Upload photos once, then use them on any page. A green dot means it's already in the treatment.</div>`}
       ${T.images.length ? `<button class="btn sm" type="button" id="libFill" style="width:100%;margin-top:12px" title="Put unused photos into this page's empty frames">Fill empty frames on this page</button>` : ""}
@@ -2820,6 +2899,7 @@
     });
     const file = rail.querySelector("#libFile");
     rail.querySelector("#libUp").onclick = () => file.click();
+    const lp = rail.querySelector("#libPal"); if(lp) lp.onclick = () => openPaletteStudio({ generate:true });
     file.onchange = async (e) => {
       const files = Array.from(e.target.files || []); e.target.value = "";
       if(!files.length) return;
@@ -2883,6 +2963,172 @@
     commit(() => { sw.forEach((e, i) => { if(cols[i]){ e.fill = cols[i]; syncPalLabel(e, pg); } }); }, "Palette");
     if(curPage() === pg){ renderStage(); refreshCurThumb(); renderRight(); } else renderAll();
     notify("Palette pulled from your images");
+  }
+  /* ---------------- Palette Studio (Coolors-style) ----------------
+     Big colour columns you can lock, recolour, reorder, add and remove; Space re-rolls the unlocked ones
+     from your photos (or as a harmony when there are none). Layout, shape, size, labels and spacing are
+     chosen here too, then applied to the palette page (or added as a new one). */
+  const PAL_OPTS = {
+    pl:[["cols","Columns"],["circles","Circles"],["bands","Bands"],["grid","Grid"],["hero","Feature"]],
+    ps:[["sq","Square"],["soft","Rounded"],["circle","Circle"]],
+    sz:[["s","S"],["m","M"],["l","L"]],
+    lb:[["both","Hex + name"],["hex","Hex"],["name","Name"],["none","None"]],
+    gap:[["0","None"],["16","Small"],["44","Large"]]
+  };
+  const hx2rgb = (h) => { h = String(h || "").replace("#", ""); return { r:parseInt(h.slice(0, 2), 16) || 0, g:parseInt(h.slice(2, 4), 16) || 0, b:parseInt(h.slice(4, 6), 16) || 0 }; };
+  const rgb2hx = (c) => "#" + [c.r, c.g, c.b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+  const lumOf = (h) => { const c = hx2rgb(h); return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255; };
+  const cdist = (a, b) => { const x = hx2rgb(a), y = hx2rgb(b); return Math.hypot(x.r - y.r, x.g - y.g, x.b - y.b); };
+  function hsl2hex(h, s, l){
+    s /= 100; l /= 100; const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return rgb2hx({ r:f(0) * 255, g:f(8) * 255, b:f(4) * 255 });
+  }
+  function hex2hue(h){ const { r, g, b } = hx2rgb(h), mx = Math.max(r, g, b), mn = Math.min(r, g, b); if(mx === mn) return 0; const d = mx - mn; let hu = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return (hu * 60 + 360) % 360; }
+  // Every distinct colour the photos offer, most prominent first (for re-rolls)
+  async function paletteCandidates(srcs){
+    const all = await paletteFrom(srcs, 40);
+    return all;
+  }
+  async function openPaletteStudio(opts){
+    opts = opts || {};
+    const pg0 = curPage(), isPal = (p) => p && p.layout === "pa-swatch";
+    const target = isPal(pg0) ? pg0 : (T.pages.find(isPal) || null);
+    const th = themeOf(target || pg0);
+    const sws = target ? target.els.filter((e) => e.t === "shape" && e.pal != null).sort((a, b) => a.pal - b.pal) : [];
+    const names = (i) => { const t = target && target.els.find((e) => e.t === "text" && e.paln === i); return t ? (t.text || "") : ""; };
+    let cols = sws.length ? sws.map((e, i) => ({ hex:toHex(shapeFill(e, th, vOf(target))) || "#888888", name:names(i), lock:false }))
+                          : th.pal.slice(0, 5).map((h) => ({ hex:toHex(h) || h, name:"", lock:false }));
+    const o = Object.assign({ pl:"cols", ps:"sq", sz:"m", lb:"both", gap:16 }, (target && target.opt) || {});
+    let cands = null, candBusy = false;
+    async function loadCands(scope){
+      if(candBusy) return cands; candBusy = true;
+      try{
+        let ids = scope === "page" ? Array.from(usedImageIds([pg0])) : Array.from(usedImageIds());
+        if(!ids.length) ids = T.images.map((x) => x.id);
+        const got = await Promise.all(ids.slice(0, 24).map(ensureImg)), srcs = got.filter(Boolean).map((c) => c.src);
+        cands = srcs.length ? await paletteCandidates(srcs) : [];
+      }catch(_e){ cands = []; }
+      candBusy = false; return cands;
+    }
+    // Re-roll the unlocked colours: from the photos when there are any, otherwise a harmony around the locked ones
+    async function generate(fromScratch){
+      const c = await loadCands();
+      const taken = () => cols.filter((x) => x.lock).map((x) => x.hex);
+      if(c && c.length){
+        const pool = c.slice();
+        cols.forEach((x) => {
+          if(x.lock) return;
+          const ok = pool.filter((p) => taken().concat(cols.filter((y) => y !== x && y.fresh).map((y) => y.hex)).every((t) => cdist(t, p) > 38));
+          const pickFrom = (ok.length ? ok : pool).slice(0, fromScratch ? cols.length : Math.min(pool.length, 18));
+          x.hex = pickFrom[Math.floor(Math.random() * pickFrom.length)] || x.hex; x.fresh = true;
+        });
+      }else{
+        const base = taken()[0] ? hex2hue(taken()[0]) : Math.random() * 360, scheme = [0, 30, 180, 210, 150, 330, 60, 270, 90, 120][Math.floor(Math.random() * 3)];
+        cols.forEach((x, i) => { if(x.lock) return; const h = (base + (i % 2 ? scheme : 0) + (i * 360 / (cols.length + 1)) * (Math.random() * .5 + .25)) % 360; x.hex = hsl2hex(h, 35 + Math.random() * 45, 18 + Math.random() * 64); });
+      }
+      cols.forEach((x) => delete x.fresh);
+      if(!cols.some((x) => x.lock)) cols.sort((a, b) => lumOf(a.hex) - lumOf(b.hex));   // dark to light, unless you've pinned some
+      paint();
+    }
+
+    const shade = document.createElement("div");
+    shade.className = "palShade";
+    shade.innerHTML = `<div class="palBox" role="dialog" aria-label="Palette Studio">
+      <div class="palHead">
+        <div><b>Palette Studio</b><span class="palHint">Space: new colours · drag to reorder · click a colour to change it</span></div>
+        <div class="palHeadActs">
+          <select id="palSrc" title="Where new colours come from"><option value="all">From all photos</option><option value="page">From this page's photos</option></select>
+          <button type="button" class="btn sm" id="palGen">Generate <kbd>Space</kbd></button>
+          <button type="button" class="iconBtn sm" id="palX" title="Close" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="palCols" id="palCols"></div>
+      <div class="palFoot">
+        ${Object.keys(PAL_OPTS).map((k) => `<div class="palOpt"><span>${{ pl:"Layout", ps:"Shape", sz:"Size", lb:"Labels", gap:"Spacing" }[k]}</span><div class="seg" data-k="${k}">${PAL_OPTS[k].map(([v, n]) => `<button type="button" data-v="${v}">${n}</button>`).join("")}</div></div>`).join("")}
+        <div class="palApply">
+          <button type="button" class="btn sm" id="palCopy" title="Copy all hex codes">Copy hex codes</button>
+          <button type="button" class="btn sm primary" id="palOk">${target ? "Apply to palette page" : "Add palette page"}</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(shade);
+    const $p = (s) => shade.querySelector(s), colsEl = $p("#palCols");
+    let dragFrom = -1;
+    function paint(){
+      colsEl.innerHTML = cols.map((c, i) => {
+        const fg = lumOf(c.hex) > 0.55 ? "#111" : "#fff";
+        return `<div class="palCol${c.lock ? " locked" : ""}" draggable="true" data-i="${i}" style="background:${c.hex};color:${fg}">
+          ${cols.length < 10 ? `<button type="button" class="palAdd" data-a="add" title="Add a colour here" aria-label="Add a colour">+</button>` : ""}
+          <div class="palTools">
+            <button type="button" data-a="lock" title="${c.lock ? "Unlock" : "Lock (keeps it when generating)"}" aria-pressed="${c.lock}">${c.lock ? "🔒" : "🔓"}</button>
+            <button type="button" data-a="copy" title="Copy hex">⧉</button>
+            ${cols.length > 2 ? `<button type="button" data-a="del" title="Remove">✕</button>` : ""}
+          </div>
+          <label class="palPick" title="Change colour"><input type="color" value="${c.hex}" data-a="pick"></label>
+          <input class="palHex" value="${c.hex.toUpperCase()}" maxlength="7" spellcheck="false" aria-label="Hex code">
+          <input class="palName" value="${esc(c.name || "")}" placeholder="Name" maxlength="28" aria-label="Colour name">
+        </div>`;
+      }).join("");
+      shade.querySelectorAll(".palFoot .seg").forEach((sg) => sg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", String(o[sg.dataset.k]) === b.dataset.v)));
+    }
+    paint();
+    const idxOf = (el) => Number(el.closest(".palCol").dataset.i);
+    colsEl.addEventListener("click", async (e) => {
+      const b = e.target.closest("button[data-a]"); if(!b) return;
+      const i = idxOf(b), a = b.dataset.a;
+      if(a === "lock"){ cols[i].lock = !cols[i].lock; paint(); }
+      else if(a === "del"){ cols.splice(i, 1); paint(); }
+      else if(a === "copy"){ try{ await navigator.clipboard.writeText(cols[i].hex.toUpperCase()); notify("Copied " + cols[i].hex.toUpperCase()); }catch(_e){} }
+      else if(a === "add"){
+        // a new colour between this one and the previous: their mix, or a fresh pick
+        const prev = cols[i - 1], cur = cols[i], m = prev ? rgb2hx({ r:(hx2rgb(prev.hex).r + hx2rgb(cur.hex).r) / 2, g:(hx2rgb(prev.hex).g + hx2rgb(cur.hex).g) / 2, b:(hx2rgb(prev.hex).b + hx2rgb(cur.hex).b) / 2 }) : hsl2hex(hex2hue(cur.hex) + 25, 40, Math.min(80, lumOf(cur.hex) * 100 + 20));
+        cols.splice(i, 0, { hex:m, name:"", lock:false }); paint();
+      }
+    });
+    colsEl.addEventListener("input", (e) => {
+      const t = e.target, i = idxOf(t);
+      if(t.dataset.a === "pick"){ cols[i].hex = t.value; const col = t.closest(".palCol"); col.style.background = t.value; col.style.color = lumOf(t.value) > 0.55 ? "#111" : "#fff"; col.querySelector(".palHex").value = t.value.toUpperCase(); }
+      else if(t.classList.contains("palName")) cols[i].name = t.value;
+    });
+    colsEl.addEventListener("change", (e) => {
+      const t = e.target; if(!t.classList.contains("palHex")) return;
+      const h = toHex(t.value.trim().startsWith("#") ? t.value.trim() : "#" + t.value.trim());
+      if(h){ cols[idxOf(t)].hex = h; paint(); } else t.value = cols[idxOf(t)].hex.toUpperCase();
+    });
+    colsEl.addEventListener("dragstart", (e) => { if(e.target.closest("input")){ e.preventDefault(); return; } const c = e.target.closest(".palCol"); if(c){ dragFrom = Number(c.dataset.i); c.classList.add("dragging"); try{ e.dataTransfer.setData("text/plain", String(dragFrom)); }catch(_e){} } });
+    colsEl.addEventListener("dragover", (e) => { if(dragFrom >= 0) e.preventDefault(); });
+    colsEl.addEventListener("drop", (e) => {
+      e.preventDefault(); const c = e.target.closest(".palCol"); if(!c || dragFrom < 0) return;
+      const to = Number(c.dataset.i); const [m] = cols.splice(dragFrom, 1); cols.splice(to, 0, m); dragFrom = -1; paint();
+    });
+    colsEl.addEventListener("dragend", () => { dragFrom = -1; colsEl.querySelectorAll(".dragging").forEach((x) => x.classList.remove("dragging")); });
+    shade.querySelectorAll(".palFoot .seg").forEach((sg) => sg.addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if(!b) return; const k = sg.dataset.k; o[k] = k === "gap" ? Number(b.dataset.v) : b.dataset.v; paint(); }));
+    $p("#palSrc").onchange = async (e) => { cands = null; await loadCands(e.target.value); generate(true); };
+    $p("#palGen").onclick = () => generate(false);
+    $p("#palCopy").onclick = async () => { try{ await navigator.clipboard.writeText(cols.map((c) => c.hex.toUpperCase()).join(" ")); notify("Hex codes copied"); }catch(_e){} };
+    const close = () => { shade.remove(); document.removeEventListener("keydown", onKey, true); };
+    $p("#palX").onclick = close;
+    shade.addEventListener("pointerdown", (e) => { if(e.target === shade) close(); });
+    function onKey(e){
+      if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); close(); return; }
+      if(e.key === " " && !(e.target.closest && e.target.closest("input, select, textarea"))){ e.preventDefault(); e.stopPropagation(); generate(false); return; }
+      if(!(e.target.closest && e.target.closest("input, select, textarea"))) e.stopPropagation();   // keep page shortcuts out while the studio is open
+    }
+    document.addEventListener("keydown", onKey, true);
+    $p("#palOk").onclick = () => {
+      const opt = { n:cols.length, pl:o.pl, ps:o.ps, sz:o.sz, lb:o.lb, gap:Number(o.gap) };
+      commit(() => {
+        let pg = target;
+        if(!pg){ const thk = (pg0 && pg0.bg && THEMES[pg0.bg.th]) ? pg0.bg.th : "deck"; pg = makePage(null, "pa-swatch", DATA, opt, thk, 0); T.pages.splice(T.cur + 1, 0, pg); T.cur++; }
+        else{ rebuildPage(pg, "pa-swatch", opt); T.cur = T.pages.indexOf(pg); }
+        const sw = pg.els.filter((e) => e.t === "shape" && e.pal != null).sort((a, b) => a.pal - b.pal);
+        sw.forEach((e, i) => { if(!cols[i]) return; e.fill = cols[i].hex; syncPalLabel(e, pg); const nm = pg.els.find((x) => x.t === "text" && x.paln === i); if(nm) nm.text = cols[i].name || ""; });
+      }, "Palette");
+      close(); SEL = null; renderAll();
+      notify("Palette applied");
+    };
+    if(opts.generate) generate(true);
   }
   // Re-read the script for this page: group names ("Everyone") out, new characters/locations in. Photos and written text stay.
   function refreshFromScript(){
@@ -3245,7 +3491,7 @@
     }else if(el.t === "shape"){
       h += `<label>Fill</label>${swatchRow("epFill", el.fill, el.fill ? "" : el.fk, V, FILLS, false)}
         <div class="seg" id="epShape" style="margin-top:12px"><button type="button" data-r="0" class="${!el.round ? "on" : ""}">Rectangle</button><button type="button" data-r="1" class="${el.round ? "on" : ""}">Circle</button></div>
-        ${el.pal != null ? `<button class="btn sm" type="button" id="epFillReset" style="width:100%;margin-top:10px">Use the theme's colour</button>` : ""}`;
+        ${el.pal != null ? `<button class="btn sm" type="button" id="epFillReset" style="width:100%;margin-top:10px">Use the theme's colour</button><button class="btn sm primary" type="button" id="epPalStudio" style="width:100%;margin-top:8px">Edit palette in Studio</button>` : ""}`;
     }else if(el.t === "image"){
       const has = !!el.img, z = el.zoom || 1, crop = CROPPING === el.id, dtype = !el.dim ? "none" : el.dimc === "light" ? "light" : "dark";
       h += `<div class="row2"><button class="btn sm" type="button" id="epUp">${has ? "Replace…" : "Upload…"}</button><button class="btn sm" type="button" id="epClear"${has ? "" : " disabled"}>Remove photo</button></div>
@@ -3351,7 +3597,7 @@
 
         <label class="chk"><input type="checkbox" id="rpChrome"${showChrome(pg) ? " checked" : ""}> Header &amp; page number</label>`
         : `<div class="hint" style="margin-top:8px">An older page. Pick a section to update it.</div>`}
-      ${pg.layout === "pa-swatch" ? `<label>Swatches</label><div class="seg" id="rpPal">${[3, 4, 5, 6].map((n) => `<button type="button" data-n="${n}" class="${pg.els.filter((e) => e.pal != null).length === n ? "on" : ""}">${n}</button>`).join("")}</div>` : ""}
+      ${pg.layout === "pa-swatch" ? `<button class="btn primary palStudioBtn" type="button" id="rpPalStudio" style="width:100%;margin-top:12px">${ICON.palette || "🎨"} Palette Studio</button><div class="hint" style="margin-top:6px">Pick colours from your photos, lock favourites, change the layout, shape and size.</div><label>Swatches</label><div class="seg" id="rpPal">${[3, 4, 5, 6].map((n) => `<button type="button" data-n="${n}" class="${pg.els.filter((e) => e.pal != null).length === n ? "on" : ""}">${n}</button>`).join("")}</div>` : ""}
       ${pg.els.some((e) => e.t === "shape" && e.pal != null) ? `<button class="btn sm" type="button" id="rpPalPull" style="width:100%;margin-top:10px">Pull palette from images</button>` : ""}
       ${pg.sec === "characters" && nChars > per ? `<label>Characters on this page</label><select id="rpFrom">${range(Math.ceil(nChars / per)).map((i) => `<option value="${i * per}"${(pg.opt && pg.opt.from || 0) === i * per ? " selected" : ""}>${i * per + 1}–${Math.min(nChars, (i + 1) * per)}</option>`).join("")}</select>` : ""}
       ${["characters", "locations"].includes(pg.sec) ? `<button class="btn sm" type="button" id="rpSync" style="width:100%;margin-top:10px">Refresh from script</button>` : ""}
@@ -3441,6 +3687,7 @@
     }
     if(el.t === "shape"){
       const pg = curPage();
+      if($("epPalStudio")) $("epPalStudio").onclick = () => openPaletteStudio();
       $("epFill").querySelectorAll(".swatch").forEach((b) => { b.onclick = () => {
         if(b.dataset.pick){ colorEdit(b, el.fill || shapeFill(el, themeOf(pg), vOf(pg)), (c) => { delete el.ac; el.fill = c; if(el.pal != null) syncPalLabel(el, pg); }, "Fill"); return; }
         set(() => { delete el.ac; if(b.dataset.k){ delete el.fill; delete el.pal; el.fk = b.dataset.k; } else { el.fill = b.dataset.c; if(el.pal != null) syncPalLabel(el, pg); } }, "Fill", true);
@@ -3531,6 +3778,7 @@
     const ch = $("rpChrome"); if(ch) ch.onchange = () => { commit(() => { pg.chrome = ch.checked; }, "Header"); renderStage(); refreshCurThumb(); };
     const rpp = $("rpPal"); if(rpp) rpp.querySelectorAll("button").forEach((b) => { b.onclick = () => { if(Number(b.dataset.n) !== pg.els.filter((e) => e.pal != null).length) repalette(Number(b.dataset.n)); }; });
     const rpx = $("rpPalPull"); if(rpx) rpx.onclick = pullPalette;
+    const rpStudio = $("rpPalStudio"); if(rpStudio) rpStudio.onclick = () => openPaletteStudio();
     const rps = $("rpSync"); if(rps) rps.onclick = refreshFromScript;
     const rf = $("rpFrom"); if(rf) rf.onchange = () => {
       const from = Number(rf.value);
