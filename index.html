@@ -1326,7 +1326,8 @@ async function exportDoc(kind, fileId, retried) {
   let res;
   try {
     const r = await fetch(RIP.ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, cache: "no-store", signal: ctl.signal,
-      body: JSON.stringify({ key: lsGet(KEY_KEY) || "", action: kind, fileId, folderId: p.folderId, tz }) });
+      // The Production plan travels with every export, so the schedule and budget follow the panel
+      body: JSON.stringify({ key: lsGet(KEY_KEY) || "", action: kind, fileId, folderId: p.folderId, tz, plan: (p && p.production && p.production.scriptId === fileId) ? p.production : null }) });
     res = await r.json();
   } catch (err) {
     throw new Error(err && err.name === "AbortError" ? "Google took too long. Try again: it may be half made, and trying again finishes it." : "Couldn't reach the script cloud.");
@@ -1690,7 +1691,18 @@ window.__CampHub = {
   // The plan lives with the project, so every member sees changes live. ⚠ needs the production rule.
   writeProduction: (pid, plan) => set(ref(db, "projects/" + pid + "/production"), Object.assign({}, plan, { updatedAt: Date.now(), by: (me && me.email) || "" })),
   toast: m => toast(m),
-  layoutChanged: () => {}
+  layoutChanged: () => {},
+  isOwner: p => isOwner(p),
+  // Rebuild the schedule (with Day Out of Days) and the budget from the plan, then show them
+  syncSheets: async (pid, fileId, btn) => run(btn, async () => {
+    const steps = [["schedule", "schedule"], ["budget", "budget"]];
+    for (let i = 0; i < steps.length; i++) {
+      toast("Updating the " + steps[i][1] + " from the plan (" + (i + 1) + "/" + steps.length + ")… this can take a minute.", "ok", 240000);
+      await exportDoc(steps[i][0], fileId);
+    }
+    toast("Schedule and budget now follow the plan.", "ok");
+    await loadSheets(pid);
+  })
 };
 
 // ---------- drafts: exported PDFs kept under their script (served by Camp's script cloud) ----------

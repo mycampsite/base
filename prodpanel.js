@@ -228,6 +228,7 @@ function render(pid){
         ${canEdit ? `<button class="btn sm" type="button" data-a="auto" title="Place unscheduled scenes on days with room, keeping locations together">Auto-schedule</button>
         <button class="btn sm" type="button" data-a="reauto" title="Lay out every scene again from scratch">Re-plan all</button>` : ""}
         <button class="btn sm" type="button" data-a="reload" title="Read the latest version of the script">Refresh script</button>
+        ${hub.isOwner(p) ? `<button class="btn sm primary" type="button" data-a="sync" title="Rebuild the Schedule (with Day Out of Days) and the Budget from this plan">Sync to Sheets</button>` : ""}
       </div>
     </div>`;
 
@@ -293,6 +294,7 @@ function wire(box, pid, ctx){
       if(k === "full"){ S.full = !S.full; render(pid); hub.layoutChanged(); return; }
       if(k === "reload"){ loadScript(ctx.scriptId || hub.scriptIds(p)[0], true); return; }
       if(k === "dismiss"){ delete S.notice[pid]; render(pid); return; }
+      if(k === "sync"){ flush(); hub.syncSheets(pid, ctx.scriptId, a); return; }
       if(k === "unpick"){ S.pick = null; render(pid); return; }
       if(!canEdit) return;
       if(k === "start"){
