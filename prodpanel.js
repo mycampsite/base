@@ -61,6 +61,7 @@ const css = `
 .ctlWarn div{ color:#f1c76b; } .ctlWarn div.info{ color:var(--uiMuted); }
 .board{ display:flex; gap:10px; overflow-x:auto; padding:12px 0 6px; align-items:flex-start; }
 .col{ flex:0 0 228px; background:#1d1d1d; border:1px solid var(--uiBorder); border-radius:12px; display:flex; flex-direction:column; max-height:440px; }
+.col.none{ flex-basis:150px; }
 .col.over{ border-color:rgba(255,139,131,.55); }
 .col.drop{ border-color:var(--focus); box-shadow:0 0 0 2px rgba(91,140,255,.35); }
 .colHead{ padding:9px 10px 7px; border-bottom:1px solid var(--uiBorder); }
@@ -95,7 +96,9 @@ const css = `
 .ctlRO{ font-size:11.5px; color:var(--uiMuted); }
 @media (max-width:760px){
   #ctl.open{ max-height:none; flex:1; }
-  .col{ flex-basis:78vw; }
+  .col{ flex-basis:78vw; scroll-snap-align:start; }
+  .col.none{ flex-basis:36vw; }
+  .board{ scroll-snap-type:x proximity; scroll-padding-left:2px; -webkit-overflow-scrolling:touch; }
   .ctlActs{ margin-left:0; width:100%; }
 }`;
 const style = document.createElement("style"); style.textContent = css; document.head.appendChild(style);
@@ -258,7 +261,7 @@ function render(pid){
       <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div></button>`;
   };
   const unsched = rec.unscheduled.slice().sort((a, b) => byId[a].n - byId[b].n);
-  const cols = [`<div class="col" data-day="-1"><div class="colHead"><b>Unscheduled</b><span class="dt">${unsched.length}</span>
+  const cols = [`<div class="col${unsched.length ? "" : " none"}" data-day="-1"><div class="colHead"><b>Unscheduled</b><span class="dt">${unsched.length}</span>
       <div class="colMeta"><span>${P.fmtEighths(unsched.reduce((a, id) => a + byId[id].eighths, 0))} pages</span></div></div>
       <div class="strips">${unsched.length ? unsched.map(strip).join("") : `<div class="colEmpty">Every scene has a day ✓</div>`}</div></div>`]
     .concat(pl.days.map((d, i) => {
@@ -285,7 +288,7 @@ function render(pid){
     </table></div></details>`;
 
   box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${csRow}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}
-    <div class="ctlRO">Drag scenes between days (or click a scene to move it). Changes save for the whole team straight away.</div></div>`;
+    <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it to another day" : "Drag scenes between days (or click a scene to move it)"}. Changes save for the whole team straight away.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
 }
 

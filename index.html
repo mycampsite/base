@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="ui.css">
+<script src="ui.js" defer></script>
 <title>Hub - Camp</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#17181c">
+<meta name="theme-color" content="#141414">
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://script.google.com">
@@ -310,6 +312,10 @@
     .pHead h2{ flex:1 1 100%; order:-1; font-size:16px; }
     .pHead .btn, .actions .btn{ padding:0 11px; }
     .mtabs{ padding:0 4px; }
+    /* Phones: all four tabs fit on screen (icon over label) instead of Production hiding off the edge */
+    .mtab{ flex:1 1 0; min-width:0; flex-direction:column; gap:4px; padding:9px 2px 8px; font-size:11.5px; }
+    .mtab svg{ width:17px; height:17px; }
+    .mtab .n{ display:none; }
     #listPane{ padding:10px; }
     .listHead .muted{ flex:1 1 100%; }
     .srow{ flex-wrap:wrap; }
