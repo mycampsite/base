@@ -48,6 +48,12 @@ const css = `
 .ctlStep button:hover{ background:rgba(255,255,255,.12); }
 .ctlStep input{ width:46px; border:0 !important; border-radius:0 !important; text-align:center; background:#111; }
 .ctlActs{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+.ctlCs{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:10px; font-size:12.5px; }
+.ctlCs b{ margin-right:4px; }
+.ctlCs a{ text-decoration:none; border:1px solid var(--uiBorder); border-radius:8px; padding:3px 9px; background:rgba(255,255,255,.04); }
+.ctlCs a:hover{ border-color:rgba(255,255,255,.3); }
+.ctlCs a.fold{ color:var(--uiMuted); }
+.ctlCs span{ color:var(--uiMuted); font-size:11.5px; margin-left:4px; }
 .ctlNote{ margin:10px 0 0; padding:9px 12px; border-radius:10px; background:rgba(91,140,255,.1); border:1px solid rgba(91,140,255,.3); font-size:12.5px; display:flex; gap:10px; align-items:flex-start; }
 .ctlNote ul{ margin:4px 0 0; padding-left:18px; }
 .ctlNote .x{ margin-left:auto; }
@@ -232,6 +238,8 @@ function render(pid){
       </div>
     </div>`;
 
+  const cs = raw.callsheets, csDays = cs ? (Array.isArray(cs.days) ? cs.days : Object.values(cs.days || {})) : [];
+  const csRow = csDays.length ? `<div class="ctlCs"><b>Call sheets</b>${csDays.map((d) => `<a href="${esc(d.url)}" target="_blank" rel="noopener">Day ${esc(d.day)}</a>`).join("")}${cs.folderUrl ? `<a href="${esc(cs.folderUrl)}" target="_blank" rel="noopener" class="fold">All in Drive ↗</a>` : ""}<span>Synced ${esc(new Date(cs.at || 0).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}</span></div>` : "";
   const n = S.notice[pid];
   const sceneName = (id) => { const s = byId[id]; return s ? "Sc " + s.n : "a deleted scene"; };
   const notice = n ? `<div class="ctlNote"><div><b>The script changed</b><ul>
@@ -276,7 +284,7 @@ function render(pid){
       ${rows.map((r) => `<tr><td>${esc(r.name)}</td>${r.marks.map((m) => `<td class="${m}">${m}</td>`).join("")}<td>${r.workDays}</td><td>${r.holdDays}</td><td><b>${r.total}</b></td></tr>`).join("")}
     </table></div></details>`;
 
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}
+  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${csRow}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}
     <div class="ctlRO">Drag scenes between days (or click a scene to move it). Changes save for the whole team straight away.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
 }

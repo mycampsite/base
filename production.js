@@ -61,7 +61,10 @@ function normalize(plan){
   const seen = new Set();
   days.forEach((d) => { d.scenes = d.scenes.filter((id) => !seen.has(id) && seen.add(id)); });
   // `known` = every scene id the plan has already seen, so a scene added to the script later is spotted as new
-  return { v: 1, scriptId: String(plan.scriptId || ""), settings, days, known: arr(plan.known).map(String) };
+  const out = { v: 1, scriptId: String(plan.scriptId || ""), settings, days, known: arr(plan.known).map(String) };
+  // links to the call sheets made by the last Sync (kept as they are)
+  if(plan.callsheets && typeof plan.callsheets === "object") out.callsheets = plan.callsheets;
+  return out;
 }
 
 // Changing the number of shoot days. Scenes on days that are removed go back to Unscheduled

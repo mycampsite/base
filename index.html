@@ -1695,12 +1695,16 @@ window.__CampHub = {
   isOwner: p => isOwner(p),
   // Rebuild the schedule (with Day Out of Days) and the budget from the plan, then show them
   syncSheets: async (pid, fileId, btn) => run(btn, async () => {
-    const steps = [["schedule", "schedule"], ["budget", "budget"]];
+    const steps = [["schedule", "schedule"], ["budget", "budget"], ["callsheets", "call sheets"]];
     for (let i = 0; i < steps.length; i++) {
       toast("Updating the " + steps[i][1] + " from the plan (" + (i + 1) + "/" + steps.length + ")… this can take a minute.", "ok", 240000);
-      await exportDoc(steps[i][0], fileId);
+      const res = await exportDoc(steps[i][0], fileId);
+      // remember where the call sheets are, so everyone can open them from the panel
+      if (steps[i][0] === "callsheets" && res && res.days) {
+        await set(ref(db, "projects/" + pid + "/production/callsheets"), { folderUrl: res.folderUrl || "", at: Date.now(), days: res.days.map(d => ({ day: d.day, url: d.url })) });
+      }
     }
-    toast("Schedule and budget now follow the plan.", "ok");
+    toast("Schedule, budget and call sheets now follow the plan.", "ok");
     await loadSheets(pid);
   })
 };
