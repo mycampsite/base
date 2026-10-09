@@ -2125,6 +2125,13 @@ html,body{ background: var(--uiBg) !important; }
   .drawerShade{ position:fixed; inset:0; z-index:1001; background:rgba(0,0,0,.45); }
   @media (hover:none){ .sceneGrip{ display:none; } }
 </style>
+<script>
+  // config.json is read by several parts of the editor; fetch it once per page load and share it
+  window.__cfgFetch = function(){
+    if(!window.__cfgP) window.__cfgP = fetch("config.json?_=" + Date.now(), { cache:"no-store" }).catch(function(e){ window.__cfgP = null; throw e; });
+    return window.__cfgP.then(function(r){ return r.clone(); });
+  };
+</script>
 <script src="auth.js"></script>
 </head>
 <body>
@@ -10241,7 +10248,7 @@ $("#newBtn").addEventListener("click", () => {
     if(__CONFIG_PROMISE) return __CONFIG_PROMISE;
     __CONFIG_PROMISE = (async ()=>{
       try{
-        const r = await fetch("config.json?_=" + Date.now(), { cache: "no-store" });
+        const r = await window.__cfgFetch();
         if(!r.ok) return "";
         const j = await r.json();
         const u = normalizeEndpoint(j.cloudUrl || j.cloudURL || j.cloud || j.endpoint || "");
@@ -13993,7 +14000,7 @@ ${TP.join("\n")}
     let cfg = null;
     try{ cfg = JSON.parse(localStorage.getItem("SCRIPTY_FIREBASE_V1") || "null"); }catch(_e){}
     try{
-      const r = await fetch("config.json?_=" + Date.now(), { cache: "no-store" });
+      const r = await window.__cfgFetch();
       if(r.ok){ const j = await r.json(); cfg = (j && j.firebase && j.firebase.apiKey && j.firebase.databaseURL) ? j.firebase : null; try{ localStorage.setItem("SCRIPTY_FIREBASE_V1", JSON.stringify(cfg)); }catch(_e){} }
     }catch(_e){}
     return cfg;
@@ -14371,6 +14378,10 @@ ${TP.join("\n")}
     try{
       const cfg = await __liveConfig();
       if(!cfg){ __liveOff("config.json on your site doesn't have the \"firebase\" settings yet (or has a typo). Add the firebase block I sent, then reload."); return; }
+      // Download the three SDK files at the same time; they still run in order (each waits for the one before)
+      try{ ["firebase-app-compat.js", "firebase-auth-compat.js", "firebase-database-compat.js"].forEach((f) => {
+        if(document.querySelector(`link[rel="preload"][href="${__LIVE_SDK + f}"]`)) return;
+        const l = document.createElement("link"); l.rel = "preload"; l.as = "script"; l.href = __LIVE_SDK + f; document.head.appendChild(l); }); }catch(_e){}
       await __liveLoadScript(__LIVE_SDK + "firebase-app-compat.js");
       await __liveLoadScript(__LIVE_SDK + "firebase-auth-compat.js");
       await __liveLoadScript(__LIVE_SDK + "firebase-database-compat.js");
@@ -14379,12 +14390,14 @@ ${TP.join("\n")}
       const auth = fb.auth();
       const cred = await window.__ensureGoogleUser(auth, fb);
       try{ const c = document.getElementById("userChip"); const em = auth.currentUser && auth.currentUser.email; if(c && !c.textContent && em) window.setUserChip(em); }catch(_e){}
-            // Ask the hub to refresh this script's room->project mapping (never blocks, never throws)
-      try{
+      // Ask the hub to refresh this script's room->project mapping. It no longer holds up joining the room
+      // (it's a slow round trip): the room is read straight away, and only if that read is refused do we
+      // wait for the refresh and try once more.
+      const __roomAccessP = (async () => { try{
         const qs = new URLSearchParams(location.search);
         let fid = qs.get("fileId") || qs.get("id") || "";
         if(!fid){ try{ fid = __cloud.fileId || ""; }catch(_e){} }
-        const r = await fetch("config.json?_=" + Date.now(), { cache:"no-store" });
+        const r = await window.__cfgFetch();
         const hub = r.ok ? String(((await r.json()) || {}).hubUrl || "").trim() : "";
         const u = auth.currentUser;
         if(hub && fid && u){
@@ -14392,7 +14405,7 @@ ${TP.join("\n")}
           await fetch(hub, { method:"POST", headers:{ "Content-Type":"text/plain;charset=UTF-8" }, signal: ctl.signal,
             body: JSON.stringify({ idToken: await u.getIdToken(), action:"roomAccess", fileId: fid }) });
         }
-      }catch(_e){}
+      }catch(_e){} })();
       __LIVE.uid = (cred.user && cred.user.uid) || (auth.currentUser && auth.currentUser.uid) || "";
       const room = fb.database().ref("rooms/" + live.room);
       __LIVE.room = room;
@@ -14412,7 +14425,9 @@ ${TP.join("\n")}
           }catch(_e){}
         });
       }catch(_e){}
-      const snap = await room.once("value");
+      let snap;
+      try{ snap = await room.once("value"); }
+      catch(_e){ await __roomAccessP; snap = await room.once("value"); }   // refused: wait for the access refresh, then retry
       const r = snap.val() || {};
       const others = Object.keys(r.presence || {}).filter(k => k !== __LIVE.uid);
       const roomLines = r.lines || {};

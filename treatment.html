@@ -4233,12 +4233,14 @@
       const fb = window.firebase; LV.fb = fb;
       if(!fb.apps.length) fb.initializeApp(fbCfg);
       const auth = fb.auth(), cred = await window.Camp.ensureGoogleUser(auth, fb);   // no timeout: the Google popup waits for the person
-      await window.Camp.roomAccess(auth, T.fileId);
+      const accessP = window.Camp.roomAccess(auth, T.fileId);   // runs alongside the first read (slow round trip)
       LV.uid = (cred.user && cred.user.uid) || (auth.currentUser && auth.currentUser.uid) || "";
       const TS = fb.database.ServerValue.TIMESTAMP;
       LV.room = fb.database().ref("rooms/" + roomKey); LV.root = LV.room.child("treatment"); LV.pres = LV.room.child("treatmentPresence");
       try{ LV.offset = Number((await withTimeout(fb.database().ref(".info/serverTimeOffset").once("value"), 5000)).val()) || 0; }catch(_e){}
-      let val = (await withTimeout(LV.root.once("value"), 10000)).val();
+      let val;
+      try{ val = (await withTimeout(LV.root.once("value"), 10000)).val(); }
+      catch(_e){ await accessP; val = (await withTimeout(LV.root.once("value"), 10000)).val(); }   // refused: wait for access, retry once
       const savedRev = Number((val && val.savedRev) || 0);
       let adopted = false;
       if(roomHas(val) && !(T.rev > savedRev)) adopted = joinRoom(val);

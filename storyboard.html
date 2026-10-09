@@ -1077,7 +1077,8 @@ window.SB3D={
     // signs in anonymously the same way before touching "rooms/...", so the Storyboard does too.
     const auth = fb.auth();
     await window.camp.ensureGoogleUser(auth, fb);
-    await window.camp.roomAccess(auth, S.fileId);
+    // The access refresh runs alongside the first read instead of before it (see boot)
+    S.roomAccessP = window.camp.roomAccess(auth, S.fileId);
     return fb.database().ref("rooms/" + roomKey + "/storyboard");
   }
   // The room key changes when the team password changes or a script is made Private (Code.gs v21+
@@ -1250,7 +1251,9 @@ window.SB3D={
     }
     if(S.boardRef){
       try{
-        const snap = await S.boardRef.once("value");
+        let snap;
+        try{ snap = await S.boardRef.once("value"); }
+        catch(_e){ await S.roomAccessP; snap = await S.boardRef.once("value"); }   // refused: wait for the access refresh, retry once
         let val = snap.val() || {};
         try{ val = await adoptOldRooms(val); }catch(_e){}
         if(val.aspect) S.ratio = Number(val.aspect) || S.ratio;
