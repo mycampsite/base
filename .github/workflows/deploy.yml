@@ -13,6 +13,8 @@ jobs:
       name: github-pages
     steps:
       - uses: actions/checkout@v4
+      # The production math must pass its tests before anything is published
+      - run: node tests/breakdown.test.js
       - run: sed -i "s|__API_KEY__|${{ secrets.GOOGLE_API_KEY }}|" config.json index.html
       - run: grep -c "__API_KEY__" config.json index.html || echo "replaced"
       - uses: actions/configure-pages@v5
