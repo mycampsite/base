@@ -4087,7 +4087,7 @@
       came = sessionStorage.getItem(BK) || "";
     }catch(_e){}
     let backHref = came;
-    if(!backHref && hub) backHref = "hub.html?pid=" + encodeURIComponent(hub) + cloudParam() + "&tab=treatment";
+    if(!backHref && hub) backHref = "index.html?pid=" + encodeURIComponent(hub) + cloudParam() + "&tab=treatment";
     if(backHref){
       const fromHub = /hub/i.test(backHref) || !!hub;
       back.href = mnLib.href = backHref; back.innerHTML = fromHub ? "&larr; Project" : "&larr; Back"; mnLib.textContent = fromHub ? "Project" : "Back";

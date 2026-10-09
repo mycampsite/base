@@ -23,7 +23,6 @@
   }
   async function getCloudEndpoint(){
     const r = route();
-    if(r.cloud) return normalizeEndpoint(r.cloud);
     for(const k of CLOUD_ENDPOINT_KEYS){ const v = localStorage.getItem(k); if(v) return normalizeEndpoint(v); }
     const cfg = await loadConfig_();
     return normalizeEndpoint(cfg.cloudUrl || cfg.cloudURL || cfg.cloud || cfg.endpoint || "");

@@ -2943,7 +2943,7 @@ document.getElementById("mSaveDraft")?.addEventListener("click",()=>{ closeMenus
   document.getElementById("mLibrary")?.addEventListener("click",()=>{
   closeMenus();
   const hub = new URLSearchParams(location.search).get("hub");
-  window.location.href = hub ? "hub.html?pid=" + encodeURIComponent(hub) + "&tab=scripts" : "index.html";
+  window.location.href = hub ? "index.html?pid=" + encodeURIComponent(hub) + "&tab=scripts" : "index.html";
 });
   // Edit menu actions
   function focusEditor(){
@@ -10109,12 +10109,6 @@ $("#newBtn").addEventListener("click", () => {
   }
 
   function getCloudEndpoint(){
-    // URL param wins if present
-    try{
-      const qs = new URLSearchParams(location.search);
-      const u = qs.get("cloud");
-      if(u) return normalizeEndpoint(u);
-    }catch(_e){}
     for(const k of CLOUD_ENDPOINT_KEYS){
       const v = lsGetRaw(k);
       if(v) return normalizeEndpoint(v);
@@ -17736,7 +17730,7 @@ function clearHighlights(){
   }catch(_e){}
   const hub = qs.get("hub") || "";
   const cameHub = /\/hub\.html/i.test(came) ? came : "";
-  const hubHref = hub ? "hub.html?pid=" + encodeURIComponent(hub) + cloudParam() + "&tab=" + HUB_TAB : "";
+  const hubHref = hub ? "index.html?pid=" + encodeURIComponent(hub) + cloudParam() + "&tab=" + HUB_TAB : "";
   const backHref = cameHub || hubHref || came || "index.html";
   const fromHub = !!(cameHub || hubHref);
   window.__campBackHref = backHref;

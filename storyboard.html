@@ -1214,12 +1214,12 @@ window.SB3D={
       // Back to the project (or Library) — carries the cloud link like the other pages do, and if you
       // arrived from the project page it simply returns to that exact page.
       const b = document.getElementById("backLink");
-      b.href = hub ? "hub.html?pid=" + encodeURIComponent(hub) + "&tab=storyboard" + cloudParam() : "index.html" + (cloudParam() ? "?" + cloudParam().slice(1) : "");
+      b.href = hub ? "index.html?pid=" + encodeURIComponent(hub) + "&tab=storyboard" + cloudParam() : "index.html" + (cloudParam() ? "?" + cloudParam().slice(1) : "");
       if(hub) b.innerHTML = "&larr; Project";
       b.onclick = (e) => {
         try{
           const ref = document.referrer ? new URL(document.referrer) : null;
-          if(ref && ref.origin === location.origin && /(hub|index)\.html$/i.test(ref.pathname) && (!hub || ref.pathname.toLowerCase().endsWith("hub.html"))){ e.preventDefault(); location.href = document.referrer; }
+          if(ref && ref.origin === location.origin && /(hub|index)\.html$/i.test(ref.pathname) && (!hub || ref.pathname.toLowerCase().endsWith("index.html"))){ e.preventDefault(); location.href = document.referrer; }
         }catch(_e){}
       };
     }
