@@ -567,6 +567,23 @@
   :root[data-pages="dark"] #scriptEditor .cmt[data-color="blue"]{ background: #243a5e; }
   :root[data-pages="dark"] #scriptEditor .cmt[data-color="green"]{ background: #1f4a31; }
   :root[data-pages="dark"] #scriptEditor .cmt[data-color="purple"]{ background: #3d2e63; }
+  /* Custom topics: any colour, tinted like the built-ins */
+  #scriptEditor .cmt[data-color="custom"]{ background: color-mix(in srgb, var(--cmt-hex, #f5c542) 38%, #fff); }
+  :root[data-pages="dark"] #scriptEditor .cmt[data-color="custom"]{ background: color-mix(in srgb, var(--cmt-hex, #f5c542) 42%, #1b1b1b); }
+  .cmtMark[data-color="custom"]{ color: var(--cmt-hex, #e0ad2b); }
+  .cmtBar{ display:flex; justify-content:flex-end; gap:6px; margin: 0 0 8px; }
+  .cmtBar button{ font: 600 12px Inter, system-ui, sans-serif; color: inherit; opacity:.75; background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius: 8px; height: 26px; padding: 0 10px; cursor:pointer; }
+  .cmtBar button:hover{ opacity:1; background: rgba(255,255,255,.12); }
+  .cmtBar button.danger{ color:#ff8b83; }
+  :root[data-theme="light"] .cmtBar button{ background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.12); }
+  .cpColors .cpNew{ border-style: dashed !important; }
+  .cpColors button .cpDel{ margin-left:2px; opacity:.5; font-size: 11px; }
+  .cpColors button .cpDel:hover{ opacity:1; }
+  .cpTopicForm{ display:flex; gap:6px; align-items:center; margin-top: 8px; }
+  .cpTopicForm[hidden]{ display:none; }
+  .cpTopicForm input[type="text"]{ flex:1; min-width:0; height: 28px; padding: 0 8px; border-radius: 8px; border:1px solid rgba(255,255,255,.18); background: rgba(0,0,0,.28); color: inherit; font: inherit; font-size: 12.5px; outline:none; }
+  .cpTopicForm input[type="color"]{ width: 32px; height: 28px; padding: 0; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; background: transparent; cursor: pointer; }
+  .cpTopicForm button{ height: 28px; }
   #scriptEditor .cmt.lit{ box-shadow: inset 0 -2px 0 0 rgba(0,0,0,.45); filter: saturate(1.8) brightness(.97); }
   #scriptEditor .cmt.flash{ animation: cmtFlash 1.6s ease-out; }
   @keyframes cmtFlash{ 0%,40%{ box-shadow: 0 0 0 3px rgba(255,204,0,.8); } 100%{ box-shadow: 0 0 0 0 rgba(255,204,0,0); } }
@@ -4042,6 +4059,7 @@ const $ = (sel, el=document) => el.querySelector(sel);
         span.className = "cmt" + (cm.resolved ? " resolved" : "") + (cm.pending ? " orphan" : "");
         span.dataset.note = run.n;
         span.dataset.color = cm.color || "yellow";
+        if(cm.color === "custom" && /^#[0-9a-f]{6}$/i.test(cm.hex || "")) span.style.setProperty("--cmt-hex", cm.hex);
         span.appendChild(wrap);
         wrap = span;
       }
@@ -13232,7 +13250,23 @@ ${TP.join("\n")}
       { key:"purple", label:"Question", hex:"#b18cff" },
       { key:"blue",   label:"Idea",     hex:"#6aa8ff", hidden:true }   // older comments only
     ];
-    const colorOf = (k) => COLORS.find(c => c.key === k) || COLORS[0];
+    const colorOf = (k, cm) => {
+      if(k === "custom" && cm && /^#[0-9a-f]{6}$/i.test(cm.hex || "")) return { key:"custom", label: cm.label || "Note", hex: cm.hex };
+      return COLORS.find(c => c.key === k) || COLORS[0];
+    };
+    // Custom topics (name + any colour). Each comment carries its own colour and name, so everyone
+    // sees them; the picker lists topics used in this script plus ones you've made before.
+    const TOPIC_KEY = "SCRIPTY_COMMENT_TOPICS_V1";
+    const tKey = (t) => (t.hex || "").toLowerCase() + "|" + (t.label || "").trim().toLowerCase();
+    function savedTopics(){ try{ const v = JSON.parse(localStorage.getItem(TOPIC_KEY) || "[]"); return Array.isArray(v) ? v.filter(t => t && /^#[0-9a-f]{6}$/i.test(t.hex) && t.label) : []; }catch(_e){ return []; } }
+    function saveTopics(list){ try{ localStorage.setItem(TOPIC_KEY, JSON.stringify(list.slice(0, 30))); }catch(_e){} }
+    function allTopics(){
+      const seen = new Set(), out = [];
+      for(const t of savedTopics()){ const k = tKey(t); if(!seen.has(k)){ seen.add(k); out.push({ hex: t.hex, label: t.label, saved: true }); } }
+      for(const id of Object.keys(__COMMENTS)){ const c = __COMMENTS[id]; if(c && c.color === "custom" && c.hex && c.label){ const k = tKey(c); if(!seen.has(k)){ seen.add(k); out.push({ hex: c.hex, label: c.label }); } } }
+      return out;
+    }
+    let lastTopic = null;   // { hex, label } when the last comment used a custom topic
     const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
     const newId = () => "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const spansOf = (id) => Array.from(editor.querySelectorAll(`.cmt[data-note="${CSS.escape(id)}"]`));
@@ -13255,6 +13289,7 @@ ${TP.join("\n")}
         if(!cm){ s.classList.add("orphan"); continue; }
         s.classList.remove("orphan");
         s.dataset.color = cm.color || "yellow";
+        if(cm.color === "custom" && cm.hex) s.style.setProperty("--cmt-hex", cm.hex); else s.style.removeProperty("--cmt-hex");
         s.classList.toggle("resolved", !!cm.resolved);
       }
       scheduleMarks();
@@ -13282,6 +13317,7 @@ ${TP.join("\n")}
         seen.set(id, true);
         const m = document.createElement("button");
         m.type = "button"; m.className = "cmtMark"; m.dataset.note = id; m.dataset.color = (__COMMENTS[id] || {}).color || "yellow";
+        if(m.dataset.color === "custom" && (__COMMENTS[id] || {}).hex) m.style.setProperty("--cmt-hex", __COMMENTS[id].hex);
         m.style.top = (top - 1) + "px";
         m.style.left = ((pr.right - sr.left) / vs - 30) + "px";
         m.title = "Comment";
@@ -13345,6 +13381,7 @@ ${TP.join("\n")}
       const id = newId();
       const now = new Date().toISOString();
       __COMMENTS[id] = { text: "", color: lastColor, resolved: false, created: now, updated: now, by: (window.__scriptyMe && window.__scriptyMe.name) || "" };
+      if(lastColor === "custom" && lastTopic){ __COMMENTS[id].hex = lastTopic.hex; __COMMENTS[id].label = lastTopic.label; }
       if(!applyIdToRange(d, id)){ delete __COMMENTS[id]; return; }
       hideAddBtn();
       decorate();
@@ -13355,6 +13392,22 @@ ${TP.join("\n")}
     let lastColor = "yellow";
 
     // ---------- Removing ----------
+    // Removes many comments in one go (one undo step, each line rebuilt once)
+    function removeComments(ids){
+      ids = ids.filter(id => __COMMENTS[id]); if(!ids.length) return 0;
+      try{ scheduleSnapshot("clear-comments"); }catch(_e){}
+      const drop = new Set(ids), lineEls = new Set();
+      for(const id of ids){ spansOf(id).forEach(s => { const l = s.closest(".line"); if(l) lineEls.add(l); }); delete __COMMENTS[id]; }
+      for(const line of lineEls){
+        if(line.dataset.type === "dual") continue;
+        const runs = lineRunsFromDOM(line).map(r => { if(r.n && drop.has(r.n)) delete r.n; return r; });
+        line.innerHTML = "";
+        line.appendChild(renderRuns(mergeRuns(runs, [])));
+      }
+      closeEditor(); hideTip(); decorate();
+      try{ markDirty(); }catch(_e){}
+      return ids.length;
+    }
     function removeComment(id){
       try{ scheduleSnapshot("delete-comment"); }catch(_e){}
       const lineEls = new Set(spansOf(id).map(s => s.closest(".line")).filter(Boolean));
@@ -13395,7 +13448,7 @@ ${TP.join("\n")}
       const cm = __COMMENTS[id]; if(!cm || !pop.hidden) return;
       clearTimeout(tipHide);
       tipFor = id;
-      const c = colorOf(cm.color);
+      const c = colorOf(cm.color, cm);
       tip.innerHTML = `
         <div class="ctHead"><span class="ctDot" style="background:${c.hex}"></span><b>${esc(c.label)}</b>${cm.resolved ? `<span class="ctRes">Resolved</span>` : ""}<span class="ctDate">${cm.by ? esc(cm.by) + " · " : ""}${esc(fmtDate(cm.updated || cm.created))}</span></div>
         <div class="ctText">${cm.text ? esc(cm.text).replace(/\n/g, "<br>") : `<i style="opacity:.6">No note yet</i>`}</div>
@@ -13437,7 +13490,8 @@ ${TP.join("\n")}
       pop.innerHTML = `
         <div class="cpHead">${isNew ? "New comment" : "Comment"}<button class="cpX" data-a="close" title="Close">✕</button></div>
         <textarea placeholder="Start typing...">${esc(cm.text || "")}</textarea>
-        <div class="cpColors">${COLORS.filter(c => !c.hidden).map(c => `<button data-c="${c.key}" class="${(cm.color || "yellow") === c.key ? "on" : ""}" title="${c.label}"><span style="background:${c.hex}"></span>${c.label}</button>`).join("")}</div>
+        <div class="cpColors">${chipsHtml(cm.color || "yellow", cm)}</div>
+        <div class="cpTopicForm" hidden><input type="text" maxlength="24" placeholder="Topic name, e.g. Sound"><input type="color" value="#4fb3bf" title="Colour"><button data-a="addtopic" class="primary" style="height:28px;border-radius:8px;padding:0 10px;cursor:pointer">Add</button></div>
         <div class="cpActs">
           <button data-a="del" class="danger">Delete</button>
           <button data-a="res">${cm.resolved ? "Reopen" : "Resolve"}</button>
@@ -13449,11 +13503,30 @@ ${TP.join("\n")}
       const ta = pop.querySelector("textarea");
       setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 20);
     }
+    // Topic chips: the built-in four, then custom topics (used in this script or made by you), then "+ Topic"
+    function chipsHtml(curKey, cur){
+      const built = COLORS.filter(c => !c.hidden).map(c => `<button data-c="${c.key}" class="${curKey === c.key ? "on" : ""}" title="${c.label}"><span style="background:${c.hex}"></span>${c.label}</button>`).join("");
+      const curT = curKey === "custom" && cur ? tKey(cur) : "";
+      const custom = allTopics().map(t => `<button data-c="custom" data-hex="${esc(t.hex)}" data-label="${esc(t.label)}" class="${curT && curT === tKey(t) ? "on" : ""}" title="${esc(t.label)}"><span style="background:${esc(t.hex)}"></span>${esc(t.label)}${t.saved ? `<i class="cpDel" data-del="1" title="Remove from your topics">✕</i>` : ""}</button>`).join("");
+      return built + custom + `<button class="cpNew" data-a="newtopic" title="Make your own topic and colour">+ Topic</button>`;
+    }
+    function pickedTopic(){
+      const on = pop.querySelector(".cpColors .on");
+      if(!on) return null;
+      return on.dataset.c === "custom" ? { c:"custom", hex: on.dataset.hex, label: on.dataset.label } : { c: on.dataset.c };
+    }
     function saveEditor(){
       const id = pop.dataset.note; const cm = __COMMENTS[id]; if(!cm) return closeEditor();
       const text = pop.querySelector("textarea").value.replace(/\s+$/, "");
-      const col = (pop.querySelector(".cpColors .on") || {}).dataset?.c || cm.color;
-      if(text !== cm.text || col !== cm.color){ cm.text = text; cm.color = col; cm.updated = new Date().toISOString(); lastColor = col; try{ markDirty(); }catch(_e){} }
+      const pk = pickedTopic() || { c: cm.color, hex: cm.hex, label: cm.label };
+      const changed = text !== cm.text || pk.c !== cm.color || (pk.c === "custom" && (pk.hex !== cm.hex || pk.label !== cm.label));
+      if(changed){
+        cm.text = text; cm.color = pk.c;
+        if(pk.c === "custom"){ cm.hex = pk.hex; cm.label = pk.label; lastTopic = { hex: pk.hex, label: pk.label }; }
+        else { delete cm.hex; delete cm.label; }
+        cm.updated = new Date().toISOString(); lastColor = pk.c;
+        try{ markDirty(); }catch(_e){}
+      }
       closeEditor(); decorate();
     }
     function closeEditor(){
@@ -13466,9 +13539,34 @@ ${TP.join("\n")}
     }
     pop.addEventListener("click", (e) => {
       const cbtn = e.target.closest("[data-c]");
-      if(cbtn){ pop.querySelectorAll("[data-c]").forEach(b => b.classList.toggle("on", b === cbtn)); spansOf(pop.dataset.note).forEach(s => s.dataset.color = cbtn.dataset.c); return; }
+      if(cbtn && e.target.closest("[data-del]")){
+        // forget a saved topic (comments already using it keep their colour)
+        saveTopics(savedTopics().filter(t => tKey(t) !== tKey({ hex: cbtn.dataset.hex, label: cbtn.dataset.label })));
+        const pk = pickedTopic(); pop.querySelector(".cpColors").innerHTML = chipsHtml(pk ? pk.c : "yellow", pk); return;
+      }
+      if(cbtn){
+        pop.querySelectorAll("[data-c]").forEach(b => b.classList.toggle("on", b === cbtn));
+        spansOf(pop.dataset.note).forEach(s => { s.dataset.color = cbtn.dataset.c; if(cbtn.dataset.hex) s.style.setProperty("--cmt-hex", cbtn.dataset.hex); });
+        return;
+      }
       const b = e.target.closest("[data-a]"); if(!b) return;
       const id = pop.dataset.note;
+      if(b.dataset.a === "newtopic"){
+        const f = pop.querySelector(".cpTopicForm"); f.hidden = !f.hidden;
+        if(!f.hidden) setTimeout(() => f.querySelector('input[type="text"]').focus(), 10);
+        return;
+      }
+      if(b.dataset.a === "addtopic"){
+        const f = pop.querySelector(".cpTopicForm");
+        const label = f.querySelector('input[type="text"]').value.trim().slice(0, 24), hex = f.querySelector('input[type="color"]').value;
+        if(!label){ f.querySelector('input[type="text"]').focus(); return; }
+        const t = { hex, label }, list = savedTopics().filter(x => tKey(x) !== tKey(t));
+        list.unshift(t); saveTopics(list);
+        pop.querySelector(".cpColors").innerHTML = chipsHtml("custom", t);
+        spansOf(id).forEach(s => { s.dataset.color = "custom"; s.style.setProperty("--cmt-hex", hex); });
+        f.hidden = true; f.querySelector('input[type="text"]').value = "";
+        return;
+      }
       if(b.dataset.a === "save") saveEditor();
       else if(b.dataset.a === "close") closeEditor();
       else if(b.dataset.a === "res"){ saveEditor(); setResolved(id, !(__COMMENTS[id] || {}).resolved); }
@@ -13476,6 +13574,7 @@ ${TP.join("\n")}
     });
     pop.addEventListener("keydown", (e) => {
       e.stopPropagation();
+      if(e.key === "Enter" && e.target.closest && e.target.closest(".cpTopicForm")){ e.preventDefault(); pop.querySelector('[data-a="addtopic"]').click(); return; }
       if(e.key === "Escape"){ e.preventDefault(); closeEditor(); }
       if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){ e.preventDefault(); saveEditor(); }
     });
@@ -13538,7 +13637,7 @@ ${TP.join("\n")}
         const badge = document.getElementById("cmtCount"); if(badge){ badge.textContent = open.length ? String(open.length) : ""; }
         const rbadge = document.getElementById("resCount"); if(rbadge){ rbadge.textContent = done.length ? String(done.length) : ""; }
         const item = (id) => {
-          const cm = __COMMENTS[id], c = colorOf(cm.color);
+          const cm = __COMMENTS[id], c = colorOf(cm.color, cm);
           const sp = spansOf(id);
           const live = sp.length > 0;
           const quote = live ? sp.map(s => s.textContent).join(" ").replace(/\s+/g, " ").trim() : String(cm.quote || "");
@@ -13550,10 +13649,11 @@ ${TP.join("\n")}
             ${quote ? `<div class="ciQuote">“${esc(quote.length > 90 ? quote.slice(0, 88) + "…" : quote)}”</div>` : ""}
             <div class="ciText">${cm.text ? esc(cm.text) : `<i>No note</i>`}</div>${when}${acts}</div>`;
         };
-        if(list) list.innerHTML = open.length ? open.map(item).join("")
+        const bar = (a, label) => `<div class="cmtBar"><button type="button" data-a="${a}" class="danger">${label}</button></div>`;
+        if(list) list.innerHTML = open.length ? bar("clearopen", "Clear all comments") + open.map(item).join("")
           : (done.length ? `<div class="cmtEmpty">No open comments. Resolved ones are in the <b>Resolved</b> tab.</div>`
                          : `<div class="cmtEmpty">No comments yet.<br><br>Highlight some script text and click <b>Comment</b> (or press Ctrl/Cmd+Alt+M). Hover a highlight to read its note.</div>`);
-        if(rlist) rlist.innerHTML = done.length ? done.map(item).join("") : `<div class="cmtEmpty">Nothing resolved yet.<br><br>When you resolve a comment it moves here, so you can still read it or reopen it.</div>`;
+        if(rlist) rlist.innerHTML = done.length ? bar("clearres", "Clear all resolved") + done.map(item).join("") : `<div class="cmtEmpty">Nothing resolved yet.<br><br>When you resolve a comment it moves here, so you can still read it or reopen it.</div>`;
       }, 60);
     }
     function jumpTo(id){
@@ -13565,12 +13665,22 @@ ${TP.join("\n")}
       setTimeout(() => spansOf(id).forEach(x => x.classList.remove("flash")), 1800);
     }
     list?.addEventListener("click", (e) => {
+      if(e.target.closest('[data-a="clearopen"]')){
+        const ids = orderedIds().filter(id => __COMMENTS[id] && !__COMMENTS[id].resolved);
+        if(ids.length && confirm("Delete all " + ids.length + " open comment" + (ids.length === 1 ? "" : "s") + "? Resolved ones are kept. You can undo this.")) removeComments(ids);
+        return;
+      }
       const it = e.target.closest(".cmtItem"); if(!it) return;
       try{ window.__scriptyCloseDrawer && window.__scriptyCloseDrawer(); }catch(_e){}
       jumpTo(it.dataset.note);
       setTimeout(() => openEditor(it.dataset.note, spansOf(it.dataset.note)[0] || it), 450);
     });
     rlist?.addEventListener("click", (e) => {
+      if(e.target.closest('[data-a="clearres"]')){
+        const ids = Object.keys(__COMMENTS).filter(id => __COMMENTS[id] && __COMMENTS[id].resolved);
+        if(ids.length && confirm("Delete all " + ids.length + " resolved comment" + (ids.length === 1 ? "" : "s") + " for good?")) removeComments(ids);
+        return;
+      }
       const it = e.target.closest(".cmtItem"); if(!it) return;
       const id = it.dataset.note, b = e.target.closest("button[data-a]");
       if(b && b.dataset.a === "del"){ if(confirm("Delete this resolved comment for good?")) removeComment(id); return; }
@@ -13612,7 +13722,7 @@ ${TP.join("\n")}
     window.addEventListener("resize", scheduleMarks);
     document.addEventListener("scripty:pageSizeChanged", scheduleMarks);
 
-    window.__scriptyComments = { add: addComment, remove: removeComment, decorate, open: openEditor, jumpTo, all: () => __COMMENTS };
+    window.__scriptyComments = { add: addComment, remove: removeComment, removeMany: removeComments, decorate, open: openEditor, jumpTo, all: () => __COMMENTS };
     setTimeout(decorate, 300);
   })();
 
