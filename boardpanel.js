@@ -26,6 +26,7 @@ const S = {
   closed: {},          // "kind|group" -> true while collapsed
   bad: {},             // card id -> true when its photo didn't load
   open: null,          // card id shown in the detail view
+  viewer: null,        // { id, i } while the photo viewer is open
   briefDraft: null,
   briefEdit: "",       // "kind|group" while its brief is being typed
   edit: null,          // the form being filled in: { kind, id, key, group, base, vals, busy, err, conflict }
@@ -127,6 +128,31 @@ span.bdStar{ cursor:default; }
 .bdBriefForm textarea{ width:100%; min-height:64px; padding:7px 10px; border-radius:9px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); font:inherit; font-size:13px; box-sizing:border-box; resize:vertical; outline:none; }
 .bdBriefForm div{ display:flex; gap:8px; }
 .bdGroup.shut .bdBrief, .bdGroup.shut .bdBriefAdd, .bdGroup.shut .bdBriefForm{ display:none; }
+.bdCount{ position:absolute; left:6px; bottom:6px; z-index:2; height:20px; padding:0 7px; border-radius:999px; background:rgba(0,0,0,.55); color:#fff; font-size:11px; font-weight:700; display:inline-flex; align-items:center; gap:4px; }
+.bdPh[data-bd=view]{ cursor:zoom-in; }
+.bdPhotos{ display:grid; gap:8px; }
+.bdPhLabel{ font-size:12px; color:var(--uiMuted); font-weight:600; } .bdPhLabel span{ font-weight:400; opacity:.8; }
+.bdThumbs{ display:flex; gap:8px; flex-wrap:wrap; }
+.bdThumb{ position:relative; width:72px; height:72px; border-radius:9px; overflow:hidden; background:#242424; border:2px solid transparent; display:grid; place-items:center; font-size:10px; color:var(--uiMuted); text-align:center; }
+.bdThumb.main{ border-color:var(--gold); }
+.bdThumb img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.bdThumb button{ position:absolute; z-index:2; width:22px; height:22px; border:0; border-radius:50%; background:rgba(0,0,0,.7); color:#fff; font-size:12px; line-height:22px; padding:0; cursor:pointer; }
+.bdThumb .rm{ top:3px; right:3px; } .bdThumb .mk{ bottom:3px; left:3px; }
+.bdThumb .mk:hover{ color:var(--gold); }
+.bdThumb.up .spin{ width:18px; height:18px; }
+.bdDrop{ border:1.5px dashed rgba(255,255,255,.25); border-radius:10px; padding:12px; text-align:center; font-size:12.5px; color:var(--uiMuted); }
+.bdDrop.over{ border-color:var(--gold); background:rgba(242,201,76,.07); color:var(--uiText); }
+.bdDrop button, .bdLinkAdd button{ background:none; border:0; color:var(--uiText); text-decoration:underline; text-underline-offset:3px; cursor:pointer; font:inherit; padding:0; }
+.bdLinkAdd{ display:flex; gap:8px; align-items:center; } .bdLinkAdd input{ flex:1; }
+.bdLinkAdd button{ height:34px; padding:0 12px; border:1px solid var(--uiBorder); border-radius:9px; text-decoration:none; }
+.bdView{ z-index:101; background:rgba(0,0,0,.9); flex-direction:column; gap:10px; }
+.bdView figure{ margin:0; flex:1; min-height:0; width:100%; display:grid; place-items:center; }
+.bdView img{ max-width:100%; max-height:100%; object-fit:contain; border-radius:6px; }
+.bdView .nav{ position:absolute; top:50%; margin-top:-22px; width:44px; height:44px; border-radius:50%; border:0; background:rgba(255,255,255,.14); color:#fff; font-size:20px; cursor:pointer; }
+.bdView .nav:hover{ background:rgba(255,255,255,.28); } .bdView .nav.l{ left:14px; } .bdView .nav.r{ right:14px; }
+.bdView .x{ position:absolute; top:12px; right:14px; }
+.bdVBar{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:center; font-size:13px; color:#d6d6dc; }
+.bdVBar a{ color:#fff; }
 @media (max-width:640px){ .bdForm .two{ grid-template-columns:1fr; } }
 @media (max-width:640px){
   .bdShade{ align-items:flex-end; padding:0; }
@@ -230,7 +256,7 @@ function cardHtml(c, kind, o){
   o = o || {};
   const hasImg = c.photo && !S.bad[c.id];
   const star = o.can ? `<button class="bdStar${c.fav ? " on" : ""}" type="button" data-fav="${esc(c.id)}" aria-pressed="${c.fav}" aria-label="${c.fav ? "Remove from favorites" : "Add to favorites"}" title="${c.fav ? "Remove from favorites" : "Favorite"}">★</button>` : (c.fav ? `<span class="bdStar on" title="Favorite" aria-label="Favorite">★</span>` : "");
-  const ph = `<div class="bdPh">${esc(initial(c))}${hasImg ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(c.photo)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}${star}</div>`;
+  const ph = `<div class="bdPh">${esc(initial(c))}${hasImg ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(c.photo)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}${c.photos.length > 1 ? `<span class="bdCount" title="${c.photos.length} photos">▣ ${c.photos.length}</span>` : ""}${star}</div>`;
   const links = c.links.map((l) => `<a class="bdBtn" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>`).join("");
   const drag = o.can && !o.showGroup ? ` draggable="true"` : "";
   return `<article class="bdCard${c.passed ? " passed" : ""}${c.done ? " done" : ""}" tabindex="0" data-id="${esc(c.id)}" data-key="${esc(c.key)}" data-group="${esc(c.group)}"${drag} aria-label="${esc(c.title + ", " + c.group + (c.status ? ", " + c.status : ""))}">${ph}
@@ -289,12 +315,18 @@ function findCard(id){
   return null;
 }
 function closeDetail(quiet){
+  closeViewer();
   const el = document.getElementById("bdShade"); if(el) el.remove();
   document.removeEventListener("keydown", detailKeys, true);
   if(!quiet && lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
   S.open = null; S.edit = null;
 }
 function detailKeys(e){
+  if(S.viewer){
+    if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); closeViewer(); }
+    else if(e.key === "ArrowRight" || e.key === "ArrowLeft"){ e.preventDefault(); stepViewer(e.key === "ArrowRight" ? 1 : -1); }
+    return;
+  }
   if(S.edit){
     if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); cancelEdit(); }
     else if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); saveEdit(false); }
@@ -328,7 +360,7 @@ function showDetail(id, keep){
   const quick = can ? `<select class="bdQuick" data-bd="status" aria-label="Set the status" title="Set the status (saved to the Sheet)"><option value="">No status</option>${statusOptions(L.statusList(d, c.kind), c.raw.status)}</select>` : "";
   const rowLink = d && d.url ? esc(d.url + (gid ? "#gid=" + gid + "&range=A" + c.row : "")) : "";
   const html = `<div class="bdShade" id="bdShade"><div class="bdDlg ${c.kind}" role="dialog" aria-modal="true" aria-label="${esc(c.title)}">
-    <div class="bdPh">${esc(initial(c))}${c.photo && !bad ? `<img referrerpolicy="no-referrer" src="${esc(c.photo)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}</div>
+    <div class="bdPh"${c.photos.length ? ` data-bd="view" title="View ${c.photos.length > 1 ? "all " + c.photos.length + " photos" : "the photo"}"` : ""}>${esc(initial(c))}${c.photos.length > 1 ? `<span class="bdCount">▣ ${c.photos.length}</span>` : ""}${c.photo && !bad ? `<img referrerpolicy="no-referrer" src="${esc(c.photo)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}</div>
     <div class="bdDBody"><div class="bdDHead"><h2>${esc(c.title)}</h2><button class="iconBtn" type="button" data-bd="close" aria-label="Close" title="Close (Esc)">${ICON.close}</button></div>
       <div class="bdDMeta">${esc(c.group)}${c.groupType ? " · " + esc(c.groupType) : ""}</div>
       ${c.status ? `<span class="bdSt ${slug(c.status)}">${esc(c.status)}</span>` : ""}
@@ -349,6 +381,7 @@ function showDetail(id, keep){
     else if(b.dataset.bd === "prev" && prev) showDetail(prev);
     else if(b.dataset.bd === "next" && next) showDetail(next);
     else if(b.dataset.bd === "edit") openEditor(c);
+    else if(b.dataset.bd === "view") openViewer(c.id, 0);
     else if(b.dataset.bd === "fav") toggleFav(c);
     else if(b.dataset.bd === "earlier") moveCard(c, -1);
     else if(b.dataset.bd === "later") moveCard(c, 1);
@@ -429,6 +462,50 @@ async function deleteCard(c){
   }catch(err){ H().toast("Couldn't delete: " + ((err && err.message) || err), "err"); if(err && err.gone) afterSheetMoved(); }
   if(S.pid) render(S.pid);
 }
+/* ---------- the photo viewer ---------- */
+function closeViewer(){ const v = document.getElementById("bdView"); if(v) v.remove(); S.viewer = null; }
+function openViewer(id, i){
+  const c = findCard(id); if(!c || !c.photos.length) return;
+  S.viewer = { id, i: Math.max(0, Math.min(i || 0, c.photos.length - 1)) }; drawViewer();
+}
+function stepViewer(d){
+  const v = S.viewer, c = v && findCard(v.id); if(!c) return;
+  v.i = (v.i + d + c.photos.length) % c.photos.length; drawViewer();
+}
+function drawViewer(){
+  const v = S.viewer, c = v && findCard(v.id); if(!c){ closeViewer(); return; }
+  const n = c.photos.length, u = c.photos[v.i], src = L.viewSrc(u, true), can = canWrite(S.hubP);
+  const old = document.getElementById("bdView"); if(old) old.remove();
+  const nav = n > 1 ? `<button class="nav l" type="button" data-vw="prev" aria-label="Previous photo">‹</button><button class="nav r" type="button" data-vw="next" aria-label="Next photo">›</button>` : "";
+  const fig = src ? `<img referrerpolicy="no-referrer" src="${esc(src)}" alt="${esc(c.title)}">` : `<div class="bdHint">This link can't be shown here. <a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open it</a></div>`;
+  document.body.insertAdjacentHTML("beforeend", `<div class="bdShade bdView" id="bdView" role="dialog" aria-modal="true" aria-label="Photos of ${esc(c.title)}">
+    <button class="iconBtn x" type="button" data-vw="close" aria-label="Close photos" title="Close (Esc)">${ICON.close}</button>${nav}<figure>${fig}</figure>
+    <div class="bdVBar"><span>${esc(c.title)} · ${v.i + 1} / ${n}</span>${v.i === 0 ? `<span>★ Display photo</span>` : (can ? `<button class="btn sm" type="button" data-vw="main">Make display photo</button>` : "")}<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open original</a></div></div>`);
+  const el = document.getElementById("bdView"); let x0 = null;
+  el.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-vw]");
+    if(!b){ if(ev.target === el || ev.target.tagName === "FIGURE") closeViewer(); return; }
+    const k = b.dataset.vw;
+    if(k === "close") closeViewer(); else if(k === "prev") stepViewer(-1); else if(k === "next") stepViewer(1); else if(k === "main") makeDisplayPhoto(c, u);
+  });
+  el.addEventListener("touchstart", (ev) => { x0 = ev.touches[0].clientX; }, { passive: true });
+  el.addEventListener("touchend", (ev) => { if(x0 == null) return; const dx = ev.changedTouches[0].clientX - x0; x0 = null; if(Math.abs(dx) > 50) stepViewer(dx < 0 ? 1 : -1); }, { passive: true });
+  el.addEventListener("error", (ev) => { if(ev.target.tagName === "IMG"){ const f = ev.target.parentNode; f.innerHTML = `<div class="bdHint">The photo didn't load. If it's on Drive, set sharing to “Anyone with the link”.</div>`; } }, true);
+  const close = el.querySelector("[data-vw=close]"); if(close) close.focus();
+  if(!S.edit){ document.removeEventListener("keydown", detailKeys, true); document.addEventListener("keydown", detailKeys, true); }
+}
+// Choose which photo is the card's display photo
+async function makeDisplayPhoto(c, url){
+  const list = L.makeDisplay(c.photos, url), pf = L.photoFields(list);
+  try{
+    const res = await post({ kind: c.kind, op: "set", rowKey: c.key, fields: { photo: pf.photo, photos: pf.photos }, base: { photo: c.raw.photo, photos: L.photoFields(c.photos).photos.join("\n") } });
+    if(res.conflict) H().toast("The photos changed in the Sheet meanwhile. Showing the Sheet's version.", "err");
+    setData((d) => L.withCandidate(d, c.kind, res.candidate));
+  }catch(err){ H().toast("Couldn't save: " + ((err && err.message) || err), "err"); }
+  if(S.pid) render(S.pid);
+  if(S.open && findCard(S.open)) showDetail(S.open, true);
+  if(S.viewer){ S.viewer.i = 0; drawViewer(); }
+}
 async function saveBrief(group){
   const ta = document.getElementById("bdBriefTa"); if(!ta) return;
   const text = ta.value.trim(), kind = S.tab;
@@ -442,11 +519,12 @@ function openEditor(c, groupName){
   const kind = S.tab;
   const base = c ? Object.assign({}, c.raw) : {};
   L.fieldsOf(kind).forEach((f) => { if(!(f in base)) base[f] = ""; });
-  S.edit = { kind, id: c ? c.id : "", key: c ? c.key : "", group: c ? c.group : groupName, base, vals: Object.assign({}, base), busy: false, err: "", conflict: null };
+  S.edit = { kind, id: c ? c.id : "", key: c ? c.key : "", group: c ? c.group : groupName, base, vals: Object.assign({}, base), busy: false, err: "", conflict: null,
+    photos: c ? c.photos.slice() : [], basePhotos: c ? c.photos.slice() : [], uploading: 0, linkDraft: "" };
   if(!document.getElementById("bdShade")) lastFocus = document.activeElement;
   showEditor();
 }
-function dirty(){ const e = S.edit; return !!e && L.fieldsOf(e.kind).some((f) => String(e.vals[f] || "").trim() !== String(e.base[f] || "").trim()); }
+function dirty(){ const e = S.edit; return !!e && (!L.samePhotos(e.photos, e.basePhotos) || L.fieldsOf(e.kind).some((f) => f !== "photo" && String(e.vals[f] || "").trim() !== String(e.base[f] || "").trim())); }
 async function cancelEdit(){
   const e = S.edit; if(!e || e.busy) return;
   if(dirty() && !(await H().confirm("Discard your changes?", "What you typed here hasn't been saved to the Sheet.", "Discard", true))) return;
@@ -466,17 +544,24 @@ function showEditor(){
       <label>Status<select data-f="status"><option value="">No status</option>${statusOptions(statuses, e.base.status)}</select></label>
       <div class="two">${inp("phone", "Phone", `inputmode="tel"`)}${inp("email", "Email", `inputmode="email"`)}</div>
       ${kind === "cast" ? `<div class="two">${inp("showreel", "Showreel link", `inputmode="url" placeholder="YouTube, Vimeo…"`)}${inp("audition", "Audition tape link", `inputmode="url" placeholder="Self-tape or audition"`)}</div>` : ""}
-      ${inp("photo", "Photo link", `inputmode="url" placeholder="Drive share link or image address"`)}
+      ${photosBlock(e)}
       <label>Notes<textarea data-f="notes" placeholder="Links to a reel, IMDb or listing become buttons">${esc(v.notes || "")}</textarea></label>
       ${conf}${e.err ? `<div class="bdErr" role="alert">${esc(e.err)}</div>` : ""}
-      <div class="bdDFoot">${isAdd ? "" : `<button class="btn sm danger" type="button" data-be="remove"${e.busy ? " disabled" : ""}>Remove</button>`}<span class="sp"></span><button class="btn sm" type="button" data-be="cancel"${e.busy ? " disabled" : ""}>Cancel</button><button class="btn sm primary" type="submit"${e.busy ? " disabled" : ""}>${e.busy ? `<span class="spin"></span>` : ""}${isAdd ? "Add" : "Save"}</button></div>
+      <div class="bdDFoot">${isAdd ? "" : `<button class="btn sm danger" type="button" data-be="remove"${e.busy ? " disabled" : ""}>Remove</button>`}<span class="sp"></span><button class="btn sm" type="button" data-be="cancel"${e.busy ? " disabled" : ""}>Cancel</button><button class="btn sm primary" type="submit"${e.busy || e.uploading ? " disabled" : ""}>${e.busy ? `<span class="spin"></span>` : ""}${isAdd ? "Add" : "Save"}</button></div>
       <div class="bdKeys">Saved straight to the Sheet · Ctrl+Enter to save</div>
     </form></div></div></div>`;
   const old = document.getElementById("bdShade"); if(old) old.remove();
   document.body.insertAdjacentHTML("beforeend", html);
   const shade = document.getElementById("bdShade"), form = shade.querySelector("#bdForm");
   form.querySelector("[data-f=status]").value = v.status || "";
-  form.addEventListener("input", (ev) => { const n = ev.target.dataset && ev.target.dataset.f; if(n) e.vals[n] = ev.target.value; });
+  form.addEventListener("input", (ev) => { const n = ev.target.dataset && ev.target.dataset.f; if(n) e.vals[n] = ev.target.value; if(ev.target.dataset && "pl" in ev.target.dataset) e.linkDraft = ev.target.value; });
+  form.addEventListener("keydown", (ev) => { if(ev.key === "Enter" && ev.target.dataset && "pl" in ev.target.dataset){ ev.preventDefault(); ev.stopPropagation(); addLinkFromInput(); } });
+  const drop = shade.querySelector("#bdDrop"), file = shade.querySelector("#bdFile");
+  const hasFiles = (ev) => ev.dataTransfer && Array.from(ev.dataTransfer.types || []).indexOf("Files") >= 0;
+  shade.addEventListener("dragover", (ev) => { if(hasFiles(ev)){ ev.preventDefault(); if(drop) drop.classList.toggle("over", !!ev.target.closest("#bdDrop")); } });
+  shade.addEventListener("dragleave", (ev) => { if(drop && !shade.contains(ev.relatedTarget)) drop.classList.remove("over"); });
+  shade.addEventListener("drop", (ev) => { if(!hasFiles(ev)) return; ev.preventDefault(); if(drop) drop.classList.remove("over"); addFiles(ev.dataTransfer.files); });
+  if(file) file.addEventListener("change", () => { const fl = Array.from(file.files || []); file.value = ""; addFiles(fl); });
   form.addEventListener("change", (ev) => { const n = ev.target.dataset && ev.target.dataset.f; if(n) e.vals[n] = ev.target.value; });
   form.addEventListener("submit", (ev) => { ev.preventDefault(); saveEdit(false); });
   shade.addEventListener("click", (ev) => {
@@ -487,10 +572,71 @@ function showEditor(){
     else if(k === "remove") removeOption();
     else if(k === "mine") saveEdit(true);
     else if(k === "theirs") useSheetVersion();
+    else if(k === "pick"){ const f = shade.querySelector("#bdFile"); if(f) f.click(); }
+    else if(k === "addlink") addLinkFromInput();
+    else if(k === "rmphoto"){ e.photos = L.removePhoto(e.photos, b.dataset.u); syncPhotoVal(e); showEditor(); }
+    else if(k === "mkmain"){ e.photos = L.makeDisplay(e.photos, b.dataset.u); syncPhotoVal(e); showEditor(); }
   });
   document.removeEventListener("keydown", detailKeys, true);
   document.addEventListener("keydown", detailKeys, true);
   const first = form.querySelector(e.err ? "[data-f]" : "[data-f=" + f1 + "]"); if(first && !e.conflict) first.focus();
+}
+/* ---------- photos in the editor: upload, drag in, paste a link, choose the display photo ---------- */
+function photosBlock(e){
+  const tiles = e.photos.map((u, i) => {
+    const src = L.viewSrc(u, false);
+    return `<div class="bdThumb${i === 0 ? " main" : ""}" title="${i === 0 ? "Display photo" : ""}">${src ? `<img referrerpolicy="no-referrer" src="${esc(src)}" alt="">` : esc(L.hostOf(u) || "link")}${i > 0 ? `<button class="mk" type="button" data-be="mkmain" data-u="${esc(u)}" title="Make this the display photo" aria-label="Make this the display photo">★</button>` : ""}<button class="rm" type="button" data-be="rmphoto" data-u="${esc(u)}" title="Remove this photo" aria-label="Remove this photo">✕</button></div>`;
+  }).join("") + Array.from({ length: e.uploading || 0 }, () => `<div class="bdThumb up"><span class="spin"></span></div>`).join("");
+  const full = e.photos.length + (e.uploading || 0) >= L.MAX_PHOTOS;
+  return `<div class="bdPhotos"><div class="bdPhLabel">Photos <span>· the starred one is the display photo</span></div>
+    ${tiles ? `<div class="bdThumbs">${tiles}</div>` : ""}
+    ${full ? "" : `<div class="bdDrop" id="bdDrop">Drop photos here or <button type="button" data-be="pick">choose from your device</button><input type="file" id="bdFile" accept="image/*" multiple hidden></div>
+    <div class="bdLinkAdd"><input data-pl value="${esc(e.linkDraft || "")}" inputmode="url" placeholder="…or paste a photo link" autocomplete="off" aria-label="Photo link"><button type="button" data-be="addlink">Add</button></div>`}</div>`;
+}
+function syncPhotoVal(e){ const f = L.photoFields(e.photos); e.vals.photo = f.photo; }
+function addLinkFromInput(){
+  const e = S.edit, inp = e && document.querySelector("#bdForm [data-pl]"); if(!e || !inp) return;
+  const raw = inp.value.trim(); if(!raw) return;
+  if(!L.safeUrl(raw)){ e.err = "That doesn't look like a web link."; e.linkDraft = raw; showEditor(); return; }
+  e.photos = L.addPhotos(e.photos, [raw]); e.linkDraft = ""; e.err = ""; syncPhotoVal(e); showEditor();
+}
+// Shrink a photo before it goes up (a phone photo can be 10MB); returns a JPEG data address
+function shrink(file){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      try{
+        const max = 1600, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        const cv = document.createElement("canvas"); cv.width = Math.max(1, Math.round(img.naturalWidth * k)); cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+        const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(img, 0, 0, cv.width, cv.height);
+        resolve(cv.toDataURL("image/jpeg", 0.85));
+      }catch(err){ reject(err); } finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("unreadable")); };
+    img.src = url;
+  });
+}
+function readRaw(file){ return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error("unreadable")); r.readAsDataURL(file); }); }
+async function addFiles(files){
+  const e = S.edit; if(!e) return;
+  const list = Array.from(files || []);
+  for(const f of list){
+    if(!L.imageOk(f.type, f.size)){ H().toast("“" + f.name + "” isn't a photo I can use.", "err"); continue; }
+    if(e.photos.length + (e.uploading || 0) >= L.MAX_PHOTOS){ H().toast("That's the most photos one option can hold (" + L.MAX_PHOTOS + ").", "err"); break; }
+    e.uploading = (e.uploading || 0) + 1; showEditor();
+    try{
+      let dataUrl;
+      try{ dataUrl = await shrink(f); }
+      catch(_e){ if(f.size < 6 * 1024 * 1024 && /^image\/(jpeg|png|webp|gif)$/i.test(f.type)) dataUrl = await readRaw(f); else throw new Error("couldn't read that picture (HEIC? try JPEG)"); }
+      const res = await H().ripPost({ action: "boardphoto", fileId: S.fileId, dataUrl, name: f.name });
+      if(!res || res.ok === false) throw new Error((res && res.error) || "upload failed");
+      if(S.edit !== e) return;                 // the form was closed meanwhile; the file stays in Drive
+      e.photos = L.addPhotos(e.photos, [res.url]);
+      if(res.shared === false) H().toast("The photo is in Drive, but Drive wouldn't let anyone view it by link. Share it as “Anyone with the link” to see it here.", "err", 9000);
+    }catch(err){ H().toast("“" + f.name + "”: " + ((err && err.message) || err), "err"); }
+    if(S.edit !== e) return;
+    e.uploading = Math.max(0, (e.uploading || 0) - 1); syncPhotoVal(e); showEditor();
+  }
 }
 function useSheetVersion(){
   const e = S.edit; if(!e || !e.conflict) return;
@@ -503,16 +649,23 @@ function useSheetVersion(){
 async function saveEdit(force){
   const e = S.edit; if(!e || e.busy) return;
   const d = (S.data[S.fileId] || {}).d, isAdd = !e.key;
+  if(e.uploading) return;
+  const photosChanged = !L.samePhotos(e.photos, e.basePhotos), pf = L.photoFields(e.photos);
+  if(photosChanged) e.vals.photo = pf.photo; else e.vals.photo = e.base.photo;   // an unchanged photo is never rewritten
   const bad = L.checkEdit(e.kind, e.vals, L.statusList(d, e.kind), isAdd);
   if(bad){ e.err = bad; showEditor(); return; }
   let body;
   if(isAdd){
     const fields = L.tidyValues(e.kind, e.vals); Object.keys(fields).forEach((k) => { if(!fields[k]) delete fields[k]; });
+    if(pf.photos.length) fields.photos = pf.photos;
     body = { kind: e.kind, op: "add", group: e.group, fields };
   }else{
     const fields = L.changes(e.kind, e.base, e.vals);
+    const base = {};
+    if(photosChanged){ fields.photo = pf.photo; fields.photos = pf.photos; base.photo = e.base.photo; base.photos = L.photoFields(e.basePhotos).photos.join("\n"); }
+    else delete fields.photo;
     if(!Object.keys(fields).length){ const id = e.id; S.edit = null; showDetail(id, true); return; }
-    const base = {}; Object.keys(fields).forEach((k) => { base[k] = e.base[k]; });
+    Object.keys(fields).forEach((k) => { if(!(k in base)) base[k] = e.base[k]; });
     body = { kind: e.kind, op: "set", rowKey: e.key, fields, base, force: !!force };
   }
   e.busy = true; e.err = ""; showEditor();

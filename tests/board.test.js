@@ -221,5 +221,28 @@ test("links in an edit are checked and tidied", () => {
   assert.deepStrictEqual(B.changes("cast", { showreel: "https://a.com/" }, { showreel: "a.com" }), {});
 });
 
+/* ---------- photos ---------- */
+test("the first photo is the display photo; making another the display photo reorders", () => {
+  const l = ["https://a.com/1.jpg", "https://a.com/2.jpg", "https://a.com/3.jpg"];
+  assert.deepStrictEqual(B.photoFields(l), { photo: l[0], photos: [l[1], l[2]] });
+  assert.deepStrictEqual(B.makeDisplay(l, l[2]), [l[2], l[0], l[1]]);
+  assert.deepStrictEqual(B.makeDisplay(l, l[0]), l);
+  assert.deepStrictEqual(B.removePhoto(l, l[0]), [l[1], l[2]]);                       // the next one becomes the display photo
+  assert.deepStrictEqual(B.photoFields([]), { photo: "", photos: [] });
+});
+test("added photos skip repeats and unsafe links, and stop at the limit", () => {
+  assert.deepStrictEqual(B.addPhotos(["https://a.com/1.jpg"], ["https://a.com/1.jpg", "javascript:x", "https://a.com/2.jpg"]), ["https://a.com/1.jpg", "https://a.com/2.jpg"]);
+  const many = []; for(let i = 0; i < 20; i++) many.push("https://a.com/" + i + ".jpg");
+  assert.strictEqual(B.addPhotos([], many).length, B.MAX_PHOTOS);
+  assert.strictEqual(B.samePhotos(["https://a.com/1.jpg"], ["a.com/1.jpg"]), true);        // spelling tidied the same way
+  assert.strictEqual(B.samePhotos(["https://a.com/1.jpg"], ["https://a.com/1.jpg"]), true);
+});
+test("the viewer asks Drive for a bigger picture; only real images upload", () => {
+  const u = "https://drive.google.com/file/d/1AbCdEfGhIjKl/view";
+  assert.strictEqual(B.viewSrc(u, true), "https://drive.google.com/thumbnail?id=1AbCdEfGhIjKl&sz=w1600");
+  assert.strictEqual(B.viewSrc("https://example.com/page", true), "");
+  assert.strictEqual(B.imageOk("image/jpeg", 1000), true); assert.strictEqual(B.imageOk("application/pdf", 1000), false); assert.strictEqual(B.imageOk("image/png", 0), false);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
