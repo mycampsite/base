@@ -109,12 +109,11 @@
     const first = await new Promise(r => { const u = auth.onAuthStateChanged(x => { u(); r(x); }); });
     if(first && !first.isAnonymous) return { user: first };
     const provider = new fb.auth.GoogleAuthProvider();
-    try{
-      return first ? await first.linkWithPopup(provider) : await auth.signInWithPopup(provider);
-    }catch(e){
-      if(e.code === "auth/credential-already-in-use" && e.credential) return await auth.signInWithCredential(e.credential);
-      throw e;
-    }
+    const key = auth.app && auth.app.options && auth.app.options.apiKey;
+    const fin = async (go) => { try{ return await go(); }catch(e){ if(e.code === "auth/credential-already-in-use" && e.credential) return await auth.signInWithCredential(e.credential); throw e; } };
+    const popup = () => fin(() => first ? first.linkWithPopup(provider) : auth.signInWithPopup(provider));
+    if(!window.CampSignIn || !key) return popup();
+    return window.CampSignIn.run(key, { popup, withToken: (tok) => { const cred = fb.auth.GoogleAuthProvider.credential(null, tok); return fin(() => first ? first.linkWithCredential(cred) : auth.signInWithCredential(cred)); } });
   }
   // Asks the hub to refresh this script's room->project mapping. Never throws, waits at most 8s.
   async function roomAccess(auth, fileId){

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="ui.css">
+<script src="signin.js" defer></script>
 <script src="ui.js" defer></script>
 <title>Hub - Camp</title>
 <link rel="icon" type="image/png" href="favicon.png">
@@ -456,7 +457,7 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="prodpanel.js" defer></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
@@ -786,7 +787,11 @@ onAuthStateChanged(auth, async user => {
   api("claimInvites").catch(e => console.warn("Invites:", e.message));
 });
 $("signIn").onclick = async () => {
-  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  try {
+    const popup = () => signInWithPopup(auth, new GoogleAuthProvider());
+    if (window.CampSignIn) await window.CampSignIn.run(firebaseConfig.apiKey, { popup, withToken: (tok) => signInWithCredential(auth, GoogleAuthProvider.credential(null, tok)) });
+    else await popup();
+  }
   catch (e) { if (!/popup-closed|cancelled/i.test(String(e.code || e.message))) toast("Sign-in failed: " + (e.message || e)); }
 };
 $("signOut").onclick = () => { [SESSION_KEY, PROJ_CACHE, FILES_CACHE, SHEETS_CACHE, DRAFTS_CACHE].forEach(k => { try { localStorage.removeItem(k); } catch (_e) {} }); signOut(auth); };
