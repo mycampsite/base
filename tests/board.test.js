@@ -85,14 +85,15 @@ test("a card carries its photo, links, status flags and where it sits in the She
   const jo = cast()[0].cards[1];
   assert.strictEqual(jo.id, "f1|cast:ANA:1"); assert.strictEqual(jo.row, 8);
   assert.strictEqual(jo.photo, "https://drive.google.com/thumbnail?id=1AbCdEfGhIjKl&sz=w900");
-  assert.deepStrictEqual(jo.links.map((l) => l.label), ["Call", "Email"]);
+  assert.deepStrictEqual(jo.links, []);                                                           // no Call / Email on the card
+  assert.deepStrictEqual(jo.contact.map((l) => l.label), ["Call", "Email"]);                      // they live in the detail view
   assert.strictEqual(jo.passed, true); assert.strictEqual(cast()[2].cards[0].done, true);
   const mia = cast()[0].cards[0];
   assert.deepStrictEqual(mia.links.map((l) => l.label), ["Showreel"]); assert.strictEqual(mia.notes, "");
 });
 test("a location card gets a Map button from its address", () => {
   const h = B.groupsOf(data, "loc", "f1")[0].cards[0];
-  assert.deepStrictEqual(h.links.map((l) => l.label), ["Map", "Call"]);
+  assert.deepStrictEqual(h.links.map((l) => l.label), ["Map"]); assert.deepStrictEqual(h.contact.map((l) => l.label), ["Call"]);
   assert.strictEqual(h.title, "12 Smith St, Fitzroy"); assert.strictEqual(h.groupType, "INT · 3 scenes");   // runs of spaces tidied
 });
 test("an option with notes but no name or address is still shown, with a plain title", () => {
@@ -147,7 +148,8 @@ test("a card remembers the Sheet's own text, so an edit starts from it", () => {
   const mia = cast()[0].cards[0];
   assert.strictEqual(mia.raw.notes, "Reel https://vimeo.com/123");   // links stay in the notes
   assert.strictEqual(mia.raw.actor, "Mia Lee"); assert.strictEqual(mia.raw.status, "Callback");
-  assert.deepStrictEqual(Object.keys(B.groupsOf(data, "loc", "f")[0].cards[0].raw), ["address", "photo", "phone", "email", "status", "notes"]);
+  assert.deepStrictEqual(Object.keys(B.groupsOf(data, "loc", "f")[0].cards[0].raw), ["address", "photo", "phone", "email", "status", "notes"]);   // a place has no showreel or audition
+  assert.deepStrictEqual(B.fieldsOf("cast").slice(-2), ["showreel", "audition"]);
 });
 test("an edit is checked before it is sent", () => {
   const st = data.statuses.cast;
@@ -175,6 +177,48 @@ test("a saved option is put back into the data; clearing empties it or removes i
   assert.strictEqual(B.groupsOf(B.withoutCandidate(d2, "cast", "cast:BEN:1", false), "cast", "f")[1].cards.length, 0);
   assert.strictEqual(B.withoutCandidate(added, "cast", "cast:BEN:2", true).cast[1].candidates.length, 1);
   assert.deepStrictEqual(B.keyParts("loc:HOUSE B:3"), { kind: "loc", group: "HOUSE B", n: 3 }); assert.strictEqual(B.keyParts("nope"), null);
+});
+
+/* ---------- showreel, audition, favourites, order, brief ---------- */
+const extra = {
+  statuses: data.statuses,
+  cast: [{ name: "ANA", type: "Lead", brief: " Guarded, mid 30s ", candidates: [
+    { key: "cast:ANA:1", n: 1, row: 8, actor: "A", status: "", notes: "", showreel: "https://youtu.be/r1", audition: "vimeo.com/9", fav: false, order: 0 },
+    { key: "cast:ANA:2", n: 2, row: 9, actor: "B", status: "", notes: "IMDb imdb.com/name/nm1", showreel: "https://youtu.be/r1", fav: true, order: 1, photos: ["https://x.com/a.jpg", "javascript:x", "https://x.com/a.jpg"], photo: "https://x.com/a.jpg" },
+    { key: "cast:ANA:3", n: 3, row: 10, actor: "C", status: "Passed", fav: true, order: 0 },
+    { key: "cast:ANA:4", n: 4, row: 11, actor: "D", status: "", order: 2, fav: false } ] }]
+};
+test("a card's links are showreel, audition and notes links; reel isn't repeated from the notes", () => {
+  const g = B.groupsOf(extra, "cast", "f")[0];
+  assert.strictEqual(g.brief, "Guarded, mid 30s");
+  assert.deepStrictEqual(g.cards.map((c) => c.title), ["B", "D", "A", "C"]);                  // order set first, then the Sheet's order; passed last
+  assert.deepStrictEqual(g.cards[2].links.map((l) => l.label), ["Showreel", "Audition"]);
+  assert.deepStrictEqual(g.cards[0].links.map((l) => l.label), ["Showreel", "IMDb"]);
+  assert.deepStrictEqual(g.cards[0].photos, ["https://x.com/a.jpg"]);                         // unsafe and repeated photos dropped
+});
+test("favourites come from every group and keep their own place too", () => {
+  const g = B.groupsOf(extra, "cast", "f");
+  assert.deepStrictEqual(B.favoritesOf(g).map((c) => c.title), ["B", "C"]);
+  assert.strictEqual(g[0].cards.length, 4);
+});
+test("moving a card by one step or before another", () => {
+  const k = ["a", "b", "c", "d"];
+  assert.deepStrictEqual(B.reorder(k, "c", -1), ["a", "c", "b", "d"]);
+  assert.deepStrictEqual(B.reorder(k, "a", -1), k);
+  assert.deepStrictEqual(B.reorder(k, "b", 1), ["a", "c", "b", "d"]);
+  assert.deepStrictEqual(B.reorder(k, "a", "c"), ["b", "a", "c", "d"]);
+  assert.deepStrictEqual(B.reorder(k, "d", "b"), ["a", "d", "b", "c"]);
+  assert.deepStrictEqual(B.reorder(k, "x", 1), k);
+  const d = B.withOrder(extra, "cast", ["cast:ANA:4", "cast:ANA:1", "cast:ANA:2", "cast:ANA:3"]);
+  assert.deepStrictEqual(B.groupsOf(d, "cast", "f")[0].cards.map((c) => c.title), ["D", "A", "B", "C"]);
+  assert.strictEqual(B.withBrief(extra, "cast", "ANA", "x").cast[0].brief, "x");
+});
+test("links in an edit are checked and tidied", () => {
+  const st = data.statuses.cast;
+  assert.match(B.checkEdit("cast", { showreel: "javascript:x" }, st), /showreel/);
+  assert.match(B.checkEdit("cast", { audition: "nope" }, st), /audition/);
+  assert.strictEqual(B.tidyValues("cast", { showreel: "vimeo.com/5" }).showreel, "https://vimeo.com/5");
+  assert.deepStrictEqual(B.changes("cast", { showreel: "https://a.com/" }, { showreel: "a.com" }), {});
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
