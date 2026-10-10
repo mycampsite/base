@@ -133,5 +133,16 @@ test("a child on a shoot day is flagged, and a night scene with one is a warning
   assert.ok(/CAL \(age\?\)/.test(w[2].text));                // day 3: CAL, age unknown
 });
 
+test("shoot dates skip weekends and days off, and a pinned date moves the days after it", () => {
+  // Fri 2026-11-06 start, Mon–Fri, Tue 10th off, day 4 pinned to Mon 16th
+  const plan = P.normalize({ settings: { days: 5, start: "2026-11-06", perWeek: 5, off: ["2026-11-10"] }, days: [{}, {}, {}, { date: "2026-11-16" }, {}] });
+  assert.deepStrictEqual(P.planDates(plan), ["2026-11-06", "2026-11-09", "2026-11-11", "2026-11-16", "2026-11-17"]);
+  // no start date: days after a pinned one carry on from it
+  const p2 = P.normalize({ settings: { days: 2 }, days: [{ date: "2026-12-01" }, {}] });
+  assert.deepStrictEqual(P.planDates(p2), ["2026-12-01", "2026-12-02"]);
+  // days off survive the database turning the list into an object
+  assert.deepStrictEqual(P.normalize({ settings: { off: { 0: "2026-11-10", 1: "bad" } } }).settings.off, ["2026-11-10"]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

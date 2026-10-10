@@ -39,6 +39,25 @@ function shootDates(start, count, perWeek){
   return out;
 }
 
+// The real date of every shoot day. Days run in order from the start date on working days
+// (perWeek), skipping the days off in settings.off. A day with its own date (pinned) uses it, and
+// the days after it carry on from there, so a break in the middle of a shoot is just a later pin.
+// Mirrored in Code.gs (bgPlanDates_): keep the two the same.
+function planDates(plan){
+  const st = plan.settings, off = new Set(st.off || []);
+  const work = (dow) => st.perWeek === 7 ? true : st.perWeek === 6 ? dow !== 0 : (dow !== 0 && dow !== 6);
+  const out = []; let cur = parseISO(st.start);
+  plan.days.forEach((d) => {
+    const pin = parseISO(d.date);
+    if(pin){ out.push(toISO(pin)); cur = new Date(pin.getTime() + 864e5); return; }
+    if(!cur){ out.push(""); return; }
+    let guard = 0;
+    while((!work(cur.getUTCDay()) || off.has(toISO(cur))) && guard++ < 400) cur.setUTCDate(cur.getUTCDate() + 1);
+    out.push(toISO(cur)); cur = new Date(cur.getTime() + 864e5);
+  });
+  return out;
+}
+
 // ---------- normalising what comes back from the database ----------
 // Realtime Database drops empty arrays and may hand arrays back as objects; make it a clean plan.
 function normalize(plan){
@@ -49,13 +68,14 @@ function normalize(plan){
     days: clampInt(s.days, 1, MAX_DAYS, DEFAULTS.days),
     perWeek: clampInt(s.perWeek, 5, 7, DEFAULTS.perWeek),
     maxEighths: clampInt(s.maxEighths, 4, 160, DEFAULTS.maxEighths),
-    call: /^\d{2}:\d{2}$/.test(s.call || "") ? s.call : DEFAULTS.call
+    call: /^\d{2}:\d{2}$/.test(s.call || "") ? s.call : DEFAULTS.call,
+    off: (Array.isArray(s.off) ? s.off : (s.off && typeof s.off === "object" ? Object.values(s.off) : [])).filter((x) => parseISO(x)).sort()
   };
   const arr = (v) => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).sort((a, b) => a - b).map((k) => v[k]) : []);
-  let days = arr(plan.days).map((d) => ({ id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || "") }));
+  let days = arr(plan.days).map((d) => ({ id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }));
   // the day count setting is the truth: pad with empty days. More stored days than the setting
   // (an older save) are kept and the count follows them, so no scheduled scene is ever lost.
-  while(days.length < settings.days) days.push({ id: uid(), scenes: [], call: "", note: "" });
+  while(days.length < settings.days) days.push({ id: uid(), scenes: [], call: "", note: "", date: "" });
   if(days.length > settings.days) settings.days = days.length;
   // a scene can only be on one day
   const seen = new Set();
@@ -201,6 +221,6 @@ function validate(plan, breakdown){
   return out;
 }
 
-const api = { DEFAULTS, MAX_DAYS, fmtEighths, parseISO, shootDates, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate };
+const api = { DEFAULTS, MAX_DAYS, fmtEighths, parseISO, shootDates, planDates, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);

@@ -110,6 +110,24 @@ const css = `
 .strip .t span{ color:var(--uiMuted); font-weight:600; white-space:nowrap; }
 .strip .l{ color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .strip .c{ color:var(--uiMuted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dtPick{ position:relative; display:inline-flex; margin-left:6px; font-size:11.5px; color:var(--uiMuted); cursor:pointer; border-radius:6px; padding:1px 5px; }
+.dtPick:hover{ background:rgba(255,255,255,.08); color:var(--uiText); }
+.dtPick.pinned{ color:#a9c1ff; }
+.dtPick input{ position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; }
+.colHead .unpin{ border:0; background:none; color:var(--uiMuted); cursor:pointer; font-size:11px; padding:0 3px; }
+.colHead .unpin:hover{ color:#fff; }
+.cal{ margin-top:12px; }
+.calHead{ display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; font-size:12px; color:var(--uiMuted); margin-bottom:6px; }
+.calHead b{ color:var(--uiText); font-size:13px; }
+.calGrid{ display:grid; grid-template-columns:repeat(7, minmax(0, 64px)); gap:4px; }
+.calGrid > i{ font-style:normal; font-size:10.5px; color:var(--uiMuted); text-transform:uppercase; letter-spacing:.06em; padding-left:4px; }
+.cd{ height:38px; border-radius:8px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.02); color:var(--uiMuted); font-size:11px; display:flex; flex-direction:column; align-items:flex-start; justify-content:space-between; padding:3px 6px; cursor:default; }
+.cd b{ font-size:11px; }
+.cd.rest{ opacity:.35; }
+.cd.shoot{ background:rgba(143,227,166,.13); border-color:rgba(143,227,166,.4); color:#bff0cc; cursor:pointer; }
+.cd.shoot.pin{ background:rgba(91,140,255,.15); border-color:rgba(91,140,255,.5); color:#cbd8ff; cursor:default; }
+.cd.off{ background:repeating-linear-gradient(135deg, rgba(255,139,131,.12) 0 6px, transparent 6px 12px); border-color:rgba(255,139,131,.45); color:#ffb4ae; cursor:pointer; }
+.cd:not(:disabled):hover{ border-color:#fff; }
 .colEmpty{ color:var(--uiMuted); font-size:12px; padding:8px 4px; text-align:center; }
 .moveBar{ position:sticky; left:0; display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; padding:8px 10px; border-radius:10px; background:#202634; border:1px solid rgba(91,140,255,.35); font-size:12.5px; }
 .moveBar select{ height:30px; border-radius:8px; border:1px solid var(--uiBorder); background:#111; padding:0 8px; }
@@ -237,7 +255,8 @@ function render(pid){
     rec.plan.known = bd.scenes.filter((s) => s.id).map((s) => s.id);
     save(pid, rec.plan);
   }
-  const pl = rec.plan, st = pl.settings, dates = P.shootDates(st.start, st.days, st.perWeek);
+  const pl = rec.plan, st = pl.settings, dates = P.planDates(pl);
+  const badOrder = dates.some((d, i) => i && d && dates[i - 1] && d <= dates[i - 1]);
   const stats = pl.days.map((d) => P.dayStats(d, byId, st.maxEighths));
   const warns = P.validate(pl, bd);
   const scheduled = bd.scenes.filter((s) => s.id).length - rec.unscheduled.length;
@@ -247,6 +266,7 @@ function render(pid){
     <span class="ctlChip ${rec.unscheduled.length ? "warn" : "ok"}">${scheduled}/${bd.scenes.filter((s) => s.id).length} scheduled</span>
     ${warns.length ? `<button type="button" class="ctlChip btnChip${nWarn ? " warn" : ""}" data-a="warns" aria-expanded="${S.warnOpen}">${nWarn ? "⚠ " + nWarn + " to check" : warns.length + " note" + (warns.length === 1 ? "" : "s")} ${S.warnOpen ? "▴" : "▾"}</button>` : ""}
     ${bd.cast.some((c) => c.minor) ? `<span class="ctlChip warn" title="${esc(bd.cast.filter((c) => c.minor).map((c) => c.name + (c.age != null ? " (" + c.age + ")" : " (age?)")).join(", "))}">${bd.cast.filter((c) => c.minor).length} under 18</span>` : ""}
+    ${badOrder ? `<span class="ctlChip warn" title="A pinned date is on or before the day ahead of it">⚠ Days out of date order</span>` : ""}
     ${sc.state === "loading" ? `<span class="ctlChip">Updating from script…</span>` : ""}
     ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}`;
   const acts = `<div class="ctlActs">
@@ -298,7 +318,7 @@ function render(pid){
     .concat(pl.days.map((d, i) => {
       const x = stats[i], pct = Math.min(100, Math.round(x.eighths / st.maxEighths * 100));
       return `<div class="col${x.over ? " over" : ""}${S.landed && S.landed.day === i ? " bump" : ""}" data-day="${i}">
-        <div class="colHead"><b>Day ${i + 1}</b><span class="dt">${esc(fmtDate(dates[i]))}</span>
+        <div class="colHead"><b>Day ${i + 1}</b><label class="dtPick${d.date ? " pinned" : ""}" title="${d.date ? "Pinned to this date. Click to change" : "Click to pin this day to a date"}"><span>${esc(fmtDate(dates[i]) || "Set date")}${d.date ? " 📌" : ""}</span><input type="date" value="${esc(dates[i] || "")}" data-date="${i}"${dis}></label>${d.date && canEdit ? `<button type="button" class="unpin" data-a="unpin" data-day="${i}" title="Unpin: follow on from the day before">✕</button>` : ""}
           <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc · ${x.cast.length} cast</span></div>
           <div class="cap"><i style="width:${pct}%"></i></div>
           <div class="colCall">Call <input type="time" value="${esc(d.call || st.call)}" data-call="${i}"${dis}>${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
@@ -319,9 +339,33 @@ function render(pid){
       ${rows.map((r) => `<tr><td>${esc(r.name)}${kidOf[r.name] ? ` <span class="kid" title="Under 18${kidOf[r.name].age != null ? " (age " + kidOf[r.name].age + ")" : ": confirm age"}. Limited work hours, permit and chaperone.">⚠ under 18</span>` : ""}</td>${r.marks.map((m) => `<td class="${m}">${m}</td>`).join("")}<td>${r.workDays}</td><td>${r.holdDays}</td><td><b>${r.total}</b></td></tr>`).join("")}
     </table></div></details>`;
 
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${docsNudge}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}
+  const cal = calendar(pl, dates, canEdit);
+  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}
     <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it to another day" : "Drag scenes between days (or click a scene to move it)"}. Changes save for the whole team straight away.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
+}
+
+/* ---------- calendar: the shoot at a glance; click a date to make it a day off (or a shoot day again) ---------- */
+function calendar(pl, dates, canEdit){
+  const st = pl.settings, set = dates.filter(Boolean);
+  if(!set.length) return "";
+  const dayOf = {}; dates.forEach((d, i) => { if(d) dayOf[d] = i; });
+  const off = new Set(st.off || []);
+  const first = P.parseISO(set.reduce((a, b) => a < b ? a : b)), last = P.parseISO(set.reduce((a, b) => a > b ? a : b));
+  const d = new Date(first.getTime()); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));          // back to Monday
+  const end = new Date(last.getTime()); end.setUTCDate(end.getUTCDate() + (6 - (end.getUTCDay() + 6) % 7)); // on to Sunday
+  const work = (dow) => st.perWeek === 7 ? true : st.perWeek === 6 ? dow !== 0 : (dow !== 0 && dow !== 6);
+  const cells = []; let n = 0;
+  while(d <= end && n++ < 7 * 16){
+    const iso = d.toISOString().slice(0, 10), i = dayOf[iso], dow = d.getUTCDay();
+    const cls = i != null ? "shoot" + (pl.days[i].date ? " pin" : "") : off.has(iso) ? "off" : work(dow) ? "free" : "rest";
+    const label = d.getUTCDate() === 1 || !cells.length ? d.toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" }) : String(d.getUTCDate());
+    const tip = i != null ? "Day " + (i + 1) + (pl.days[i].date ? " (pinned)" : "") + (canEdit && !pl.days[i].date ? ": click to make this a day off" : "") : off.has(iso) ? "Day off: click to shoot again" : work(dow) ? "Not needed" : "Weekend (Shooting week setting)";
+    cells.push(`<button type="button" class="cd ${cls}" data-a="cal" data-iso="${iso}" title="${esc(tip)}"${canEdit && (cls === "off" || (cls.indexOf("shoot") === 0 && !pl.days[i].date)) ? "" : " disabled"}><span>${esc(label)}</span>${i != null ? `<b>D${i + 1}</b>` : off.has(iso) ? "<b>off</b>" : ""}</button>`);
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return `<div class="cal"><div class="calHead"><b>Calendar</b><span>Click a shoot day to make it a day off; the days after it move along. Pin a day to a date in its column.${(st.off || []).length ? " " + st.off.length + " day" + (st.off.length === 1 ? "" : "s") + " off." : ""}</span></div>
+    <div class="calGrid">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((w) => `<i>${w}</i>`).join("")}${cells.join("")}</div></div>`;
 }
 
 /* ---------- call sheets ---------- */
@@ -359,6 +403,13 @@ function wire(box, pid, ctx){
       if(k === "menu"){ S.menu = !S.menu; render(pid); return; }
       if(k === "warns"){ S.warnOpen = !S.warnOpen; render(pid); return; }
       if(k === "create"){ hub.createDocs(a); return; }
+      if(k === "unpin" && canEdit){ update((plan) => { const d = plan.days[Number(a.dataset.day)]; if(d) d.date = ""; }); return; }
+      if(k === "cal" && canEdit){
+        const iso = a.dataset.iso;
+        update((plan) => { const off = new Set(plan.settings.off || []); off.has(iso) ? off.delete(iso) : off.add(iso); plan.settings.off = Array.from(off).sort(); });
+        H().toast(new Set(planOf(pid).settings.off).has(iso) ? "Day off. The shoot days after it move along." : "Shoot day again.", "ok", 1800);
+        return;
+      }
       if(k === "cs"){ flush(); hub.makeCallsheets(pid, ctx.scriptId, a); return; }
       if(k === "pop"){ window.open(location.pathname + "?pid=" + encodeURIComponent(pid) + "&tab=production&popout=1", "campProdPop", "popup=yes,width=1280,height=900"); return; }
       if(k === "reload"){ loadScript(ctx.scriptId || hub.scriptIds(p)[0], true); return; }
@@ -395,6 +446,7 @@ function wire(box, pid, ctx){
   box.onchange = (e) => {
     const t = e.target; if(!canEdit) return;
     if(t.dataset.move){ moveScene(pid, t.dataset.move, Number(t.value), -1); S.pick = null; return; }
+    if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }
     if(t.dataset.call != null){ update((plan) => { const d = plan.days[Number(t.dataset.call)]; if(d) d.call = t.value === plan.settings.call ? "" : t.value; }); return; }
     const k = t.dataset.s; if(!k) return;
     if(k === "days"){ const r = P.resizeDays(planOf(pid), Number(t.value)); confirmShrink(pid, r); return; }
