@@ -361,6 +361,18 @@
     #toolbar #zoomGroup{ order:7; }
     #canvasWrap{ padding:12px; min-height:0; }
     body.focusView .railBack{ display:none; }
+    /* Bigger drawing area + touch-sized controls + visible press feedback */
+    body.focusView #canvasWrap{ height:max(340px, calc(100dvh - 190px)); flex:0 0 auto; padding:8px; }
+    .tool-btn{ width:40px; height:38px; }
+    .swatch{ width:26px; height:26px; flex:0 0 auto; }
+    .swatch.selected{ box-shadow:0 0 0 2px var(--bg), 0 0 0 4px #fff; }
+    .card{ transition:transform .08s, border-color .1s; }
+    .card:active{ transform:scale(.97); border-color:var(--accent); }
+    .card .cap .top .miniBtn{ width:32px; height:32px; }
+    .scene-item{ padding:11px 10px; }
+    .scene-item:active, .tool-btn:active, .pill:active{ background:#33332e; }
+    #rightRail select, #rightRail input[type=text], #rightRail textarea{ font-size:16px; height:42px; }
+    #rightRail textarea{ height:auto; }
   }
 
   /* ---------------- Print / export: A4 landscape storyboard sheets ---------------- */
