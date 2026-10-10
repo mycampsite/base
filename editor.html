@@ -13521,6 +13521,29 @@ ${TP.join("\n")}
 
     // ---------- Hover tooltip ----------
     let tipFor = null, tipHide = 0;
+    // Cards dock in one fixed spot beside the page (so they don't chase highlights as you scroll). Phones fall back to sitting by the text.
+    const useDock = () => !document.body.classList.contains("phoneUI") && window.innerWidth >= 900;
+    function dock(el){
+      el.hidden = false;
+      const w = el.offsetWidth, h = el.offsetHeight, pad = 12, vw = window.innerWidth, vh = window.innerHeight;
+      const er = editor.getBoundingClientRect(), pn = document.getElementById("panel"), pr = (pn && pn.offsetWidth) ? pn.getBoundingClientRect() : null;
+      const room = (pr ? pr.left : vw) - er.right;
+      let left;
+      if(room >= w + pad * 2) left = er.right + pad + Math.min(24, (room - w - pad * 2) / 2);   // gap beside the page
+      else if(pr && pr.width >= w - 8) left = pr.left + (pr.width - w) / 2;                    // over the formatting panel
+      else left = vw - w - pad;
+      const top = Math.max(64, Math.min(pr ? pr.top : 120, vh - h - pad));
+      el.style.left = Math.max(pad, left) + "px"; el.style.top = top + "px";
+    }
+    const placeCard = (el, rect) => { if(useDock()) dock(el); else place(el, rect, false); };
+    const quoteOf = (id) => { const q = spansOf(id).map(x => x.textContent).join(" ").replace(/\s+/g, " ").trim(); return q.length > 140 ? q.slice(0, 138) + "…" : q; };
+    // Two-step delete: first click arms the button, second (within 3s) does it. Everything is undoable too.
+    function armDelete(b){
+      if(b.classList.contains("armed")) return true;
+      b.classList.add("armed"); b.dataset.label = b.textContent; b.textContent = "Click again to delete";
+      setTimeout(() => { if(b.isConnected && b.classList.contains("armed")){ b.classList.remove("armed"); b.textContent = b.dataset.label; } }, 3000);
+      return false;
+    }
     function place(el, anchorRect, preferAbove){
       el.hidden = false;
       const w = el.offsetWidth, h = el.offsetHeight, pad = 10;
@@ -13535,15 +13558,18 @@ ${TP.join("\n")}
       clearTimeout(tipHide);
       tipFor = id;
       const c = colorOf(cm.color, cm);
-      tip.innerHTML = `
+      const q = quoteOf(id);
+      tip.style.setProperty("--ct", c.hex);
+      tip.innerHTML = `<div class="cBody">
         <div class="ctHead"><span class="ctDot" style="background:${c.hex}"></span><b>${esc(c.label)}</b>${cm.resolved ? `<span class="ctRes">Resolved</span>` : ""}<span class="ctDate">${cm.by ? esc(cm.by) + " · " : ""}${esc(fmtDate(cm.updated || cm.created))}</span></div>
-        <div class="ctText">${cm.text ? esc(cm.text).replace(/\n/g, "<br>") : `<i style="opacity:.6">No note yet</i>`}</div>
-        <div class="ctActs"><button data-a="edit">Edit</button><button data-a="res">${cm.resolved ? "Reopen" : "Resolve"}</button><button data-a="del" class="danger">Delete</button></div>`;
+        ${q ? `<div class="ctQuote">“${esc(q)}”</div>` : ""}
+        <div class="ctText">${cm.text ? esc(cm.text).replace(/\n/g, "<br>") : `<i style="opacity:.6">No note yet</i>`}</div></div>
+        <div class="cFoot"><button data-a="edit">Edit note</button><button data-a="res" class="ok">${cm.resolved ? "Reopen" : "✓ Resolve"}</button><span class="sp"></span><button data-a="del" class="danger">Delete</button></div>`;
       tip.dataset.note = id;
-      place(tip, anchor.getBoundingClientRect(), false);
+      placeCard(tip, anchor.getBoundingClientRect());
     }
     function hideTip(){ tip.hidden = true; tipFor = null; }
-    function hideTipSoon(){ clearTimeout(tipHide); tipHide = setTimeout(hideTip, 220); }
+    function hideTipSoon(){ clearTimeout(tipHide); tipHide = setTimeout(hideTip, useDock() ? 650 : 220); }
     tip.addEventListener("mouseenter", () => clearTimeout(tipHide));
     tip.addEventListener("mouseleave", hideTipSoon);
     tip.addEventListener("mousedown", (e) => e.preventDefault());
@@ -13552,7 +13578,7 @@ ${TP.join("\n")}
       const id = tip.dataset.note;
       if(b.dataset.a === "edit") openEditor(id, spansOf(id)[0] || tip);
       else if(b.dataset.a === "res"){ setResolved(id, !(__COMMENTS[id] || {}).resolved); hideTip(); }
-      else if(b.dataset.a === "del") removeComment(id);
+      else if(b.dataset.a === "del"){ if(armDelete(b)) removeComment(id); }
     });
     editor.addEventListener("mouseover", (e) => {
       const s = e.target.closest && e.target.closest(".cmt[data-note]");
@@ -13573,19 +13599,23 @@ ${TP.join("\n")}
       hideTip();
       pop.dataset.note = id;
       pop.dataset.isNew = isNew ? "1" : "";
-      pop.innerHTML = `
-        <div class="cpHead">${isNew ? "New comment" : "Comment"}<button class="cpX" data-a="close" title="Close">✕</button></div>
-        <textarea placeholder="Start typing...">${esc(cm.text || "")}</textarea>
+      const q = quoteOf(id);
+      pop.style.setProperty("--ct", colorOf(cm.color, cm).hex);
+      pop.innerHTML = `<div class="cBody">
+        <div class="cpHead">${isNew ? "New comment" : "Comment"}<button class="cpX" data-a="close" title="Close (Esc)">✕</button></div>
+        ${q ? `<div class="cpQuote">“${esc(q)}”</div>` : ""}
+        <textarea placeholder="Write your note…">${esc(cm.text || "")}</textarea>
+        <div class="cpLabel">Topic</div>
         <div class="cpColors">${chipsHtml(cm.color || "yellow", cm)}</div>
-        <div class="cpTopicForm" hidden><input type="text" maxlength="24" placeholder="Topic name, e.g. Sound"><input type="color" value="#4fb3bf" title="Colour"><button data-a="addtopic" class="primary" style="height:28px;border-radius:8px;padding:0 10px;cursor:pointer">Add</button></div>
-        <div class="cpActs">
+        <div class="cpTopicForm" hidden><input type="text" maxlength="24" placeholder="Topic name, e.g. Sound"><input type="color" value="#4fb3bf" title="Colour"><button data-a="addtopic" class="primary" style="height:28px;border-radius:8px;padding:0 10px;cursor:pointer">Add</button></div></div>
+        <div class="cFoot">
           <button data-a="del" class="danger">Delete</button>
-          <button data-a="res">${cm.resolved ? "Reopen" : "Resolve"}</button>
-          <span style="flex:1"></span>
+          <span class="sp"></span>
+          <button data-a="res" class="ok">${cm.resolved ? "Reopen" : "✓ Resolve"}</button>
           <button data-a="save" class="primary">Save</button>
         </div>`;
       const r = (anchor && anchor.getBoundingClientRect) ? anchor.getBoundingClientRect() : { left: window.innerWidth / 2 - 160, right: 0, top: 120, bottom: 120 };
-      place(pop, r, false);
+      placeCard(pop, r);
       const ta = pop.querySelector("textarea");
       setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 20);
     }
@@ -13632,6 +13662,7 @@ ${TP.join("\n")}
       }
       if(cbtn){
         pop.querySelectorAll("[data-c]").forEach(b => b.classList.toggle("on", b === cbtn));
+        try{ pop.style.setProperty("--ct", cbtn.dataset.hex || colorOf(cbtn.dataset.c, null).hex); }catch(_e){}
         spansOf(pop.dataset.note).forEach(s => { s.dataset.color = cbtn.dataset.c; if(cbtn.dataset.hex) s.style.setProperty("--cmt-hex", cbtn.dataset.hex); });
         return;
       }
@@ -13656,7 +13687,7 @@ ${TP.join("\n")}
       if(b.dataset.a === "save") saveEditor();
       else if(b.dataset.a === "close") closeEditor();
       else if(b.dataset.a === "res"){ saveEditor(); setResolved(id, !(__COMMENTS[id] || {}).resolved); }
-      else if(b.dataset.a === "del") removeComment(id);
+      else if(b.dataset.a === "del"){ if(armDelete(b)) removeComment(id); }
     });
     pop.addEventListener("keydown", (e) => {
       e.stopPropagation();
@@ -13688,7 +13719,13 @@ ${TP.join("\n")}
     editor.addEventListener("mouseup", () => setTimeout(maybeShowAddBtn, 0));
     editor.addEventListener("keyup", (e) => { if(e.shiftKey || e.key.startsWith("Arrow")) setTimeout(maybeShowAddBtn, 0); else hideAddBtn(); });
     document.addEventListener("selectionchange", () => { const s = window.getSelection(); if(!s || s.isCollapsed) hideAddBtn(); });
-    window.addEventListener("scroll", () => { hideAddBtn(); if(!tip.hidden) hideTip(); if(!pop.hidden && pop.dataset.note){ const a = spansOf(pop.dataset.note)[0]; if(a) place(pop, a.getBoundingClientRect(), false); } }, { passive: true });
+    window.addEventListener("scroll", () => {
+      hideAddBtn();
+      if(useDock()) return;   // docked cards stay put while you scroll
+      if(!tip.hidden) hideTip();
+      if(!pop.hidden && pop.dataset.note){ const a = spansOf(pop.dataset.note)[0]; if(a) place(pop, a.getBoundingClientRect(), false); }
+    }, { passive: true });
+    window.addEventListener("resize", () => { if(useDock()){ if(!tip.hidden) dock(tip); if(!pop.hidden) dock(pop); } });
 
     // Ctrl/Cmd + Alt + M = add comment (same as Google Docs / Word)
     document.addEventListener("keydown", (e) => {
@@ -13728,18 +13765,20 @@ ${TP.join("\n")}
           const live = sp.length > 0;
           const quote = live ? sp.map(s => s.textContent).join(" ").replace(/\s+/g, " ").trim() : String(cm.quote || "");
           const scene = live ? sceneOf(sp[0]) : String(cm.scene || "");
-          const acts = cm.resolved ? `<div class="ciActs"><button type="button" data-a="reopen"${live ? "" : " disabled title=\"The highlighted text was deleted\""}>Reopen</button><button type="button" data-a="del" class="danger">Delete</button></div>` : "";
+          const acts = cm.resolved
+            ? `<div class="ciActs"><button type="button" data-a="reopen"${live ? "" : " disabled title=\"The highlighted text was deleted\""}>Reopen</button><span class="sp"></span><button type="button" data-a="del" class="danger">Delete</button></div>`
+            : `<div class="ciActs"><button type="button" data-a="res" class="ok">✓ Resolve</button><button type="button" data-a="edit">Edit</button><span class="sp"></span><button type="button" data-a="del" class="danger">Delete</button></div>`;
           const when = cm.resolved ? `<span class="ciWhen">Resolved ${esc(fmtDate(cm.resolvedAt || cm.updated))}${cm.resolvedBy ? " by " + esc(cm.resolvedBy) : ""}${live ? "" : " · text deleted"}</span>` : "";
           return `<div class="cmtItem${cm.resolved ? " resolved" : ""}" data-note="${esc(id)}" tabindex="0">
             <div class="ciTop"><span class="ctDot" style="background:${c.hex}"></span><b>${esc(c.label)}</b><span class="ciScene">${cm.by ? esc(cm.by) + " · " : ""}${esc(scene)}</span></div>
             ${quote ? `<div class="ciQuote">“${esc(quote.length > 90 ? quote.slice(0, 88) + "…" : quote)}”</div>` : ""}
             <div class="ciText">${cm.text ? esc(cm.text) : `<i>No note</i>`}</div>${when}${acts}</div>`;
         };
-        const bar = (a, label) => `<div class="cmtBar"><button type="button" data-a="${a}" class="danger">${label}</button></div>`;
-        if(list) list.innerHTML = open.length ? bar("clearopen", "Clear all comments") + open.map(item).join("")
+        const bar = (a, label, n, word) => `<div class="cmtBar"><span class="cnt">${n} ${word}</span><button type="button" data-a="${a}" class="danger">${label}</button></div>`;
+        if(list) list.innerHTML = open.length ? bar("clearopen", "Clear all", open.length, "open") + open.map(item).join("")
           : (done.length ? `<div class="cmtEmpty">No open comments. Resolved ones are in the <b>Resolved</b> tab.</div>`
                          : `<div class="cmtEmpty">No comments yet.<br><br>Highlight some script text and click <b>Comment</b> (or press Ctrl/Cmd+Alt+M). Hover a highlight to read its note.</div>`);
-        if(rlist) rlist.innerHTML = done.length ? bar("clearres", "Clear all resolved") + done.map(item).join("") : `<div class="cmtEmpty">Nothing resolved yet.<br><br>When you resolve a comment it moves here, so you can still read it or reopen it.</div>`;
+        if(rlist) rlist.innerHTML = done.length ? bar("clearres", "Clear all", done.length, "resolved") + done.map(item).join("") : `<div class="cmtEmpty">Nothing resolved yet.<br><br>When you resolve a comment it moves here, so you can still read it or reopen it.</div>`;
       }, 60);
     }
     function jumpTo(id){
@@ -13757,6 +13796,14 @@ ${TP.join("\n")}
         return;
       }
       const it = e.target.closest(".cmtItem"); if(!it) return;
+      const ab = e.target.closest("button[data-a]");
+      if(ab){
+        const nid = it.dataset.note;
+        if(ab.dataset.a === "res") setResolved(nid, true);
+        else if(ab.dataset.a === "edit"){ try{ window.__scriptyCloseDrawer && window.__scriptyCloseDrawer(); }catch(_e){} jumpTo(nid); setTimeout(() => openEditor(nid, spansOf(nid)[0] || it), 450); }
+        else if(ab.dataset.a === "del"){ if(armDelete(ab)) removeComment(nid); }
+        return;
+      }
       try{ window.__scriptyCloseDrawer && window.__scriptyCloseDrawer(); }catch(_e){}
       jumpTo(it.dataset.note);
       setTimeout(() => openEditor(it.dataset.note, spansOf(it.dataset.note)[0] || it), 450);
@@ -13769,7 +13816,7 @@ ${TP.join("\n")}
       }
       const it = e.target.closest(".cmtItem"); if(!it) return;
       const id = it.dataset.note, b = e.target.closest("button[data-a]");
-      if(b && b.dataset.a === "del"){ if(confirm("Delete this resolved comment for good?")) removeComment(id); return; }
+      if(b && b.dataset.a === "del"){ if(armDelete(b)) removeComment(id); return; }
       if(b && b.dataset.a === "reopen"){ setResolved(id, false); sideTab("comments"); return; }
       if(spansOf(id).length){ try{ window.__scriptyCloseDrawer && window.__scriptyCloseDrawer(); }catch(_e){} jumpTo(id); }
     });
@@ -18097,22 +18144,60 @@ function clearHighlights(){
 })();
 </script>
 <style>
-  /* Dual dialogue: show which box is which while writing (never printed or exported) */
+  /* Dual dialogue: faded CHARACTER / Dialogue hints show which box is which while writing (never printed or exported) */
   .line[data-type="dual"] .dualField{ position: relative; }
   .line[data-type="dual"] .dualField[data-empty="1"]::before{ content: attr(data-ph); position: absolute; left: 0; right: 0; top: 0; color: rgba(0,0,0,.32); pointer-events: none; }
-  .line[data-type="dual"].dualActive .dualCol{ box-shadow: 0 0 0 1px rgba(91,140,255,.45); border-radius: 3px; }
-  .line[data-type="dual"].dualActive .dualCol[data-side="L"]::after,
-  .line[data-type="dual"].dualActive .dualCol[data-side="R"]::after{
-    position: absolute; top: -1.15em; font: 600 9px/1 Inter, system-ui, sans-serif; letter-spacing: .4px; color: rgba(91,140,255,.9); text-transform: uppercase;
-  }
+  :root[data-pages="dark"] .line[data-type="dual"] .dualField[data-empty="1"]::before{ color: rgba(255,255,255,.34); }
   .line[data-type="dual"] .dualCol{ position: relative; }
-  .line[data-type="dual"].dualActive .dualCol[data-side="L"]::after{ content: "Left speaker"; left: 0; }
-  .line[data-type="dual"].dualActive .dualCol[data-side="R"]::after{ content: "Right speaker"; left: 0; }
+  /* Same shape as a normal speech block: the name sits indented over the speech, which stops short of the column edge */
+  .line[data-type="dual"] .dualChar{ text-align: left; margin-left: min(calc((var(--x-character-L-mm) - var(--x-dialogue-L-mm)) * 1mm), 28%); }
+  .line[data-type="dual"] .dualDlg{ padding-right: 6%; }
+  /* a pair that follows text (not a blank line) gets the same one-line gap a normal speech does */
+  .line:not(:empty) + .line[data-type="dual"]{ margin-top: calc(var(--baseline-step-mm) * 1mm); }
   @media print{
-    .line[data-type="dual"] .dualField[data-empty="1"]::before,
-    .line[data-type="dual"] .dualCol::after{ content: none !important; }
-    .line[data-type="dual"] .dualCol{ box-shadow: none !important; }
+    .line[data-type="dual"] .dualField[data-empty="1"]::before{ content: none !important; }
+    #blankCaret{ display:none !important; }
   }
+
+  /* Blank-line caret: drawn by us so it can never go missing on an empty line */
+  #blankCaret{ position:fixed; z-index:40; width:2px; border-radius:1px; pointer-events:none; animation: blankBlink 1.06s steps(1) infinite; }
+  #blankCaret[hidden]{ display:none; }
+  @keyframes blankBlink{ 0%,58%{ opacity:1; } 59%,100%{ opacity:.14; } }
+
+  /* Comment cards (hover + editor): docked beside the script, topic kept apart from resolve / delete */
+  .cmtTip, .cmtPop{ width: 320px; padding: 0; overflow: hidden; border-left: 4px solid var(--ct, rgba(255,255,255,.3)); }
+  .cmtTip .cBody, .cmtPop .cBody{ padding: 12px 14px 12px; }
+  .ctQuote, .cpQuote{ font-family: var(--font-stack, ui-monospace, monospace); font-size: 12px; line-height: 1.35; opacity: .7; padding: 5px 8px; margin: 0 0 9px; border-left: 2px solid rgba(255,255,255,.2); background: rgba(255,255,255,.04); border-radius: 0 6px 6px 0; max-height: 4.1em; overflow: hidden; }
+  .ctHead b{ font-weight: 650; }
+  .cpHead{ margin-bottom: 8px; }
+  .cmtPop textarea{ min-height: 96px; }
+  .cpLabel{ font: 600 10.5px/1 Inter, system-ui, sans-serif; letter-spacing: .09em; text-transform: uppercase; opacity: .5; margin: 14px 0 7px; }
+  .cmtPop .cpColors{ margin-top: 0; gap: 5px; }
+  .cmtPop .cpColors button{ border-radius: 999px; height: 24px; padding: 0 10px 0 8px; font-size: 12px; background: transparent; border-color: rgba(255,255,255,.14); }
+  .cmtPop .cpColors button.on{ background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.5); }
+  .cmtPop .cpColors button.cpNew{ border-style: dashed; opacity: .75; }
+  .cFoot{ display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid rgba(255,255,255,.1); background: rgba(0,0,0,.2); }
+  .cFoot .sp{ flex: 1; }
+  .cFoot button{ font: 600 12.5px Inter, system-ui, sans-serif; height: 30px; padding: 0 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; background: none; color: inherit; }
+  .cFoot button:hover{ background: rgba(255,255,255,.08); }
+  .cFoot .ok{ border-color: rgba(92,207,138,.5); color: #8fe3b0; }
+  .cFoot .ok:hover{ background: rgba(92,207,138,.14); }
+  .cFoot .primary, .cmtPop .primary{ background: #ececf0; color: #111; border-color: #ececf0; }
+  .cFoot .primary:hover{ background: #fff; }
+  .cFoot .danger, .ciActs .danger{ color: #ff8b83; }
+  .cFoot .danger:hover{ background: rgba(255,139,131,.14); }
+  .cFoot .danger.armed, .ciActs .danger.armed{ background: #c0392b; color: #fff; border-color: #c0392b; }
+  .cmtBar{ justify-content: space-between; align-items: center; margin: 0 0 10px; }
+  .cmtBar .cnt{ font-size: 12px; opacity: .6; padding-left: 4px; }
+  .cmtBar button{ background: transparent; border-color: transparent; }
+  .ciTop b{ font-weight: 650; }
+  .ciActs{ display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(255,255,255,.08); }
+  .ciActs .sp{ flex: 1; }
+  .ciActs .ok{ color: #8fe3b0; border-color: rgba(92,207,138,.45); background: transparent; }
+  .ciActs .ok:hover{ background: rgba(92,207,138,.14); }
+  .ciActs .danger{ background: transparent; border-color: transparent; }
+  .ciActs .danger:hover{ background: rgba(255,139,131,.14); }
+  :root[data-theme="light"] .cFoot{ border-top-color: rgba(0,0,0,.1); }
 </style>
 <script>
 (function(){
@@ -18138,6 +18223,51 @@ function clearHighlights(){
   document.addEventListener("selectionchange", later);
   ed.addEventListener("input", later);
   new MutationObserver(later).observe(ed, { childList: true });
+  later();
+})();
+</script>
+<script>
+/* Blank-line caret: Chrome can leave the caret invisible on an empty line, so draw our own there.
+   It disappears the moment there's text (the browser's own caret takes over) and is never saved or printed. */
+(function(){
+  const ed = document.getElementById("scriptEditor");
+  if(!ed) return;
+  const bar = document.createElement("div");
+  bar.id = "blankCaret"; bar.setAttribute("aria-hidden", "true"); bar.hidden = true;
+  document.body.appendChild(bar);
+  let raf = 0, lastKey = "";
+  const hostOf = (node) => { const el = node && (node.nodeType === 1 ? node : node.parentElement); return el ? (el.closest(".dualField") || el.closest(".line")) : null; };
+  const isBlank = (el) => !(el.textContent || "").replace(/[\u200B\u00A0\s]/g, "") && !el.querySelector("br,img");
+  function update(){
+    raf = 0;
+    const hide = () => { bar.hidden = true; lastKey = ""; };
+    const sel = window.getSelection();
+    if(!sel || !sel.rangeCount || !sel.isCollapsed) return hide();
+    if(document.body.classList.contains("previewLock") || document.body.classList.contains("notesMode")) return hide();
+    const n = sel.anchorNode;
+    if(!n || !ed.contains(n)) return hide();
+    const ae = document.activeElement;
+    if(ae !== ed && !(ae && ed.contains(ae))) return hide();
+    const host = hostOf(n);
+    if(!host || !ed.contains(host) || host.matches('.line[data-type="dual"]') || !isBlank(host)) return hide();
+    const r = host.getBoundingClientRect();
+    if(!r.width || !r.height) return hide();
+    const cs = getComputedStyle(host), scale = host.offsetHeight ? r.height / host.offsetHeight : 1;
+    let x = r.left + (parseFloat(cs.paddingLeft) || 0) * scale;
+    if(cs.textAlign === "center") x = r.left + r.width / 2;
+    else if(cs.textAlign === "right" || cs.textAlign === "end") x = r.right - (parseFloat(cs.paddingRight) || 0) * scale;
+    const h = Math.min(r.height, (parseFloat(cs.lineHeight) || r.height) * scale);
+    const key = Math.round(x) + "," + Math.round(r.top);
+    bar.style.left = x + "px"; bar.style.top = r.top + "px"; bar.style.height = h + "px"; bar.style.background = cs.color;
+    bar.hidden = false;
+    if(key !== lastKey){ lastKey = key; bar.style.animation = "none"; void bar.offsetWidth; bar.style.animation = ""; }   // solid right after you move, then blinks
+  }
+  const later = () => { if(!raf) raf = requestAnimationFrame(update); };
+  document.addEventListener("selectionchange", later);
+  document.addEventListener("focusin", later); document.addEventListener("focusout", later);
+  window.addEventListener("scroll", later, true); window.addEventListener("resize", later);
+  ed.addEventListener("input", later); ed.addEventListener("keyup", later); ed.addEventListener("mouseup", later);
+  new MutationObserver(later).observe(ed, { childList: true, subtree: true, characterData: true });
   later();
 })();
 </script>
