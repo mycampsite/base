@@ -137,6 +137,13 @@
   .tab{ border:0; background:transparent; cursor:pointer; padding:5px 12px; border-radius:7px; font-size:12.5px; font-weight:600; color:rgba(255,255,255,.6); white-space:nowrap; }
   .tab:hover{ color:rgba(255,255,255,.9); }
   .tab.on{ background:rgba(255,255,255,.14); color:#fff; }
+  .tab.pseudo{ color:rgba(255,255,255,.75); }
+  .tab.pseudo.on{ background:#ececf0; color:#111; }
+  .tabSep{ width:1px; align-self:stretch; margin:3px 4px; background:rgba(255,255,255,.14); flex:0 0 auto; }
+  #budgetHint{ display:flex; gap:10px; align-items:center; padding:7px 12px; font-size:12px; color:var(--uiMuted); border-bottom:1px solid var(--uiBorder); background:rgba(91,140,255,.07); }
+  #budgetHint > b{ color:#a9c1ff; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  #budgetHint span{ flex:1; } #budgetHint span b{ color:var(--uiText); }
+  #prodPane.pseudo #frames, #prodPane.pseudo #banner{ display:none; }
   .actions{ margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
   #frames{ position:relative; flex:1; min-height:0; background:#1b1b1b; }
   /* Pop-out window: just the production control panel */
@@ -397,11 +404,6 @@
       <div id="listPane"></div>
 
       <div id="prodPane" class="hidden">
-        <div id="ctl"></div>
-        <div id="banner">
-          <span>Be signed into the same Google account in this browser that has access to the Sheets, or the tabs will show a login wall.</span>
-          <button id="dismiss" class="iconBtn" type="button" aria-label="Dismiss" title="Dismiss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-        </div>
         <div class="bar">
           <div class="tabs" id="tabs" role="tablist" aria-label="Sheets"></div>
           <div class="actions">
@@ -410,6 +412,12 @@
             <button id="sheetMenu" class="btn primary" type="button" aria-haspopup="menu" aria-label="Sheet options" title="Sheet options: toolbar, dark view, downloads, shortcuts"><span class="lbl">Sheet</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg></button>
           </div>
         </div>
+        <div id="ctl"></div>
+        <div id="banner">
+          <span>Sheets show a login wall? Sign into the Google account that owns them in this browser.</span>
+          <button id="dismiss" class="iconBtn" type="button" aria-label="Dismiss" title="Dismiss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div id="budgetHint" class="hidden"><b>Rates</b><span>Come from your master sheet. To compare full vs indie rates, open the <b>Settings</b> tab (gold, last tab) in this sheet and change <b>Pay basis</b> (Indie / MEAA / Award) or <b>Prices</b> (Low / Typical / High). The budget recalculates straight away.</span><button id="hintX" class="iconBtn" type="button" aria-label="Hide" title="Hide">✕</button></div>
         <div id="frames"><div class="empty" id="empty"></div></div>
       </div>
     </div>
@@ -861,8 +869,9 @@ function render() {
       c = sheetsByProject[current.pid] = cached ? { list: applyOrder(current.pid, cached), state: "ok" } : { list: [], state: "loading" };
       loadSheets(current.pid);
     }
-    const has = k => c.list.some(s => s.id === k);
-    if (!has(current.key)) current.key = has(lastKey[current.pid]) ? lastKey[current.pid] : (c.list[0] ? c.list[0].id : null);
+    const has = k => k === "@plan" || k === "@cs" || c.list.some(s => s.id === k);
+    if (POPOUT) current.key = "@plan";
+    else if (!has(current.key)) current.key = has(lastKey[current.pid]) ? lastKey[current.pid] : "@plan";
     saveLast();
     if (RIP.state === "idle") loadCamp();
     // A newly linked script the list doesn't know yet: refresh once
@@ -992,6 +1001,16 @@ document.querySelectorAll(".mtab").forEach(t => t.addEventListener("click", () =
 function renderTabs() {
   const box = $("tabs"); box.innerHTML = "";
   const c = sheetsByProject[current.pid]; if (!c) return;
+  const pseudoTab = (key, label, title) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("role", "tab"); b.className = "tab pseudo" + (current.key === key ? " on" : "");
+    b.setAttribute("aria-selected", current.key === key ? "true" : "false"); b.textContent = label; b.title = title; b.dataset.id = key;
+    b.onclick = () => { current.key = key; lastKey[current.pid] = key; saveLast(); renderTabs(); showFrame(); };
+    box.appendChild(b);
+  };
+  const sep = () => { const i = document.createElement("span"); i.className = "tabSep"; box.appendChild(i); };
+  pseudoTab("@plan", "Plan", "Shoot days, scene order and Day Out of Days");
+  if (c.list.length) sep();
   c.list.forEach(s => {
     const b = document.createElement("button");
     b.type = "button"; b.setAttribute("role", "tab");
@@ -999,7 +1018,7 @@ function renderTabs() {
     b.setAttribute("aria-selected", s.id === current.key ? "true" : "false");
     b.textContent = s.name;
     b.draggable = FINE; b.dataset.id = s.id;
-    b.onclick = () => { current.key = s.id; lastKey[current.pid] = s.id; saveLast(); renderTabs(); showFrame(); };
+    b.onclick = () => { holdScroll(); current.key = s.id; lastKey[current.pid] = s.id; saveLast(); renderTabs(); showFrame(); };
     const after = e => { const r = b.getBoundingClientRect(); return e.clientX > r.left + r.width / 2; };
     b.ondragstart = e => { dragSheet = s.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", s.id); } catch (_e) {} };
     b.ondragend = () => { dragSheet = null; box.querySelectorAll(".tab").forEach(t => t.classList.remove("dl", "dr")); };
@@ -1016,7 +1035,10 @@ function renderTabs() {
     };
     box.appendChild(b);
   });
-  const on = box.querySelector(".tab.on"); if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" });
+  sep(); pseudoTab("@cs", "Call sheets", "One Google Doc per shoot day");
+  // bring the open tab into view sideways only (scrollIntoView would also scroll the page)
+  const on = box.querySelector(".tab.on");
+  if (on) { const l = on.offsetLeft - box.offsetLeft, r = l + on.offsetWidth; if (l < box.scrollLeft) box.scrollLeft = l - 8; else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth + 8; }
 }
 function setEmpty(title, text, btns, why) {
   const e = $("empty");
@@ -1028,11 +1050,15 @@ function showFrame() {
   Object.values(frames).forEach(f => { f.classList.add("hidden"); f._loader.classList.add("hidden"); });
   const p = projects[current.pid], c = sheetsByProject[current.pid];
   const s = c && current.key ? c.list.find(x => x.id === current.key) : null;
-  $("createDocs").classList.toggle("hidden", !(p && isOwner(p)) || !s);
+  const pseudo = current.key === "@plan" || current.key === "@cs";
+  $("prodPane").classList.toggle("pseudo", pseudo);
+  try { window.CampProdPanel && window.CampProdPanel.setMode(current.key === "@plan" ? "plan" : current.key === "@cs" ? "cs" : "off"); } catch (e) { console.error(e); }
+  $("createDocs").classList.toggle("hidden", !(p && isOwner(p)));
   $("open").classList.toggle("hidden", !s);
   $("sheetMenu").classList.toggle("hidden", !s);
-  document.querySelector("#prodPane .bar").classList.toggle("hidden", !s);
-  $("empty").classList.toggle("hidden", !!s);
+  $("budgetHint").classList.toggle("hidden", !s || !/budget/i.test(s.name || "") || lsGet(HINT_KEY) === "1");
+  $("empty").classList.toggle("hidden", !!s || pseudo);
+  if (pseudo) return;
   Object.values(frames).forEach(f => f.classList.toggle("dark", DARK));
   if (!s) {
     // No sheet to show: offer to make some instead of an error (an empty or unreadable folder usually just means none yet)
@@ -1053,14 +1079,27 @@ function showFrame() {
     f.className = DARK ? "dark" : "";
     f._loader = loader; f._loading = true;
     // Sheets keeps painting after "load": hold the cover a moment so the grid never flashes in half-drawn
-    f.addEventListener("load", () => setTimeout(() => { f._loading = false; loader.classList.add("hidden"); }, 350));
-    f.src = sheetUrl(s.id, !FULLBAR);
+    f.addEventListener("load", () => { holdScroll(); setTimeout(() => { f._loading = false; loader.classList.add("hidden"); }, 350); });
+    holdScroll(); f.src = sheetUrl(s.id, !FULLBAR);
     $("frames").appendChild(loader); $("frames").appendChild(f);
     frames[fk] = f;
   }
   frames[fk].classList.remove("hidden");
   if (frames[fk]._loading) frames[fk]._loader.classList.remove("hidden");
   $("open").href = s.url || sheetUrl(s.id, false);
+}
+// Google Sheets grabs focus when it loads, which makes the browser scroll the page to it.
+// Remember where every scrolled box was and put it back for a moment afterwards.
+const HINT_KEY = "Camp_HUB_BUDGETHINT_V1";
+const POPOUT = new URLSearchParams(location.search).get("popout") === "1";
+function holdScroll(ms) {
+  const boxes = [document.scrollingElement].concat(Array.from(document.querySelectorAll("#app, #app *")).filter(el => el.scrollTop > 0 && el.tagName !== "IFRAME"));
+  const saved = boxes.map(el => [el, el.scrollTop, el.scrollLeft]);
+  const put = () => saved.forEach(([el, t, l]) => { if (el.scrollTop !== t) el.scrollTop = t; if (el.scrollLeft !== l) el.scrollLeft = l; });
+  const end = Date.now() + (ms || 1500);
+  const onScroll = () => { if (Date.now() < end) put(); else window.removeEventListener("scroll", onScroll, true); };
+  window.addEventListener("scroll", onScroll, true);
+  setTimeout(() => window.removeEventListener("scroll", onScroll, true), (ms || 1500) + 50);
 }
 function dropFrames(pid) {
   Object.keys(frames).forEach(k => { if (!pid || k.startsWith(pid + ":")) { frames[k]._loader && frames[k]._loader.remove(); frames[k].remove(); delete frames[k]; } });
@@ -1709,11 +1748,26 @@ window.__CampHub = {
   layoutChanged: () => {},
   isOwner: p => isOwner(p),
   // Rebuild the schedule (with Day Out of Days) and the budget from the plan, then show them
+  hasSheets: pid => { const c = sheetsByProject[pid]; return c ? (c.state === "loading" && !c.list.length ? null : c.list.length > 0) : null; },
+  createDocs: btn => createDocsFlow(btn),
+  // Only the call sheets (one Google Doc per shoot day)
+  makeCallsheets: async (pid, fileId, btn) => run(btn, async () => {
+    toast("Making the call sheets from the plan… this can take a minute.", "ok", 240000);
+    try {
+      const res = await exportDoc("callsheets", fileId);
+      await set(ref(db, "projects/" + pid + "/production/callsheets"), { folderUrl: res.folderUrl || "", at: Date.now(), days: (res.days || []).map(d => ({ day: d.day, url: d.url })) });
+      window.CampProdPanel && window.CampProdPanel.csError(pid, "");
+      toast("Call sheets are up to date.", "ok");
+    } catch (e) { window.CampProdPanel && window.CampProdPanel.csError(pid, e.message || String(e)); throw e; }
+  }),
   syncSheets: async (pid, fileId, btn) => run(btn, async () => {
     const steps = [["schedule", "schedule"], ["budget", "budget"], ["callsheets", "call sheets"]];
     for (let i = 0; i < steps.length; i++) {
       toast("Updating the " + steps[i][1] + " from the plan (" + (i + 1) + "/" + steps.length + ")… this can take a minute.", "ok", 240000);
-      const res = await exportDoc(steps[i][0], fileId);
+      let res;
+      try { res = await exportDoc(steps[i][0], fileId); }
+      catch (e) { if (steps[i][0] === "callsheets" && window.CampProdPanel) window.CampProdPanel.csError(pid, e.message || String(e)); throw e; }
+      if (steps[i][0] === "callsheets" && window.CampProdPanel) window.CampProdPanel.csError(pid, "");
       // remember where the call sheets are, so everyone can open them from the panel
       if (steps[i][0] === "callsheets" && res && res.days) {
         await set(ref(db, "projects/" + pid + "/production/callsheets"), { folderUrl: res.folderUrl || "", at: Date.now(), days: res.days.map(d => ({ day: d.day, url: d.url })) });
@@ -1927,6 +1981,7 @@ const moveCurrent = dir => {
 // ---------- banner, phone sidebar, keyboard ----------
 if (lsGet(LS_BANNER) === "1") $("banner").classList.add("hidden");
 $("dismiss").onclick = () => { $("banner").classList.add("hidden"); lsSet(LS_BANNER, "1"); };
+$("hintX").onclick = () => { $("budgetHint").classList.add("hidden"); lsSet(HINT_KEY, "1"); };
 if (lsGet("camp.sideCollapsed") === "1") document.body.classList.add("sideCollapsed");
 $("menuToggle").onclick = () => {
   closeMenu(); $("drawer").classList.add("hidden");

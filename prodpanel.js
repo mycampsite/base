@@ -14,8 +14,10 @@ const lsSet = (k, v) => { try{ localStorage.setItem(k, v); }catch(_e){} };
 
 const S = {
   popout: new URLSearchParams(location.search).get("popout") === "1",
-  open: new URLSearchParams(location.search).get("popout") === "1" || lsGet(OPEN_KEY) !== "0",
-  full: new URLSearchParams(location.search).get("popout") === "1",
+  mode: new URLSearchParams(location.search).get("popout") === "1" ? "plan" : "off",   // "plan" | "cs" | "off" (a sheet is showing)
+  warnOpen: false,       // the "to check" list
+  menu: false,           // the ⋯ menu
+  csErr: {},             // pid -> last call-sheet error
   doodOpen: lsGet(DOOD_KEY) === "1",
   scripts: {},           // scriptId -> { state:"loading"|"ok"|"error", bd, err, modified }
   notice: {},            // pid -> { added:[], removed:[], moved:[] } shown until dismissed
@@ -26,15 +28,31 @@ const S = {
 
 /* ---------- styles ---------- */
 const css = `
-#ctl{ border-bottom:1px solid var(--uiBorder); background:#171717; display:flex; flex-direction:column; min-height:0; }
-#ctl.open{ max-height:none; }
-#prodPane:has(#ctl.open:not(.full)){ overflow-y:auto; overflow-x:hidden; }
-#prodPane:has(#ctl.open:not(.full)) > *{ flex-shrink:0; }
-#prodPane:has(#ctl.open:not(.full)) #frames{ flex:0 0 auto; height:max(78vh, 520px); }
-#ctl.full{ max-height:none; flex:1; }
-#prodPane:has(#ctl.full) > :not(#ctl){ display:none !important; }
-#ctl:empty{ display:none; }
-.ctlHead{ display:flex; align-items:center; gap:10px; padding:8px 10px; min-height:48px; flex-wrap:wrap; }
+#ctl{ background:#171717; display:flex; flex-direction:column; min-height:0; flex:1; }
+#ctl.off, #ctl:empty{ display:none; }
+.ctlBody{ flex:1; overflow:auto; padding:0 12px 16px; min-height:0; overscroll-behavior:contain; }
+.ctlTitle{ font-weight:700; font-size:14px; padding:0 4px; white-space:nowrap; }
+.ctlChip.btnChip{ cursor:pointer; background:none; font:inherit; font-size:11.5px; }
+.ctlChip.btnChip:hover{ border-color:rgba(241,199,107,.8); }
+.ctlMore{ position:relative; }
+.ctlMenu{ position:absolute; right:0; top:calc(100% + 6px); z-index:20; min-width:230px; padding:4px; border-radius:10px; background:#1d1e22; border:1px solid rgba(255,255,255,.17); box-shadow:0 14px 40px rgba(0,0,0,.5); display:flex; flex-direction:column; }
+.ctlMenu button{ text-align:left; border:0; background:none; padding:8px 10px; border-radius:7px; cursor:pointer; font-size:13px; }
+.ctlMenu button small{ display:block; color:var(--uiMuted); font-size:11.5px; margin-top:2px; }
+.ctlMenu button:hover{ background:rgba(255,255,255,.08); }
+.ctlMenu button:disabled{ opacity:.45; cursor:default; }
+.ctlDocs{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; padding:10px 12px; border-radius:10px; border:1px dashed rgba(255,255,255,.2); font-size:12.5px; color:var(--uiMuted); }
+.csWrap{ max-width:760px; padding:14px 2px; display:flex; flex-direction:column; gap:12px; }
+.csWrap h3{ margin:0; font-size:15px; }
+.csWrap p{ margin:0; color:var(--uiMuted); font-size:12.5px; line-height:1.5; }
+.csList{ display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:8px; }
+.csDay{ display:flex; flex-direction:column; gap:3px; padding:10px 12px; border-radius:10px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.03); text-decoration:none; }
+.csDay:hover{ border-color:rgba(255,255,255,.35); background:rgba(255,255,255,.06); }
+.csDay b{ font-size:13.5px; } .csDay span{ font-size:12px; color:var(--uiMuted); }
+.csDay.stale{ border-style:dashed; opacity:.7; }
+.csErr{ padding:10px 12px; border-radius:10px; background:rgba(255,139,131,.08); border:1px solid rgba(255,139,131,.35); font-size:12.5px; line-height:1.55; }
+.csErr ol{ margin:6px 0 0; padding-left:20px; }
+.csErr code{ background:rgba(255,255,255,.08); padding:1px 5px; border-radius:4px; }
+.ctlHead{ display:flex; align-items:center; gap:10px; padding:8px 12px; min-height:48px; flex-wrap:wrap; border-bottom:1px solid var(--uiBorder); }
 .ctlTitle{ display:flex; align-items:center; gap:8px; background:none; border:0; padding:4px 6px; border-radius:8px; cursor:pointer; font-weight:700; font-size:13.5px; }
 .ctlTitle:hover{ background:rgba(255,255,255,.06); }
 .ctlTitle svg{ width:15px; height:15px; transition:transform .15s; }
@@ -43,7 +61,6 @@ const css = `
 .ctlChip{ font-size:11.5px; color:var(--uiMuted); border:1px solid var(--uiBorder); border-radius:999px; padding:2px 9px; white-space:nowrap; }
 .ctlChip.warn{ color:#f1c76b; border-color:rgba(241,199,107,.4); }
 .ctlChip.ok{ color:#8fe3a6; border-color:rgba(143,227,166,.35); }
-.ctlBody{ overflow:auto; padding:0 10px 12px; min-height:0; }
 .ctlSet{ display:flex; flex-wrap:wrap; gap:10px 14px; align-items:flex-end; padding:6px 0 12px; border-bottom:1px solid var(--uiBorder); }
 .ctlSet label{ display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--uiMuted); text-transform:uppercase; letter-spacing:.05em; }
 .ctlSet input, .ctlSet select{ height:32px; border-radius:9px; border:1px solid var(--uiBorder); background:#111; padding:0 9px; font-size:13px; text-transform:none; letter-spacing:0; }
@@ -101,7 +118,6 @@ const css = `
 .ctlEmpty{ padding:18px 6px; color:var(--uiMuted); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .ctlRO{ font-size:11.5px; color:var(--uiMuted); }
 @media (max-width:760px){
-  #ctl.open{ max-height:none; flex:1; }
   .col{ flex-basis:78vw; scroll-snap-align:start; }
   .col.none{ flex-basis:36vw; }
   .board{ scroll-snap-type:x proximity; scroll-padding-left:2px; -webkit-overflow-scrolling:touch; }
@@ -172,10 +188,11 @@ function render(pid){
   const canEdit = hub.canEdit(p), ids = hub.scriptIds(p);
   const raw = p.production, plan = planOf(pid);
   const scriptId = (plan.scriptId && ids.indexOf(plan.scriptId) >= 0) ? plan.scriptId : ids[0] || "";
-  box.className = S.open ? "open" + (S.full ? " full" : "") : "";
-
+  box.className = S.mode;
+  if(S.mode === "off"){ return; }
+  S.open = true;
   const head = (chips, acts) => `<div class="ctlHead">
-      <button class="ctlTitle" type="button" data-a="toggle" aria-expanded="${S.open}"><svg class="car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>Production control</button>
+      <span class="ctlTitle">${S.mode === "cs" ? "Call sheets" : "Shoot plan"}</span>
       <div class="ctlChips">${chips || ""}</div>${acts || ""}</div>`;
 
   if(!ids.length){ box.innerHTML = head(`<span class="ctlChip">Add a script to this project to plan the shoot</span>`); wire(box, pid); return; }
@@ -221,13 +238,19 @@ function render(pid){
   const chips = `<span class="ctlChip">${st.days} shoot day${st.days === 1 ? "" : "s"}${st.start ? " · from " + esc(fmtDate(dates[0])) : ""}</span>
     <span class="ctlChip">${bd.scenes.length} scenes · ${P.fmtEighths(bd.totals.eighths)} pages</span>
     <span class="ctlChip ${rec.unscheduled.length ? "warn" : "ok"}">${scheduled}/${bd.scenes.filter((s) => s.id).length} scheduled</span>
-    ${nWarn ? `<span class="ctlChip warn">${nWarn} to check</span>` : ""}
+    ${warns.length ? `<button type="button" class="ctlChip btnChip${nWarn ? " warn" : ""}" data-a="warns" aria-expanded="${S.warnOpen}">${nWarn ? "⚠ " + nWarn + " to check" : warns.length + " note" + (warns.length === 1 ? "" : "s")} ${S.warnOpen ? "▴" : "▾"}</button>` : ""}
     ${bd.cast.some((c) => c.minor) ? `<span class="ctlChip warn" title="${esc(bd.cast.filter((c) => c.minor).map((c) => c.name + (c.age != null ? " (" + c.age + ")" : " (age?)")).join(", "))}">${bd.cast.filter((c) => c.minor).length} under 18</span>` : ""}
     ${sc.state === "loading" ? `<span class="ctlChip">Updating from script…</span>` : ""}
     ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}`;
-  const acts = S.open ? `<div class="ctlActs">
-      ${S.popout ? "" : `<button class="btn sm" type="button" data-a="full" title="${S.full ? "Show the sheets again" : "Use the whole screen"}">${S.full ? "Show sheets" : "Expand"}</button><button class="btn sm" type="button" data-a="pop" title="Open the control panel in its own window (handy on a second screen)">Pop out</button>`}</div>` : "";
-  if(!S.open){ box.innerHTML = head(chips); wire(box, pid, { bd, scriptId }); return; }
+  const acts = `<div class="ctlActs">
+      ${hub.isOwner(p) ? `<button class="btn sm primary" type="button" data-a="sync" title="Rebuild the Schedule (with Day Out of Days), the Budget and the call sheets from this plan">Sync to Sheets</button>` : ""}
+      <span class="ctlMore"><button class="btn sm" type="button" data-a="menu" aria-haspopup="menu" aria-expanded="${S.menu}" title="More">⋯</button>${S.menu ? `<div class="ctlMenu" role="menu">
+        <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room</small></button>
+        <button type="button" data-a="reauto"${canEdit ? "" : " disabled"}>Re-plan all<small>Lay out every scene again from scratch</small></button>
+        <button type="button" data-a="reload">Refresh script<small>Read the latest version of the script</small></button>
+        ${S.popout ? "" : `<button type="button" data-a="pop">Pop out<small>Open the plan in its own window</small></button>`}
+      </div>` : ""}</span></div>`;
+  if(S.mode === "cs"){ box.innerHTML = head("", "") + `<div class="ctlBody">${csView(pid, p, raw, pl, dates, scriptId)}</div>`; wire(box, pid, { bd, scriptId }); return; }
 
   const dis = canEdit ? "" : " disabled";
   const scriptSel = ids.length > 1 ? `<label>Script<select data-s="script"${dis}>${ids.map((id) => `<option value="${esc(id)}"${id === scriptId ? " selected" : ""}>${esc(hub.scriptTitle(id))}</option>`).join("")}</select></label>` : "";
@@ -240,16 +263,10 @@ function render(pid){
       <label>Shooting week<select data-s="perWeek"${dis}>${[[5, "5 days (Mon–Fri)"], [6, "6 days (Mon–Sat)"], [7, "7 days"]].map(([v, n]) => `<option value="${v}"${v === st.perWeek ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <label>Pages per day (limit)<select data-s="maxEighths"${dis}>${pageOpts.map((e) => `<option value="${e}"${e === st.maxEighths ? " selected" : ""}>${P.fmtEighths(e)}</option>`).join("")}</select></label>
       <label>Default call<input type="time" value="${esc(st.call)}" data-s="call"${dis}></label>
-      <div class="ctlActs">
-        ${canEdit ? `<button class="btn sm" type="button" data-a="auto" title="Place unscheduled scenes on days with room, keeping locations together">Auto-schedule</button>
-        <button class="btn sm" type="button" data-a="reauto" title="Lay out every scene again from scratch">Re-plan all</button>` : ""}
-        <button class="btn sm" type="button" data-a="reload" title="Read the latest version of the script">Refresh script</button>
-        ${hub.isOwner(p) ? `<button class="btn sm primary" type="button" data-a="sync" title="Rebuild the Schedule (with Day Out of Days) and the Budget from this plan">Sync to Sheets</button>` : ""}
-      </div>
     </div>`;
 
-  const cs = raw.callsheets, csDays = cs ? (Array.isArray(cs.days) ? cs.days : Object.values(cs.days || {})) : [];
-  const csRow = csDays.length ? `<div class="ctlCs"><b>Call sheets</b>${csDays.map((d) => `<a href="${esc(d.url)}" target="_blank" rel="noopener">Day ${esc(d.day)}</a>`).join("")}${cs.folderUrl ? `<a href="${esc(cs.folderUrl)}" target="_blank" rel="noopener" class="fold">All in Drive ↗</a>` : ""}<span>Synced ${esc(new Date(cs.at || 0).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }))}</span></div>` : "";
+  const hasDocs = hub.hasSheets(pid);
+  const docsNudge = hasDocs === false ? `<div class="ctlDocs">No budget or schedule sheets yet.${hub.isOwner(p) ? ` <button class="btn sm" type="button" data-a="create">Create production docs…</button>` : " The owner can create them."}</div>` : "";
   const n = S.notice[pid];
   const sceneName = (id) => { const s = byId[id]; return s ? "Sc " + s.n : "a deleted scene"; };
   const notice = n ? `<div class="ctlNote"><div><b>The script changed</b><ul>
@@ -257,7 +274,7 @@ function render(pid){
       ${n.removed.length ? `<li>${n.removed.length} deleted scene${n.removed.length === 1 ? " was" : "s were"} taken off ${Array.from(new Set(n.removed.map((r) => "Day " + r.day))).join(", ")}.</li>` : ""}
       ${(n.moved || []).length ? `<li>${n.moved.length} scene${n.moved.length === 1 ? "" : "s"} from removed days ${n.moved.length === 1 ? "is" : "are"} back in Unscheduled.</li>` : ""}
     </ul></div><button class="iconBtn x" type="button" data-a="dismiss" aria-label="Dismiss">✕</button></div>` : "";
-  const warnBox = warns.length ? `<div class="ctlWarn">${warns.map((w) => `<div class="${w.level}">${w.level === "warn" ? "⚠ " : "• "}${esc(w.text)}</div>`).join("")}</div>` : "";
+  const warnBox = warns.length && S.warnOpen ? `<div class="ctlWarn">${warns.map((w) => `<div class="${w.level}">${w.level === "warn" ? "⚠ " : "• "}${esc(w.text)}</div>`).join("")}</div>` : "";
 
   const strip = (id) => {
     const s = byId[id]; if(!s) return "";
@@ -295,9 +312,31 @@ function render(pid){
       ${rows.map((r) => `<tr><td>${esc(r.name)}${kidOf[r.name] ? ` <span class="kid" title="Under 18${kidOf[r.name].age != null ? " (age " + kidOf[r.name].age + ")" : ": confirm age"}. Limited work hours, permit and chaperone.">⚠ under 18</span>` : ""}</td>${r.marks.map((m) => `<td class="${m}">${m}</td>`).join("")}<td>${r.workDays}</td><td>${r.holdDays}</td><td><b>${r.total}</b></td></tr>`).join("")}
     </table></div></details>`;
 
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${csRow}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}
+  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${docsNudge}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}
     <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it to another day" : "Drag scenes between days (or click a scene to move it)"}. Changes save for the whole team straight away.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
+}
+
+/* ---------- call sheets ---------- */
+function csView(pid, p, raw, pl, dates, scriptId){
+  const hub = H(), owner = hub.isOwner(p), cs = raw && raw.callsheets;
+  const days = cs ? (Array.isArray(cs.days) ? cs.days : Object.values(cs.days || {})) : [];
+  const err = S.csErr[pid];
+  const when = cs && cs.at ? new Date(cs.at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "";
+  const stale = cs && raw.updatedAt && cs.at && raw.updatedAt > cs.at + 5000;
+  const auth = err && /permission|authori[sz]|scope|Google needs your OK/i.test(err);
+  const errBox = err ? `<div class="csErr"><b>${auth ? "Google hasn't allowed Camp to make Docs yet" : "The call sheets didn't build"}</b>
+      ${auth ? `<ol><li>Open your Camp script in Apps Script (script.google.com).</li><li>Pick <code>authorizeCallSheets</code> in the function list and press Run. Allow the permissions Google asks for.</li><li>Deploy › Manage deployments › edit › New version › Deploy.</li><li>Come back and press <b>Make call sheets</b>.</li></ol>` : `<div>${esc(err)}</div>`}</div>` : "";
+  if(!raw) return `<div class="csWrap"><h3>No shoot plan yet</h3><p>Call sheets follow the plan. Start it on the Plan tab first.</p></div>`;
+  const list = days.length ? `<div class="csList">${days.map((d) => { const i = Number(d.day) - 1; return `<a class="csDay${stale ? " stale" : ""}" href="${esc(d.url)}" target="_blank" rel="noopener"><b>Day ${esc(d.day)} ↗</b><span>${esc(fmtDate(dates[i]) || "")}${pl.days[i] ? " · " + pl.days[i].scenes.length + " scene" + (pl.days[i].scenes.length === 1 ? "" : "s") : ""}</span></a>`; }).join("")}</div>` : "";
+  return `<div class="csWrap">
+    <p>One Google Doc per shoot day: call times, scenes, cast, crew, weather, sunrise and safety checks from your master sheet. ${days.length ? `Last made ${esc(when)}.` : ""}${stale ? " <b style=\"color:#f1c76b\">The plan changed since then.</b>" : ""}</p>
+    ${errBox}
+    ${list || (err ? "" : `<p>None made yet.</p>`)}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${owner ? `<button class="btn sm primary" type="button" data-a="cs">${days.length ? "Update call sheets" : "Make call sheets"}</button>` : `<span class="ctlRO">Only the owner can make call sheets.</span>`}
+      ${cs && cs.folderUrl ? `<a class="btn sm" href="${esc(cs.folderUrl)}" target="_blank" rel="noopener">Open folder in Drive ↗</a>` : ""}
+    </div></div>`;
 }
 
 /* ---------- interaction ---------- */
@@ -309,9 +348,12 @@ function wire(box, pid, ctx){
     const a = e.target.closest("[data-a]"), sEl = e.target.closest(".strip");
     if(a){
       const k = a.dataset.a;
-      if(k === "toggle"){ S.open = !S.open; lsSet(OPEN_KEY, S.open ? "1" : "0"); if(!S.open) S.full = false; render(pid); hub.layoutChanged(); return; }
+      if(k !== "menu") S.menu = false;
+      if(k === "menu"){ S.menu = !S.menu; render(pid); return; }
+      if(k === "warns"){ S.warnOpen = !S.warnOpen; render(pid); return; }
+      if(k === "create"){ hub.createDocs(a); return; }
+      if(k === "cs"){ flush(); hub.makeCallsheets(pid, ctx.scriptId, a); return; }
       if(k === "pop"){ window.open(location.pathname + "?pid=" + encodeURIComponent(pid) + "&tab=production&popout=1", "campProdPop", "popup=yes,width=1280,height=900"); return; }
-      if(k === "full"){ S.full = !S.full; render(pid); hub.layoutChanged(); return; }
       if(k === "reload"){ loadScript(ctx.scriptId || hub.scriptIds(p)[0], true); return; }
       if(k === "dismiss"){ delete S.notice[pid]; render(pid); return; }
       if(k === "sync"){ flush(); hub.syncSheets(pid, ctx.scriptId, a); return; }
@@ -340,6 +382,7 @@ function wire(box, pid, ctx){
         return;
       }
     }
+    if(S.menu && !e.target.closest(".ctlMenu")){ S.menu = false; render(pid); return; }
     if(sEl && canEdit){ S.pick = S.pick === sEl.dataset.sid ? null : sEl.dataset.sid; render(pid); }
   };
   box.onchange = (e) => {
@@ -377,5 +420,8 @@ function confirmShrink(pid, r){
   save(pid, r.plan); rerender();
 }
 
-window.CampProdPanel = { render, reloadScript: (id) => loadScript(id, true) };
+function setMode(m){ if(S.popout) m = "plan"; if(m === S.mode) return; S.mode = m; S.menu = false; rerender(); }
+function csError(pid, msg){ if(msg) S.csErr[pid] = msg; else delete S.csErr[pid]; rerender(); }
+document.addEventListener("keydown", (e) => { if(e.key === "Escape" && S.menu){ S.menu = false; rerender(); } });
+window.CampProdPanel = { render, setMode, csError, reloadScript: (id) => loadScript(id, true) };
 })();
