@@ -13521,19 +13521,18 @@ ${TP.join("\n")}
 
     // ---------- Hover tooltip ----------
     let tipFor = null, tipHide = 0;
-    // Cards dock in one fixed spot beside the page (so they don't chase highlights as you scroll). Phones fall back to sitting by the text.
+    // Cards dock in a fixed column just right of the page, level with their highlight. Phones fall back to sitting by the text.
     const useDock = () => !document.body.classList.contains("phoneUI") && window.innerWidth >= 900;
     function dock(el){
       el.hidden = false;
       const w = el.offsetWidth, h = el.offsetHeight, pad = 12, vw = window.innerWidth, vh = window.innerHeight;
-      const er = editor.getBoundingClientRect(), pn = document.getElementById("panel"), pr = (pn && pn.offsetWidth) ? pn.getBoundingClientRect() : null;
-      const room = (pr ? pr.left : vw) - er.right;
-      let left;
-      if(room >= w + pad * 2) left = er.right + pad + Math.min(24, (room - w - pad * 2) / 2);   // gap beside the page
-      else if(pr && pr.width >= w - 8) left = pr.left + (pr.width - w) / 2;                    // over the formatting panel
-      else left = vw - w - pad;
-      const top = Math.max(64, Math.min(pr ? pr.top : 120, vh - h - pad));
-      el.style.left = Math.max(pad, left) + "px"; el.style.top = top + "px";
+      // Sits just right of the page, level with the highlight and its flag, so you can read the note beside the script
+      const er = editor.getBoundingClientRect(), pg = document.querySelector("#pagesLayer .pageBg"), edge = Math.max(er.right, pg ? pg.getBoundingClientRect().right : 0);
+      const sp = el.dataset.note ? spansOf(el.dataset.note)[0] : null, ar = sp ? sp.getBoundingClientRect() : null;
+      const left = Math.max(pad, Math.min(edge + pad, vw - w - pad));
+      const want = ar ? ar.top - 10 : 130;
+      const top = Math.max(116, Math.min(want, vh - h - pad));
+      el.style.left = left + "px"; el.style.top = top + "px";
     }
     const placeCard = (el, rect) => { if(useDock()) dock(el); else place(el, rect, false); };
     const quoteOf = (id) => { const q = spansOf(id).map(x => x.textContent).join(" ").replace(/\s+/g, " ").trim(); return q.length > 140 ? q.slice(0, 138) + "…" : q; };
@@ -13719,9 +13718,10 @@ ${TP.join("\n")}
     editor.addEventListener("mouseup", () => setTimeout(maybeShowAddBtn, 0));
     editor.addEventListener("keyup", (e) => { if(e.shiftKey || e.key.startsWith("Arrow")) setTimeout(maybeShowAddBtn, 0); else hideAddBtn(); });
     document.addEventListener("selectionchange", () => { const s = window.getSelection(); if(!s || s.isCollapsed) hideAddBtn(); });
+    let dockRAF = 0;
     window.addEventListener("scroll", () => {
       hideAddBtn();
-      if(useDock()) return;   // docked cards stay put while you scroll
+      if(useDock()){ cancelAnimationFrame(dockRAF); dockRAF = requestAnimationFrame(() => { if(!tip.hidden) dock(tip); if(!pop.hidden && pop.dataset.note) dock(pop); }); return; }   // docked cards stay level with their highlight
       if(!tip.hidden) hideTip();
       if(!pop.hidden && pop.dataset.note){ const a = spansOf(pop.dataset.note)[0]; if(a) place(pop, a.getBoundingClientRect(), false); }
     }, { passive: true });
