@@ -3003,6 +3003,11 @@
                           : th.pal.slice(0, 5).map((h) => ({ hex:toHex(h) || h, name:"", lock:false }));
     const o = Object.assign({ pl:"cols", ps:"sq", sz:"m", lb:"both", gap:16 }, (target && target.opt) || {});
     let cands = null, candBusy = false;
+    // undo / redo for every change in the studio; dirty = something changed since opening
+    const undoS = [], redoS = []; let dirty = false, editing = false;
+    const snap = () => { undoS.push(JSON.stringify(cols)); if(undoS.length > 60) undoS.shift(); redoS.length = 0; dirty = true; };
+    const stepHist = (from, to) => { if(!from.length) return; to.push(JSON.stringify(cols)); cols = JSON.parse(from.pop()); dirty = true; paint(); };
+    const doUndo = () => stepHist(undoS, redoS), doRedo = () => stepHist(redoS, undoS);
     async function loadCands(scope){
       if(candBusy) return cands; candBusy = true;
       try{
@@ -3016,6 +3021,7 @@
     // Re-roll the unlocked colours: from the photos when there are any, otherwise a harmony around the locked ones
     async function generate(fromScratch){
       const c = await loadCands();
+      snap();
       const taken = () => cols.filter((x) => x.lock).map((x) => x.hex);
       if(c && c.length){
         const pool = c.slice();
@@ -3038,9 +3044,11 @@
     shade.className = "palShade";
     shade.innerHTML = `<div class="palBox" role="dialog" aria-label="Palette Studio">
       <div class="palHead">
-        <div><b>Palette Studio</b><span class="palHint">Space: new colours · drag to reorder · click a colour to change it</span></div>
+        <div><b>Palette Studio</b><span class="palHint">Space: new colours · drag to reorder · click a colour to change it · Ctrl+Z undo · paste hex codes to import</span></div>
         <div class="palHeadActs">
           <select id="palSrc" title="Where new colours come from"><option value="all">From all photos</option><option value="page">From this page's photos</option></select>
+          <button type="button" class="btn sm" id="palUndo" title="Undo (Ctrl+Z)">↶</button>
+          <button type="button" class="btn sm" id="palRedo" title="Redo (Ctrl+Shift+Z)">↷</button>
           <button type="button" class="btn sm" id="palGen">Generate <kbd>Space</kbd></button>
           <button type="button" class="iconBtn sm" id="palX" title="Close" aria-label="Close">✕</button>
         </div>
@@ -3079,6 +3087,7 @@
     colsEl.addEventListener("click", async (e) => {
       const b = e.target.closest("button[data-a]"); if(!b) return;
       const i = idxOf(b), a = b.dataset.a;
+      if(a !== "copy") snap();
       if(a === "lock"){ cols[i].lock = !cols[i].lock; paint(); }
       else if(a === "del"){ cols.splice(i, 1); paint(); }
       else if(a === "copy"){ try{ await navigator.clipboard.writeText(cols[i].hex.toUpperCase()); notify("Copied " + cols[i].hex.toUpperCase()); }catch(_e){} }
@@ -3090,19 +3099,20 @@
     });
     colsEl.addEventListener("input", (e) => {
       const t = e.target, i = idxOf(t);
+      if(!editing){ snap(); editing = true; }
       if(t.dataset.a === "pick"){ cols[i].hex = t.value; const col = t.closest(".palCol"); col.style.background = t.value; col.style.color = lumOf(t.value) > 0.55 ? "#111" : "#fff"; col.querySelector(".palHex").value = t.value.toUpperCase(); }
       else if(t.classList.contains("palName")) cols[i].name = t.value;
     });
     colsEl.addEventListener("change", (e) => {
-      const t = e.target; if(!t.classList.contains("palHex")) return;
+      const t = e.target; editing = false; if(!t.classList.contains("palHex")) return;
       const h = toHex(t.value.trim().startsWith("#") ? t.value.trim() : "#" + t.value.trim());
-      if(h){ cols[idxOf(t)].hex = h; paint(); } else t.value = cols[idxOf(t)].hex.toUpperCase();
+      if(h){ snap(); cols[idxOf(t)].hex = h; paint(); } else t.value = cols[idxOf(t)].hex.toUpperCase();
     });
     colsEl.addEventListener("dragstart", (e) => { if(e.target.closest("input")){ e.preventDefault(); return; } const c = e.target.closest(".palCol"); if(c){ dragFrom = Number(c.dataset.i); c.classList.add("dragging"); try{ e.dataTransfer.setData("text/plain", String(dragFrom)); }catch(_e){} } });
     colsEl.addEventListener("dragover", (e) => { if(dragFrom >= 0) e.preventDefault(); });
     colsEl.addEventListener("drop", (e) => {
       e.preventDefault(); const c = e.target.closest(".palCol"); if(!c || dragFrom < 0) return;
-      const to = Number(c.dataset.i); const [m] = cols.splice(dragFrom, 1); cols.splice(to, 0, m); dragFrom = -1; paint();
+      const to = Number(c.dataset.i); snap(); const [m] = cols.splice(dragFrom, 1); cols.splice(to, 0, m); dragFrom = -1; paint();
     });
     colsEl.addEventListener("dragend", () => { dragFrom = -1; colsEl.querySelectorAll(".dragging").forEach((x) => x.classList.remove("dragging")); });
     shade.querySelectorAll(".palFoot .seg").forEach((sg) => sg.addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if(!b) return; const k = sg.dataset.k; o[k] = k === "gap" ? Number(b.dataset.v) : b.dataset.v; paint(); }));
@@ -3110,10 +3120,24 @@
     $p("#palGen").onclick = () => generate(false);
     $p("#palCopy").onclick = async () => { try{ await navigator.clipboard.writeText(cols.map((c) => c.hex.toUpperCase()).join(" ")); notify("Hex codes copied"); }catch(_e){} };
     const close = () => { shade.remove(); document.removeEventListener("keydown", onKey, true); };
-    $p("#palX").onclick = close;
-    shade.addEventListener("pointerdown", (e) => { if(e.target === shade) close(); });
+    const tryClose = () => { if(dirty && !confirm("Close without applying? Your palette changes will be lost.")) return; close(); };
+    $p("#palX").onclick = tryClose;
+    $p("#palUndo").onclick = doUndo; $p("#palRedo").onclick = doRedo;
+    shade.addEventListener("pointerdown", (e) => { if(e.target === shade) tryClose(); });
+    // paste hex codes (or a Coolors link) anywhere in the studio to import them as the palette
+    shade.addEventListener("paste", (e) => {
+      if(e.target.closest && e.target.closest("input, select, textarea")) return;
+      const txt = (e.clipboardData && e.clipboardData.getData("text")) || "";
+      const hexes = (txt.match(/(?<![0-9a-fA-F])[0-9a-fA-F]{6}(?![0-9a-fA-F])/g) || []).slice(0, 10);
+      if(hexes.length < 2) return;
+      e.preventDefault(); snap();
+      cols = hexes.map((h) => ({ hex:"#" + h.toLowerCase(), name:"", lock:false })); paint();
+      notify("Imported " + hexes.length + " colours");
+    });
     function onKey(e){
-      if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); close(); return; }
+      const inField = e.target.closest && e.target.closest("input, select, textarea");
+      if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); tryClose(); return; }
+      if((e.ctrlKey || e.metaKey) && !inField && (e.key === "z" || e.key === "Z" || e.key === "y")){ e.preventDefault(); e.stopPropagation(); (e.key === "y" || e.shiftKey) ? doRedo() : doUndo(); return; }
       if(e.key === " " && !(e.target.closest && e.target.closest("input, select, textarea"))){ e.preventDefault(); e.stopPropagation(); generate(false); return; }
       if(!(e.target.closest && e.target.closest("input, select, textarea"))) e.stopPropagation();   // keep page shortcuts out while the studio is open
     }

@@ -13,7 +13,9 @@ const lsGet = (k) => { try{ return localStorage.getItem(k); }catch(_e){ return n
 const lsSet = (k, v) => { try{ localStorage.setItem(k, v); }catch(_e){} };
 
 const S = {
-  open: lsGet(OPEN_KEY) !== "0",
+  popout: new URLSearchParams(location.search).get("popout") === "1",
+  open: new URLSearchParams(location.search).get("popout") === "1" || lsGet(OPEN_KEY) !== "0",
+  full: new URLSearchParams(location.search).get("popout") === "1",
   doodOpen: lsGet(DOOD_KEY) === "1",
   scripts: {},           // scriptId -> { state:"loading"|"ok"|"error", bd, err, modified }
   notice: {},            // pid -> { added:[], removed:[], moved:[] } shown until dismissed
@@ -25,7 +27,10 @@ const S = {
 /* ---------- styles ---------- */
 const css = `
 #ctl{ border-bottom:1px solid var(--uiBorder); background:#171717; display:flex; flex-direction:column; min-height:0; }
-#ctl.open{ max-height:72%; }
+#ctl.open{ max-height:none; }
+#prodPane:has(#ctl.open:not(.full)){ overflow-y:auto; overflow-x:hidden; }
+#prodPane:has(#ctl.open:not(.full)) > *{ flex-shrink:0; }
+#prodPane:has(#ctl.open:not(.full)) #frames{ flex:0 0 auto; height:max(78vh, 520px); }
 #ctl.full{ max-height:none; flex:1; }
 #prodPane:has(#ctl.full) > :not(#ctl){ display:none !important; }
 #ctl:empty{ display:none; }
@@ -219,7 +224,7 @@ function render(pid){
     ${sc.state === "loading" ? `<span class="ctlChip">Updating from script…</span>` : ""}
     ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}`;
   const acts = S.open ? `<div class="ctlActs">
-      <button class="btn sm" type="button" data-a="full" title="${S.full ? "Show the sheets again" : "Use the whole screen"}">${S.full ? "Show sheets" : "Expand"}</button></div>` : "";
+      ${S.popout ? "" : `<button class="btn sm" type="button" data-a="full" title="${S.full ? "Show the sheets again" : "Use the whole screen"}">${S.full ? "Show sheets" : "Expand"}</button><button class="btn sm" type="button" data-a="pop" title="Open the control panel in its own window (handy on a second screen)">Pop out</button>`}</div>` : "";
   if(!S.open){ box.innerHTML = head(chips); wire(box, pid, { bd, scriptId }); return; }
 
   const dis = canEdit ? "" : " disabled";
@@ -302,6 +307,7 @@ function wire(box, pid, ctx){
     if(a){
       const k = a.dataset.a;
       if(k === "toggle"){ S.open = !S.open; lsSet(OPEN_KEY, S.open ? "1" : "0"); if(!S.open) S.full = false; render(pid); hub.layoutChanged(); return; }
+      if(k === "pop"){ window.open(location.pathname + "?pid=" + encodeURIComponent(pid) + "&tab=production&popout=1", "campProdPop", "popup=yes,width=1280,height=900"); return; }
       if(k === "full"){ S.full = !S.full; render(pid); hub.layoutChanged(); return; }
       if(k === "reload"){ loadScript(ctx.scriptId || hub.scriptIds(p)[0], true); return; }
       if(k === "dismiss"){ delete S.notice[pid]; render(pid); return; }
