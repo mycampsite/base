@@ -204,22 +204,32 @@
   #stage .tpage .el.editing{ cursor:text; outline:calc(1.5px / var(--s, 1)) solid var(--sel); filter:none !important; }
   .palStudioBtn{ gap:8px; }
   .palShade{ position:fixed; inset:0; z-index:900; background:rgba(0,0,0,.62); display:flex; align-items:center; justify-content:center; padding:20px; }
-  .palBox{ width:min(1180px, 100%); height:min(760px, 100%); display:flex; flex-direction:column; background:#18191c; border:1px solid var(--uiBorder); border-radius:16px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  .palBox{ width:min(1280px, 100%); height:min(880px, 100%); display:flex; flex-direction:column; background:#18191c; border:1px solid var(--uiBorder); border-radius:16px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.6); }
   .palHead{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-bottom:1px solid var(--uiBorder); flex-wrap:wrap; }
   .palHead b{ font-size:15px; margin-right:10px; }
   .palHint{ font-size:12px; color:var(--uiMuted); }
   .palHeadActs{ display:flex; align-items:center; gap:8px; }
   .palHeadActs select{ height:28px; border-radius:8px; border:1px solid var(--uiBorder); background:#111; color:inherit; font:inherit; font-size:12.5px; padding:0 8px; }
   .palHeadActs kbd{ font:600 10px Inter,sans-serif; opacity:.6; margin-left:6px; border:1px solid currentColor; border-radius:4px; padding:0 4px; }
-  .palCols{ flex:1; display:flex; min-height:0; }
+  .palPrev{ flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center; background:#0f1012; padding:12px; border-bottom:1px solid var(--uiBorder); }
+  .palPrevHost > .tpage{ position:absolute; top:0; left:0; transform-origin:0 0; }
+  .palPrevHost{ position:relative; overflow:hidden; border-radius:6px; box-shadow:0 10px 40px rgba(0,0,0,.5); background:#fff; }
+  .palCols{ flex:0 0 36%; display:flex; min-height:0; }
   .palCol{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 8px 26px; min-width:0; cursor:grab; transition:flex .18s ease; }
-  .palCol.dragging{ opacity:.45; }
+  .palCol.dragging{ opacity:.5; transform:scale(.97); }
+  .palCol.dropBefore::before, .palCol.dropAfter::after{ content:""; position:absolute; top:0; bottom:0; width:5px; background:#fff; border-radius:3px; z-index:3; box-shadow:0 0 0 2px rgba(0,0,0,.45), 0 0 18px rgba(255,255,255,.85); pointer-events:none; }
+  .palCol.dropBefore::before{ left:-3px; } .palCol.dropAfter::after{ right:-3px; }
+  @keyframes palLand{ 0%{ transform:scale(1.07); } 60%{ transform:scale(.985); } 100%{ transform:scale(1); } }
+  .palCol.landed{ animation:palLand .38s cubic-bezier(.2,.9,.3,1); z-index:2; }
+  .palGrip{ position:absolute; top:7px; left:50%; transform:translateX(-50%); font-size:15px; letter-spacing:3px; opacity:.3; pointer-events:none; transition:opacity .15s; }
+  .palCol:hover .palGrip{ opacity:.85; }
+  .palTools button:disabled{ opacity:.2; cursor:default; }
   .palCol.locked{ box-shadow:inset 0 -4px 0 rgba(255,255,255,.35); }
-  .palTools{ display:flex; flex-direction:column; gap:6px; margin-bottom:auto; margin-top:22px; opacity:0; transition:opacity .15s; }
+  .palTools{ display:flex; flex-direction:row; flex-wrap:wrap; justify-content:center; gap:5px; margin-bottom:auto; margin-top:28px; opacity:0; transition:opacity .15s; }
   .palCol:hover .palTools, .palCol.locked .palTools, .palCol:focus-within .palTools{ opacity:1; }
   .palCol.locked .palTools button:not([data-a="lock"]){ opacity:.0; }
   .palCol:hover.locked .palTools button{ opacity:1; }
-  .palTools button{ width:34px; height:34px; border-radius:9px; border:0; background:rgba(127,127,127,.18); color:inherit; font-size:14px; cursor:pointer; }
+  .palTools button{ width:30px; height:30px; border-radius:9px; border:0; background:rgba(127,127,127,.18); color:inherit; font-size:14px; cursor:pointer; }
   .palTools button:hover{ background:rgba(127,127,127,.32); }
   .palPick{ width:46px; height:46px; border-radius:50%; border:2px solid currentColor; opacity:.55; cursor:pointer; overflow:hidden; margin-bottom:14px; }
   .palPick:hover{ opacity:1; }
@@ -236,7 +246,11 @@
   .palApply{ margin-left:auto; display:flex; gap:8px; }
   @media (pointer:coarse){ .palTools, .palAdd{ opacity:1; } .palCol{ cursor:default; } }
   @media (max-width:760px){
-    .palCols{ flex-direction:column; }
+    .palPrev{ display:none; }
+    .palCols{ flex:1; flex-direction:column; }
+    .palCol.dropBefore::before, .palCol.dropAfter::after{ left:0; right:0; top:auto; bottom:auto; width:auto; height:5px; }
+    .palCol.dropBefore::before{ top:-3px; } .palCol.dropAfter::after{ bottom:-3px; }
+    .palGrip{ display:none; }
     .palCol{ flex-direction:row; justify-content:flex-start; gap:8px; padding:6px 10px; }
     .palTools{ flex-direction:row; margin:0; order:3; opacity:1; }
     .palPick{ width:30px; height:30px; margin:0; }
@@ -3044,7 +3058,7 @@
     shade.className = "palShade";
     shade.innerHTML = `<div class="palBox" role="dialog" aria-label="Palette Studio">
       <div class="palHead">
-        <div><b>Palette Studio</b><span class="palHint">Space: new colours · drag to reorder · click a colour to change it · Ctrl+Z undo · paste hex codes to import</span></div>
+        <div><b>Palette Studio</b><span class="palHint">Space: new colours · drag a swatch or use ‹ › to reorder · Ctrl+Z undo · paste hex codes to import</span></div>
         <div class="palHeadActs">
           <select id="palSrc" title="Where new colours come from"><option value="all">From all photos</option><option value="page">From this page's photos</option></select>
           <button type="button" class="btn sm" id="palUndo" title="Undo (Ctrl+Z)">↶</button>
@@ -3053,6 +3067,7 @@
           <button type="button" class="iconBtn sm" id="palX" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
+      <div class="palPrev"><div class="palPrevHost" id="palPrevHost"></div></div>
       <div class="palCols" id="palCols"></div>
       <div class="palFoot">
         ${Object.keys(PAL_OPTS).map((k) => `<div class="palOpt"><span>${{ pl:"Layout", ps:"Shape", sz:"Size", lb:"Labels", gap:"Spacing" }[k]}</span><div class="seg" data-k="${k}">${PAL_OPTS[k].map(([v, n]) => `<button type="button" data-v="${v}">${n}</button>`).join("")}</div></div>`).join("")}
@@ -3064,14 +3079,42 @@
     </div>`;
     document.body.appendChild(shade);
     const $p = (s) => shade.querySelector(s), colsEl = $p("#palCols");
-    let dragFrom = -1;
+    let dragFrom = -1, dropAt = -1, landedK = 0, kseq = 0;
+    const clearDrop = () => colsEl.querySelectorAll(".dropBefore, .dropAfter").forEach((x) => x.classList.remove("dropBefore", "dropAfter"));
+    // Live preview: the real palette page, rebuilt from the studio's current colours and options
+    const prevEl = $p("#palPrevHost"); let prevRaf = 0;
+    function updatePreview(){
+      if(prevRaf) return;
+      prevRaf = requestAnimationFrame(() => {
+        prevRaf = 0;
+        const box = prevEl.parentElement, bw = box.clientWidth - 24, bh = box.clientHeight - 24;
+        if(!shade.isConnected || bw < 60 || bh < 60) return;
+        const w = Math.min(bw, bh * PAGE_W / PAGE_H);
+        prevEl.style.width = w + "px"; prevEl.style.height = (w * PAGE_H / PAGE_W) + "px";
+        try{
+          const thk = (pg0 && pg0.bg && THEMES[pg0.bg.th]) ? pg0.bg.th : "deck";
+          const pv = makePage(null, "pa-swatch", DATA, { n:cols.length, pl:o.pl, ps:o.ps, sz:o.sz, lb:o.lb, gap:Number(o.gap) }, thk, 0);
+          pv.els.filter((e) => e.t === "shape" && e.pal != null).sort((a, b) => a.pal - b.pal).forEach((e, i) => {
+            if(!cols[i]) return; e.fill = cols[i].hex; syncPalLabel(e, pv);
+            const nm = pv.els.find((x) => x.t === "text" && x.paln === i); if(nm) nm.text = cols[i].name || "";
+          });
+          mountScaled(prevEl, pv, w, true);
+        }catch(_e){}
+      });
+    }
+    const onRz = () => updatePreview(); window.addEventListener("resize", onRz);
     function paint(){
+      cols.forEach((c) => { if(!c.k) c.k = ++kseq; });
+      // FLIP: remember where each column was so a re-order glides instead of jumping
+      const firstPos = {}; colsEl.querySelectorAll(".palCol").forEach((el) => { firstPos[el.dataset.k] = el.getBoundingClientRect(); });
       colsEl.innerHTML = cols.map((c, i) => {
         const fg = lumOf(c.hex) > 0.55 ? "#111" : "#fff";
-        return `<div class="palCol${c.lock ? " locked" : ""}" draggable="true" data-i="${i}" style="background:${c.hex};color:${fg}">
+        return `<div class="palCol${c.lock ? " locked" : ""}${c.k === landedK ? " landed" : ""}" draggable="true" data-i="${i}" data-k="${c.k}" style="background:${c.hex};color:${fg}"><span class="palGrip" aria-hidden="true">⋮⋮</span>
           ${cols.length < 10 ? `<button type="button" class="palAdd" data-a="add" title="Add a colour here" aria-label="Add a colour">+</button>` : ""}
           <div class="palTools">
             <button type="button" data-a="lock" title="${c.lock ? "Unlock" : "Lock (keeps it when generating)"}" aria-pressed="${c.lock}">${c.lock ? "🔒" : "🔓"}</button>
+            <button type="button" data-a="left" title="Move earlier"${i === 0 ? " disabled" : ""}>‹</button>
+            <button type="button" data-a="right" title="Move later"${i === cols.length - 1 ? " disabled" : ""}>›</button>
             <button type="button" data-a="copy" title="Copy hex">⧉</button>
             ${cols.length > 2 ? `<button type="button" data-a="del" title="Remove">✕</button>` : ""}
           </div>
@@ -3080,6 +3123,15 @@
           <input class="palName" value="${esc(c.name || "")}" placeholder="Name" maxlength="28" aria-label="Colour name">
         </div>`;
       }).join("");
+      landedK = 0;
+      colsEl.querySelectorAll(".palCol").forEach((el) => {
+        const f = firstPos[el.dataset.k]; if(!f) return;
+        const l = el.getBoundingClientRect(), dx = f.left - l.left, dy = f.top - l.top; if(!dx && !dy) return;
+        el.style.transition = "none"; el.style.transform = `translate(${dx}px,${dy}px)`;
+      });
+      void colsEl.offsetWidth;
+      colsEl.querySelectorAll(".palCol").forEach((el) => { if(el.style.transform){ el.style.transition = "transform .24s cubic-bezier(.2,.9,.3,1)"; el.style.transform = ""; } });
+      updatePreview();
       shade.querySelectorAll(".palFoot .seg").forEach((sg) => sg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", String(o[sg.dataset.k]) === b.dataset.v)));
     }
     paint();
@@ -3090,6 +3142,7 @@
       if(a !== "copy") snap();
       if(a === "lock"){ cols[i].lock = !cols[i].lock; paint(); }
       else if(a === "del"){ cols.splice(i, 1); paint(); }
+      else if(a === "left" || a === "right"){ const j = a === "left" ? i - 1 : i + 1; if(j >= 0 && j < cols.length){ const [m] = cols.splice(i, 1); cols.splice(j, 0, m); landedK = m.k; } paint(); }
       else if(a === "copy"){ try{ await navigator.clipboard.writeText(cols[i].hex.toUpperCase()); notify("Copied " + cols[i].hex.toUpperCase()); }catch(_e){} }
       else if(a === "add"){
         // a new colour between this one and the previous: their mix, or a fresh pick
@@ -3100,8 +3153,8 @@
     colsEl.addEventListener("input", (e) => {
       const t = e.target, i = idxOf(t);
       if(!editing){ snap(); editing = true; }
-      if(t.dataset.a === "pick"){ cols[i].hex = t.value; const col = t.closest(".palCol"); col.style.background = t.value; col.style.color = lumOf(t.value) > 0.55 ? "#111" : "#fff"; col.querySelector(".palHex").value = t.value.toUpperCase(); }
-      else if(t.classList.contains("palName")) cols[i].name = t.value;
+      if(t.dataset.a === "pick"){ cols[i].hex = t.value; const col = t.closest(".palCol"); col.style.background = t.value; col.style.color = lumOf(t.value) > 0.55 ? "#111" : "#fff"; col.querySelector(".palHex").value = t.value.toUpperCase(); updatePreview(); }
+      else if(t.classList.contains("palName")){ cols[i].name = t.value; updatePreview(); }
     });
     colsEl.addEventListener("change", (e) => {
       const t = e.target; editing = false; if(!t.classList.contains("palHex")) return;
@@ -3109,17 +3162,25 @@
       if(h){ snap(); cols[idxOf(t)].hex = h; paint(); } else t.value = cols[idxOf(t)].hex.toUpperCase();
     });
     colsEl.addEventListener("dragstart", (e) => { if(e.target.closest("input")){ e.preventDefault(); return; } const c = e.target.closest(".palCol"); if(c){ dragFrom = Number(c.dataset.i); c.classList.add("dragging"); try{ e.dataTransfer.setData("text/plain", String(dragFrom)); }catch(_e){} } });
-    colsEl.addEventListener("dragover", (e) => { if(dragFrom >= 0) e.preventDefault(); });
-    colsEl.addEventListener("drop", (e) => {
-      e.preventDefault(); const c = e.target.closest(".palCol"); if(!c || dragFrom < 0) return;
-      const to = Number(c.dataset.i); snap(); const [m] = cols.splice(dragFrom, 1); cols.splice(to, 0, m); dragFrom = -1; paint();
+    colsEl.addEventListener("dragover", (e) => {
+      if(dragFrom < 0) return; e.preventDefault(); clearDrop();
+      const c = e.target.closest(".palCol"); if(!c) return;
+      const r = c.getBoundingClientRect(), vert = getComputedStyle(colsEl).flexDirection === "column";
+      const after = vert ? e.clientY > r.top + r.height / 2 : e.clientX > r.left + r.width / 2;
+      c.classList.add(after ? "dropAfter" : "dropBefore"); dropAt = Number(c.dataset.i) + (after ? 1 : 0);
     });
-    colsEl.addEventListener("dragend", () => { dragFrom = -1; colsEl.querySelectorAll(".dragging").forEach((x) => x.classList.remove("dragging")); });
+    colsEl.addEventListener("drop", (e) => {
+      e.preventDefault(); clearDrop(); if(dragFrom < 0 || dropAt < 0){ dragFrom = -1; return; }
+      let to = dropAt; if(dragFrom < to) to--;
+      if(to !== dragFrom){ snap(); const [m] = cols.splice(dragFrom, 1); cols.splice(to, 0, m); landedK = m.k; }
+      dragFrom = -1; dropAt = -1; paint();
+    });
+    colsEl.addEventListener("dragend", () => { dragFrom = -1; dropAt = -1; clearDrop(); colsEl.querySelectorAll(".dragging").forEach((x) => x.classList.remove("dragging")); });
     shade.querySelectorAll(".palFoot .seg").forEach((sg) => sg.addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if(!b) return; const k = sg.dataset.k; o[k] = k === "gap" ? Number(b.dataset.v) : b.dataset.v; paint(); }));
     $p("#palSrc").onchange = async (e) => { cands = null; await loadCands(e.target.value); generate(true); };
     $p("#palGen").onclick = () => generate(false);
     $p("#palCopy").onclick = async () => { try{ await navigator.clipboard.writeText(cols.map((c) => c.hex.toUpperCase()).join(" ")); notify("Hex codes copied"); }catch(_e){} };
-    const close = () => { shade.remove(); document.removeEventListener("keydown", onKey, true); };
+    const close = () => { shade.remove(); window.removeEventListener("resize", onRz); document.removeEventListener("keydown", onKey, true); };
     const tryClose = () => { if(dirty && !confirm("Close without applying? Your palette changes will be lost.")) return; close(); };
     $p("#palX").onclick = tryClose;
     $p("#palUndo").onclick = doUndo; $p("#palRedo").onclick = doRedo;
