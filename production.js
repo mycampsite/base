@@ -188,6 +188,16 @@ function validate(plan, breakdown){
     if(st.over) out.push({ level: "warn", code: "OVER", day: i + 1, text: "Day " + (i + 1) + " has " + fmtEighths(st.eighths) + " pages (limit " + fmtEighths(max) + ")" });
     if(st.moves >= 2) out.push({ level: "info", code: "MOVES", day: i + 1, text: "Day " + (i + 1) + " has " + st.moves + " company moves (" + st.locs.join(", ") + ")" });
   });
+  // Children (under 18, or described as a child) have their own work-hour, permit and chaperone rules
+  const kids = {}; (breakdown && breakdown.cast || []).forEach((c) => { if(c.minor) kids[c.name] = c; });
+  if(Object.keys(kids).length) plan.days.forEach((d, i) => {
+    const sc = (d.scenes || []).map((id) => byId[id]).filter(Boolean);
+    const who = Array.from(new Set([].concat(...sc.map((s) => (s.cast || []).filter((n) => kids[n])))));
+    if(!who.length) return;
+    const night = sc.filter((s) => s.dn === "N" && (s.cast || []).some((n) => kids[n])).map((s) => s.n);
+    const label = who.map((n) => n + (kids[n].age != null ? " (" + kids[n].age + ")" : " (age?)")).join(", ");
+    out.push({ level: night.length ? "warn" : "info", code: "MINOR", day: i + 1, text: "Day " + (i + 1) + ": " + label + " under 18. Check permit, chaperone and work-hour limits" + (night.length ? ". Night scene" + (night.length > 1 ? "s " : " ") + night.join(", ") + " with a minor" : "") });
+  });
   return out;
 }
 

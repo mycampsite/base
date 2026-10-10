@@ -197,6 +197,26 @@ function bgAgeNum_(s) {
   return Number(m[1]);
 }
 
+// ---- Children described in words, not just by a number ("LILY, a little girl", "little girl MIA", "TODDLER") ----
+const BG_KID_TERM_ = "little girl|little boy|young girl|young boy|small girl|small boy|tiny girl|tiny boy|teenage girl|teenage boy|toddler|infant|newborn|baby|schoolgirl|schoolboy|teenager|girl|boy|child|kid";
+const BG_KID_DESC_RE_ = new RegExp("^(?:(?:an?|the|their|his|her|our)\\s+)?(?:[A-Za-z-]+\\s+){0,2}?(" + BG_KID_TERM_ + ")\\b(?![’']?s\\b)", "i");
+// What follows a name ("a shy little girl, runs in", "8, sits", "an 8-year-old girl"): { word, age } if it describes a child, else null
+function bgKidFrom_(desc) {
+  desc = String(desc || "").trim();
+  const ym = desc.slice(0, 50).match(/\b(\d{1,2})[- ]years?[- ]old\b|\baged?\s+(\d{1,2})\b/i);
+  if (ym) { const a = Number(ym[1] || ym[2]); return a < 18 ? { word: a + " years old", age: a } : null; }
+  const cm = desc.match(/^(\d{1,2})\s*,/);
+  if (cm) { const a = Number(cm[1]); return a < 18 ? { word: a + " years old", age: a } : null; }
+  const m = desc.match(BG_KID_DESC_RE_);
+  return m ? { word: m[1].toLowerCase(), age: null } : null;
+}
+// A cue that is itself a child word: "LITTLE GIRL", "THE BOY", "TODDLER", "BABY"
+const BG_KID_CUE_RE_ = /^(?:THE\s+)?(?:(?:LITTLE|YOUNG|SMALL|TINY|TEENAGE)\s+)?(GIRL|BOY|CHILD|KID|TODDLER|INFANT|BABY|NEWBORN|SCHOOLGIRL|SCHOOLBOY|TEENAGER|TEEN|TWEEN)(?:\s+\d+)?$/;
+function bgKidCue_(name) {
+  const m = String(name || "").toUpperCase().match(BG_KID_CUE_RE_);
+  return m ? m[1].toLowerCase() : null;
+}
+
 function budgetAnalyze_(doc) {
   doc = (doc && typeof doc === "object") ? doc : {};
   const lines = Array.isArray(doc.lines) ? doc.lines : [];
@@ -204,6 +224,7 @@ function budgetAnalyze_(doc) {
   const scenes = [];
   const chars = {};
   const intros = {};   // silent-role introductions: NAME (30s)
+  const kidRaw = [];   // names written in normal case next to a child description: checked against the cast once it's known
   let cur = null, lastT = "D", speaker = null;
 
   const startScene = function (heading, id, pseudo) {
@@ -239,6 +260,37 @@ function budgetAnalyze_(doc) {
       if (/^(TWO|THREE|FOUR|FIVE|SIX|SEVERAL|SOME|MANY|DOZENS|HUNDREDS)\b/.test(nm)) continue;
       const age = bgAgeNum_(m[2]);
       if (!intros[nm]) intros[nm] = { name: nm, age: age, scene: cur ? cur.n : 1 };
+    }
+    scanKids(text);
+  };
+  // "LILY, a little girl, runs in." / "Lily, 8, sits." / "little girl MIA" -> remember the child, by name
+  const addKid = function (rawName, kid) {
+    let nm = String(rawName || "").replace(/^(A|AN|THE|HER|HIS|THEIR|OUR)\s+/i, "").trim();
+    if (!nm || nm.length < 2 || nm.length > 28 || !kid) return;
+    if (/^(INT|EXT|CUT|FADE|V\.O|O\.S|CONT)/i.test(nm)) return;
+    if (nm === nm.toUpperCase()) {
+      if (/^(TWO|THREE|FOUR|FIVE|SIX|SEVERAL|SOME|MANY|DOZENS|HUNDREDS)\b/.test(nm)) return;
+      const it = intros[nm] || (intros[nm] = { name: nm, age: null, scene: cur ? cur.n : 1 });
+      if (!it.kid) it.kid = kid.word;
+      if (it.age == null && kid.age != null) it.age = kid.age;
+    } else kidRaw.push({ name: nm, kid: kid, scene: cur ? cur.n : 1 });
+  };
+  const scanKids = function (text) {
+    text = String(text || "");
+    let m;
+    const re1 = /\b([A-Z][A-Za-z0-9'’.\-]*(?:\s+[A-Z][A-Za-z0-9'’.\-]*){0,2})\s*,\s*([^.;:!?()]{0,70})/g;
+    while ((m = re1.exec(text)) !== null) addKid(m[1], bgKidFrom_(m[2]));
+    const re2 = /\b(?:little|young|small|tiny|teenage|school)\s+(girl|boy)\b\s*,?\s+(\S+(?:\s+\S+){0,2})/gi;
+    while ((m = re2.exec(text)) !== null) {
+      const toks = [];
+      const parts = m[2].split(/\s+/);
+      for (let i = 0; i < parts.length; i++) {
+        const c = parts[i].replace(/[.,;:!?]+$/, "");
+        if (!/^[A-Z][A-Za-z0-9'’\-]+$/.test(c)) break;
+        toks.push(c);
+        if (/[.,;:!?]$/.test(parts[i])) break;
+      }
+      if (toks.length) addKid(toks.join(" "), { word: m[0].split(/\s+/).slice(0, 2).join(" ").toLowerCase(), age: null });
     }
   };
 
@@ -394,6 +446,14 @@ function budgetAnalyze_(doc) {
   introNames.forEach(function (nm) {
     const cn = speakerFor[nm];
     if (cn && chars[cn] && intros[nm].age != null && chars[cn].age == null) chars[cn].age = intros[nm].age;
+    if (cn && chars[cn] && intros[nm].kid && !chars[cn].kid) chars[cn].kid = intros[nm].kid;
+  });
+  // Normal-case names ("Lily, a little girl") only count when they match someone in the cast
+  kidRaw.forEach(function (k) {
+    const c = chars[k.name.toUpperCase()];
+    if (!c) return;
+    if (k.kid.age != null && c.age == null) c.age = k.kid.age;
+    if (!c.kid) c.kid = k.kid.word;
   });
   const castList = Object.keys(chars).map(function (n) { return chars[n]; }).filter(function (c) { return c.name && Object.keys(c.scenes).length; });
   const sceneCount = Math.max(1, scenes.length);
@@ -411,10 +471,13 @@ function budgetAnalyze_(doc) {
     else type = "Day player";
     const eighths = onCam.reduce(function (a, n) { return a + (scenes[n - 1] ? scenes[n - 1].eighths : 0); }, 0);
     const notes = [];
-    if (c.age != null && c.age < 18) notes.push("Minor (age " + c.age + ")");
+    const kidWord = c.kid || bgKidCue_(c.name);
+    const ageMinor = c.age != null && c.age < 18, hint = !ageMinor && !(c.age != null) && !!kidWord;   // an adult age beats a word
+    if (ageMinor) notes.push("Minor (age " + c.age + ")");
+    else if (hint) notes.push("Possible minor (" + kidWord + "): confirm age");
     if (c.voLines && onCam.length) notes.push("Also has voice-over");
     return { name: c.name, type: type, scenes: onCam.length ? onCam : all, onCamCount: onCam.length, lines: c.lines, words: c.words, eighths: eighths,
-      first: all.length ? all[0] : 0, note: notes.join("; "), minor: c.age != null && c.age < 18, age: c.age != null ? c.age : null };
+      first: all.length ? all[0] : 0, note: notes.join("; "), minor: ageMinor || hint, minorHint: hint, age: c.age != null ? c.age : null };
   });
   // Non-speaking featured roles: introduced as NAME (30s) in action but never speak
   const speaking = {}; cast.forEach(function (c) { speaking[c.name] = true; });
@@ -424,20 +487,21 @@ function budgetAnalyze_(doc) {
     const single = nm.replace(/S$/, "");
     if (speaking[single]) return;
     if (cast.length > 120) return;
-    const minor = it.age != null && it.age < 18;
+    const minor = (it.age != null && it.age < 18) || (it.age == null && !!(it.kid || bgKidCue_(nm)));
+    const hintOnly = minor && it.age == null;
     // every scene they're named in (in capitals); one-word generic roles ("MAN") only their intro scene
     const generic = nm.split(/\s+/).length === 1 && GENERIC_[nm];
     const seen = generic ? [it.scene] : scenes.filter(function (s) { return s.n === it.scene || bgMentionTest_(nm, true)(s.action || ""); }).map(function (s) { return s.n; });
     const sEighths = seen.reduce(function (a, n) { return a + (scenes[n - 1] ? scenes[n - 1].eighths : 0); }, 0);
     seen.forEach(function (n) { const sc = scenes[n - 1]; if (sc && !sc.castSeen[nm]) { sc.castSeen[nm] = true; sc.cast.push(nm); } });
     cast.push({ name: nm, type: "Featured (non-speaking)", scenes: seen, onCamCount: seen.length, lines: 0, words: 0, eighths: sEighths || 1, first: it.scene,
-      note: minor ? "Minor (age " + it.age + ")" : "", minor: minor, age: it.age != null ? it.age : null });
+      note: minor ? (hintOnly ? "Possible minor (" + (it.kid || bgKidCue_(nm)) + "): confirm age" : "Minor (age " + it.age + ")") : "", minor: minor, minorHint: hintOnly, age: it.age != null ? it.age : null });
     speaking[nm] = true;
   });
   const typeOrder = { "Lead": 0, "Supporting": 1, "Day player": 2, "Featured (non-speaking)": 3, "Voice only": 4 };
   cast.sort(function (a, b) { return (typeOrder[a.type] - typeOrder[b.type]) || (b.words - a.words) || (a.first - b.first); });
   // Minors from the cast list count as child scenes
-  cast.forEach(function (c) { if (c.minor) c.scenes.forEach(function (n) { if (scenes[n - 1]) addFlag("minors", scenes[n - 1], "character " + c.name + " is under 18"); }); });
+  cast.forEach(function (c) { if (c.minor) c.scenes.forEach(function (n) { if (scenes[n - 1]) addFlag("minors", scenes[n - 1], "character " + c.name + (c.minorHint ? " may be under 18" : " is under 18")); }); });
 
   // ---- Locations ----
   const locMap = {};

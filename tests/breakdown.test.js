@@ -141,5 +141,34 @@ test("column widths match Final Draft (61 / 35 / 25)", () => {
   assert.strictEqual(B.cols.action, 61); assert.strictEqual(B.cols.dialogue, 35); assert.strictEqual(B.cols.parenthetical, 25);
 });
 
+test("children described in words are flagged as possible minors", () => {
+  const r = B.analyze(doc([
+    ["scene", "INT. KITCHEN - DAY"], ["action", "MUM stirs a pot. LILY, a little girl, runs in."], ["character", "MUM"], ["dialogue", "Hi."], ["character", "LILY"], ["dialogue", "Mum!"]
+  ], 1));
+  const lily = r.cast.filter((c) => c.name === "LILY")[0], mum = r.cast.filter((c) => c.name === "MUM")[0];
+  assert.ok(lily.minor && lily.minorHint, "LILY should be a possible minor");
+  assert.ok(/little girl/.test(lily.note));
+  assert.ok(!mum.minor);
+  assert.ok(r.scenes[0].flags.indexOf("minors") >= 0);
+});
+
+test("a stated age under 18 is a confirmed minor; an adult age or 'boy's father' is not", () => {
+  const r = B.analyze(doc([
+    ["scene", "INT. A - DAY"], ["action", "Kate, 11, hides. BEN, the boy's father, waves. JOHN, 35, sits."],
+    ["character", "KATE"], ["dialogue", "Shh."], ["character", "BEN"], ["dialogue", "Hi."], ["character", "JOHN"], ["dialogue", "Hey."]
+  ], 1));
+  const by = (n) => r.cast.filter((c) => c.name === n)[0];
+  assert.ok(by("KATE").minor && !by("KATE").minorHint && by("KATE").age === 11);
+  assert.ok(!by("BEN").minor && !by("JOHN").minor);
+});
+
+test("child cues (LITTLE GIRL) count, GIRLFRIEND does not", () => {
+  const r = B.analyze(doc([
+    ["scene", "INT. A - DAY"], ["character", "LITTLE GIRL"], ["dialogue", "Hello."], ["character", "GIRLFRIEND"], ["dialogue", "Hi."]
+  ], 1));
+  assert.ok(r.cast.filter((c) => c.name === "LITTLE GIRL")[0].minor);
+  assert.ok(!r.cast.filter((c) => c.name === "GIRLFRIEND")[0].minor);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

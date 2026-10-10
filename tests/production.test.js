@@ -122,5 +122,16 @@ test("Day Out of Days: start, hold, finish marks and counts", () => {
   assert.deepStrictEqual(row("CAL").marks, ["", "SWF", "", ""]);
 });
 
+test("a child on a shoot day is flagged, and a night scene with one is a warning", () => {
+  const kidBd = { scenes: bd.scenes, cast: [{ name: "ANA" }, { name: "BEN", minor: true, age: 9 }, { name: "CAL", minor: true, minorHint: true, age: null }] };
+  const plan = P.normalize({ settings: { days: 3, maxEighths: 80 }, days: [{ scenes: ["s1", "s2"] }, { scenes: ["s3"] }, { scenes: ["s4", "s5"] }] });
+  const w = P.validate(plan, kidBd).filter((x) => x.code === "MINOR");
+  assert.strictEqual(w.length, 3);
+  assert.strictEqual(w[0].level, "info");                       // day 1: BEN in a day scene
+  assert.strictEqual(w[1].level, "warn");                       // day 2: BEN in a night scene
+  assert.ok(/BEN \(9\)/.test(w[0].text) && /Night scene 3/.test(w[1].text));
+  assert.ok(/CAL \(age\?\)/.test(w[2].text));                // day 3: CAL, age unknown
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

@@ -94,6 +94,7 @@ const css = `
 .doodWrap{ overflow-x:auto; }
 .dood table{ border-collapse:collapse; font-size:12px; min-width:100%; }
 .dood th, .dood td{ border-top:1px solid var(--uiBorder); padding:5px 8px; text-align:center; white-space:nowrap; }
+.dood .kid{ font-size:10.5px; color:#f1c76b; margin-left:6px; white-space:nowrap; }
 .dood th:first-child, .dood td:first-child{ text-align:left; position:sticky; left:0; background:#1b1b1b; }
 .dood td.W, .dood td.SW, .dood td.WF, .dood td.SWF{ background:rgba(143,227,166,.16); color:#bff0cc; font-weight:700; }
 .dood td.H{ background:rgba(241,199,107,.12); color:#f1c76b; }
@@ -221,6 +222,7 @@ function render(pid){
     <span class="ctlChip">${bd.scenes.length} scenes · ${P.fmtEighths(bd.totals.eighths)} pages</span>
     <span class="ctlChip ${rec.unscheduled.length ? "warn" : "ok"}">${scheduled}/${bd.scenes.filter((s) => s.id).length} scheduled</span>
     ${nWarn ? `<span class="ctlChip warn">${nWarn} to check</span>` : ""}
+    ${bd.cast.some((c) => c.minor) ? `<span class="ctlChip warn" title="${esc(bd.cast.filter((c) => c.minor).map((c) => c.name + (c.age != null ? " (" + c.age + ")" : " (age?)")).join(", "))}">${bd.cast.filter((c) => c.minor).length} under 18</span>` : ""}
     ${sc.state === "loading" ? `<span class="ctlChip">Updating from script…</span>` : ""}
     ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}`;
   const acts = S.open ? `<div class="ctlActs">
@@ -286,10 +288,11 @@ function render(pid){
       </select><button class="btn sm" type="button" data-a="unpick">Done</button></div>`;
   })() : "";
 
+  const kidOf = {}; bd.cast.forEach((c) => { if(c.minor) kidOf[c.name] = c; });
   const rows = P.dood(pl, bd).filter((r) => r.workDays);
   const dood = `<details class="dood"${S.doodOpen ? " open" : ""}><summary>Day Out of Days · ${rows.length} cast</summary><div class="doodWrap"><table>
       <tr><th>Cast</th>${pl.days.map((d, i) => `<th>D${i + 1}</th>`).join("")}<th>Work</th><th>Hold</th><th>Total</th></tr>
-      ${rows.map((r) => `<tr><td>${esc(r.name)}</td>${r.marks.map((m) => `<td class="${m}">${m}</td>`).join("")}<td>${r.workDays}</td><td>${r.holdDays}</td><td><b>${r.total}</b></td></tr>`).join("")}
+      ${rows.map((r) => `<tr><td>${esc(r.name)}${kidOf[r.name] ? ` <span class="kid" title="Under 18${kidOf[r.name].age != null ? " (age " + kidOf[r.name].age + ")" : ": confirm age"}. Limited work hours, permit and chaperone.">⚠ under 18</span>` : ""}</td>${r.marks.map((m) => `<td class="${m}">${m}</td>`).join("")}<td>${r.workDays}</td><td>${r.holdDays}</td><td><b>${r.total}</b></td></tr>`).join("")}
     </table></div></details>`;
 
   box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${csRow}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}
