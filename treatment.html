@@ -203,7 +203,7 @@
   #stage .tpage .el:hover{ outline:calc(1px / var(--s, 1)) dashed rgba(90,150,255,.7); }
   #stage .tpage .el.editing{ cursor:text; outline:calc(1.5px / var(--s, 1)) solid var(--sel); filter:none !important; }
   .palStudioBtn{ gap:8px; }
-  .palShade{ position:fixed; inset:0; z-index:900; background:rgba(0,0,0,.66); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:20px; }
+  .palShade{ position:fixed; inset:0; z-index:900; background:rgba(0,0,0,.74); display:flex; align-items:center; justify-content:center; padding:20px; }
   .palBox{ width:min(1320px, 100%); height:min(900px, 100%); display:flex; flex-direction:column; background:#17181b; border:1px solid var(--uiBorder); border-radius:18px; overflow:hidden; box-shadow:0 30px 90px rgba(0,0,0,.65); }
   .palHead{ display:flex; align-items:center; gap:14px; padding:12px 16px; border-bottom:1px solid var(--uiBorder); }
   .palTitle{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
@@ -228,7 +228,7 @@
   .palPickArea canvas{ border-radius:8px; cursor:crosshair; box-shadow:0 10px 36px rgba(0,0,0,.5); touch-action:none; }
   .palPickHint{ font-size:12px; color:var(--uiMuted); text-align:center; }
   .palPickHint b{ color:var(--uiText); }
-  .palLoupe{ position:absolute; z-index:3; pointer-events:none; padding:8px 12px; border-radius:10px; border:2px solid #fff; box-shadow:0 6px 20px rgba(0,0,0,.5); font:700 12px "JetBrains Mono", ui-monospace, monospace; }
+  .palLoupe{ position:absolute; left:0; top:0; z-index:3; will-change:transform; pointer-events:none; padding:8px 12px; border-radius:10px; border:2px solid #fff; box-shadow:0 6px 20px rgba(0,0,0,.5); font:700 12px "JetBrains Mono", ui-monospace, monospace; }
   .palPrevWrap{ flex:1 1 0; min-width:0; display:flex; align-items:center; justify-content:center; padding:18px; }
   .palCol.active{ box-shadow:inset 0 0 0 4px #fff, inset 0 0 0 6px rgba(0,0,0,.55); z-index:1; }
   .palCol.active::after{ content:"● SELECTED"; position:absolute; top:-1px; left:50%; transform:translateX(-50%); font:800 9.5px Inter,sans-serif; letter-spacing:.12em; color:#111; background:#fff; padding:3px 8px; border-radius:0 0 7px 7px; white-space:nowrap; }
@@ -523,7 +523,7 @@
     #toolbar .title{ font-size:13px; max-width:34vw; }
     #toolbar .btn.sm{ padding:0 10px; }
     #restyleBtn span{ display:none; }
-    .exportLong{ display:none; }
+    .exportLong, #printBtn{ display:none; }
     .photoNote{ font-size:11px; }
     #app{ padding-bottom:58px; }
     #body{ flex-direction:column; }
@@ -629,7 +629,8 @@
     <div class="sep"></div>
     <button class="btn sm restyle" id="restyleBtn" type="button" title="Change the look of the whole deck: fonts, colours and layouts. Your words and photos stay."><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span>Restyle deck</span></button>
     <button class="btn sm" id="previewBtn" type="button">Preview</button>
-    <button class="btn sm primary" id="exportBtn" type="button" title="Opens the print dialog: choose “Save as PDF”"><span class="exportLong">Export </span>PDF</button>
+    <button class="btn sm" id="printBtn" type="button" title="Print, or save a PDF with selectable text from the print dialog (Ctrl/Cmd+P)">Print</button>
+    <button class="btn sm primary" id="exportBtn" type="button" title="Download a PDF of every page"><span class="exportLong">Export </span>PDF</button>
   </div>
   <div id="body">
     <div id="leftRail"></div>
@@ -639,7 +640,7 @@
   </div>
 </div>
 <div id="preview"><div class="pvStage" id="pvStage"></div>
-  <div class="pvBar"><button class="btn sm" id="pvPrev" type="button">&lsaquo;</button><span id="pvPos"></span><button class="btn sm" id="pvNext" type="button">&rsaquo;</button><button class="btn sm" id="pvFull" type="button" title="Full screen (F)">Full screen</button><button class="btn sm" id="pvPdf" type="button">Export PDF</button><button class="btn sm" id="pvClose" type="button">Close (Esc)</button></div>
+  <div class="pvBar"><button class="btn sm" id="pvPrev" type="button">&lsaquo;</button><span id="pvPos"></span><button class="btn sm" id="pvNext" type="button">&rsaquo;</button><button class="btn sm" id="pvFull" type="button" title="Full screen (F)">Full screen</button><button class="btn sm" id="pvPrint" type="button">Print</button><button class="btn sm primary" id="pvPdf" type="button">Export PDF</button><button class="btn sm" id="pvClose" type="button">Close (Esc)</button></div>
   <div class="pvHit" id="pvHitL" style="left:0"></div><div class="pvHit" id="pvHitR" style="right:0"></div>
 </div>
 <div id="textDock" hidden><textarea id="dockTa" rows="2" autocapitalize="sentences" aria-label="Text"></textarea><button type="button" class="btn primary" id="dockDone">Done</button></div>
@@ -1645,7 +1646,31 @@
     const src = URL.createObjectURL(rec.blob);
     IMG[id] = { src, thumb:rec.thumb ? URL.createObjectURL(rec.thumb) : src, w:rec.w || 0, h:rec.h || 0 };
     onImgLoaded(id);
+    queueMid(id, rec.blob);
     return IMG[id];
+  }
+  // Big photos get a screen-sized copy (2400px long edge) for the stage, page list and preview, so moving
+  // and redrawing them stays smooth. The PDF and print always use the original.
+  const MID_PX = 2400, __midQ = []; let __midOn = false;
+  const later = (fn) => window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout:800 }) : setTimeout(fn, 60);
+  function queueMid(id, blob){
+    const c = IMG[id]; if(!c || !blob || !(c.w > MID_PX || c.h > MID_PX)) return;
+    __midQ.push([id, blob]); if(__midOn) return; __midOn = true;
+    const next = async () => {
+      const job = __midQ.shift(); if(!job){ __midOn = false; return; }
+      const [jid, jb] = job, cc = IMG[jid];
+      try{
+        if(cc && !cc.mid && typeof createImageBitmap === "function"){
+          const k = MID_PX / Math.max(cc.w, cc.h);
+          const bmp = await createImageBitmap(jb, { resizeWidth:Math.round(cc.w * k), resizeHeight:Math.round(cc.h * k), resizeQuality:"high" });
+          const cv = document.createElement("canvas"); cv.width = bmp.width; cv.height = bmp.height; cv.getContext("2d").drawImage(bmp, 0, 0); bmp.close && bmp.close();
+          const mb = await new Promise((r) => cv.toBlob(r, "image/jpeg", 0.9));
+          if(mb && IMG[jid]){ IMG[jid].mid = URL.createObjectURL(mb); document.querySelectorAll(`img[data-scr="${jid}"]`).forEach((im) => { im.src = IMG[jid].mid; }); }
+        }
+      }catch(_e){}
+      later(next);
+    };
+    later(next);
   }
   async function makeThumb(src){
     return new Promise((res) => {
@@ -1717,6 +1742,7 @@
       if(ar && im.dataset.pos){ const p = JSON.parse(im.dataset.pos); applyImgPos(im, p[0], p[1], p[2], ar, p[3]); }
     };
     document.querySelectorAll(`img[data-img="${id}"]`).forEach((im) => fix(im, c.src));
+    document.querySelectorAll(`img[data-scr="${id}"]`).forEach((im) => fix(im, c.mid || c.src));
     document.querySelectorAll(`img[data-imgt="${id}"]`).forEach((im) => fix(im, c.thumb || c.src));
     document.querySelectorAll(`img[data-lib="${id}"]`).forEach((im) => { im.src = c.thumb || c.src; });
   }
@@ -1850,12 +1876,12 @@
       if(el.round) d.style.borderRadius = "50%"; else if(th.r && !el.bleed) d.style.borderRadius = rd2(th.r * KX) + "mm";
       if(el.img){
         const im = document.createElement("img"); im.alt = ""; im.draggable = false; im.decoding = "async";
-        if(ctx.thumb) im.dataset.imgt = el.img; else im.dataset.img = el.img;
+        if(ctx.thumb) im.dataset.imgt = el.img; else if(ctx.screen) im.dataset.scr = el.img; else im.dataset.img = el.img;
         const fx = el.fx != null ? el.fx : 50, fy = el.fy != null ? el.fy : 50, z = el.zoom || 1, fa = el.w / el.h;
         im.dataset.pos = JSON.stringify([fx, fy, z, fa]);
         applyImgPos(im, fx, fy, z, arOf(el), fa);
         const c = IMG[el.img];
-        if(c && c.src) im.src = ctx.thumb ? (c.thumb || c.src) : c.src;
+        if(c && c.src) im.src = ctx.thumb ? (c.thumb || c.src) : (ctx.screen && c.mid) || c.src;
         else{ d.classList.add("loading"); ensureImg(el.img); }
         d.appendChild(im);
       }else{
@@ -1912,7 +1938,7 @@
     return `<div class="chrome" style="font-family:${th.fonts[mt.f] || th.fonts.b};color:${col};font-weight:${Math.max(500, Number(mt.w) || 500)};">${h}</div>`;
   }
   function pageDom(page, opts){
-    const th = themeOf(page), V = vOf(page), ctx = { th, V, thumb:!!(opts && opts.thumb) }, p = document.createElement("div");
+    const th = themeOf(page), V = vOf(page), ctx = { th, V, thumb:!!(opts && opts.thumb), screen:!!(opts && opts.screen) }, p = document.createElement("div");
     p.className = "tpage" + (V.light ? " light" : "");
     p.style.background = pageBg(page); p.style.color = V.hi; p.style.fontFamily = th.fonts.b;
     ensureFont(th.fonts.h); ensureFont(th.fonts.b);
@@ -1958,20 +1984,30 @@
       const over = () => n.scrollWidth > n.clientWidth + 1 || n.scrollHeight > n.clientHeight + 1;
       let size = base;
       if(over()){
-        let lo = base * (mode === "w" ? .12 : .25), hi = base;
+        let lo = base * (mode === "w" ? .3 : .5), hi = base;
         for(let i = 0; i < 10; i++){ const m = (lo + hi) / 2; n.style.fontSize = m + "mm"; if(over()) hi = m; else lo = m; }
         size = lo;
       }
       n.style.fontSize = size + "mm"; n.style.overflowWrap = wrap;
       const g = n.dataset.fg; if(g) (groups[g] = groups[g] || []).push([n, size / base, base]);
     });
+    // a matching set (captions, swatch names) shares one size, but an outlier with far more text doesn't drag the rest down
     Object.keys(groups).forEach((g) => {
       const list = groups[g]; if(list.length < 2) return;
-      const k = Math.min(...list.map((x) => x[1]));
-      list.forEach(([n, , base]) => { n.style.fontSize = base * k + "mm"; });
+      const ks = list.map((x) => x[1]).sort((a, b) => a - b), med = ks[Math.floor(ks.length / 2)];
+      const k = Math.max(ks[0], med * 0.8);
+      list.forEach(([n, own, base]) => { n.style.fontSize = base * Math.min(own, k) + "mm"; });
     });
   }
   // Text with a size someone chose grows its box downwards instead of spilling out
+  // The size text is actually showing at: a box that fits its text to the frame can be smaller than its style's size
+  function shownPt(el){
+    if(el.size) return el.size;
+    const n = elNode(el.id), fs = n && n.dataset.fit ? parseFloat(n.style.fontSize) : 0;
+    if(fs) return Math.round(fs * 2.835 * 2) / 2;
+    return Math.round(textLook(el, themeOf(curPage())).mm * 2.835 * 2) / 2;
+  }
+  const isFitted = (el) => { if(el.size) return false; const n = elNode(el.id); return !!(n && n.dataset.fit && parseFloat(n.style.fontSize) < parseFloat(n.dataset.fs) - 0.01); };
   function autoGrow(el){
     if(!el || el.t !== "text") return false;
     const n = elNode(el.id); if(!n || n.dataset.fit) return false;
@@ -1982,7 +2018,7 @@
   function mountScaled(host, page, widthPx, full){
     const s = widthPx / PAGE_WPX;
     host.innerHTML = "";
-    const p = pageDom(page, { thumb:!full && widthPx < 420 }); p.style.transform = `scale(${s})`;
+    const p = pageDom(page, { thumb:!full && widthPx < 420, screen:true }); p.style.transform = `scale(${s})`;
     host.appendChild(p);
     fitText(p);
     return s;
@@ -2155,7 +2191,12 @@
     box.classList.toggle("short", el.h * k < 34); box.classList.toggle("narrow", el.w * k < 34);
     box.classList.toggle("crop", CROPPING === el.id);
   }
-  function selectEl(id){ if(EDITING && EDITING !== id) finishEdit(); if(SEL !== id) CROPPING = null; SEL = id; drawSel(); renderRight(); presenceTouch(); }
+  let __rrRaf = 0;
+  function selectEl(id, soon){
+    if(EDITING && EDITING !== id) finishEdit(); if(SEL !== id) CROPPING = null; SEL = id; drawSel(); presenceTouch();
+    if(!soon){ renderRight(); return; }
+    if(!__rrRaf) __rrRaf = requestAnimationFrame(() => { __rrRaf = 0; renderRight(); });
+  }
   function deselect(){ if(EDITING) finishEdit(); if(!SEL) return; SEL = null; if(CROPPING){ CROPPING = null; unfocus(); } drawSel(); renderRight(); presenceTouch(); }
 
   // Snapping: page edges, margins, centre lines and every other element's edges/centre
@@ -2170,10 +2211,14 @@
     return best;
   }
   function showGuides(gx, gy){
-    document.querySelectorAll("#stage .guide").forEach((g) => g.remove());
     const stage = document.getElementById("stage"), k = pxPerMm();
-    if(gx != null){ const g = document.createElement("div"); g.className = "guide gv"; g.style.left = gx * k + "px"; stage.appendChild(g); }
-    if(gy != null){ const g = document.createElement("div"); g.className = "guide gh"; g.style.top = gy * k + "px"; stage.appendChild(g); }
+    const one = (cls, v, prop) => {
+      let g = stage.querySelector(".guide." + cls);
+      if(v == null){ if(g) g.remove(); return; }
+      if(!g){ g = document.createElement("div"); g.className = "guide " + cls; stage.appendChild(g); }
+      g.style[prop] = v * k + "px";
+    };
+    one("gv", gx, "left"); one("gh", gy, "top");
   }
   function placeLive(node, r){
     if(node){ node.style.left = r.x + "mm"; node.style.top = r.y + "mm"; node.style.width = r.w + "mm"; node.style.height = r.h + "mm"; }
@@ -2258,7 +2303,7 @@
       return;
     }
     const wasSel = SEL === el.id;
-    if(!wasSel) selectEl(el.id);
+    if(!wasSel) selectEl(el.id, true);
     // touch: tapping a text box that's already selected starts typing
     dragMove(e, el, elNode(el.id), false, wasSel && e.pointerType !== "mouse" && el.t === "text" && !el.auto);
   }
@@ -2286,11 +2331,21 @@
         if(!ev.shiftKey || dy){ const by = snap1([y, y + el.h / 2, y + el.h], tg.ys, tol); if(by){ y += by.d; gy = by.t; } }
       }
       r = { x:rd(x), y:rd(y), w:el.w, h:el.h };
-      placeLive(node, r); showGuides(gx, gy);
-      tip(ev, "X " + f1(r.x) + "   Y " + f1(r.y) + " mm");
+      lastEv = ev; lastG = [gx, gy];
+      if(!raf) raf = requestAnimationFrame(paintMove);
+    };
+    let raf = 0, lastEv = null, lastG = [null, null];
+    const paintMove = () => {
+      raf = 0;
+      if(node){ node.style.willChange = "transform"; node.style.transform = `translate(${(r.x - el.x) * PX_MM}px,${(r.y - el.y) * PX_MM}px)`; }
+      const box = document.getElementById("selBox"); if(box){ box.style.left = r.x * k + "px"; box.style.top = r.y * k + "px"; }
+      showGuides(lastG[0], lastG[1]);
+      if(lastEv) tip(lastEv, "X " + f1(r.x) + "   Y " + f1(r.y) + " mm");
     };
     const up = () => {
       window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+      if(raf){ cancelAnimationFrame(raf); raf = 0; }
+      if(node){ node.style.transform = ""; node.style.willChange = ""; if(moved) placeLive(node, r); }
       showGuides(null, null); tip(null);
       if(moved){ commit(() => { el.x = r.x; el.y = r.y; }, "Move"); refreshCurThumb(); }
       if(dup){ txEnd("Duplicate"); refreshCurThumb(); }
@@ -3021,19 +3076,29 @@
     if(lb && /^#/.test(sw.fill || "")) lb.text = sw.fill.toUpperCase();
   }
   const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
-  async function paletteFrom(srcs, n){
-    const bins = {};
-    for(const src of srcs){
-      const im = await loadImg(src); if(!im) continue;
+  const __binCache = new Map();
+  async function binsOf(src){
+    if(__binCache.has(src)) return __binCache.get(src);
+    const im = await loadImg(src), bins = {};
+    if(im){
       const k0 = 64 / Math.max(im.naturalWidth, im.naturalHeight), w = Math.max(1, Math.round(im.naturalWidth * k0)), h = Math.max(1, Math.round(im.naturalHeight * k0));
       const c = document.createElement("canvas"); c.width = w; c.height = h;
-      const x = c.getContext("2d"); x.drawImage(im, 0, 0, w, h);
+      const x = c.getContext("2d", { willReadFrequently:true }); x.drawImage(im, 0, 0, w, h);
       const px = x.getImageData(0, 0, w, h).data;
       for(let i = 0; i < px.length; i += 4){
         if(px[i + 3] < 128) continue;
         const k = ((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4), b = bins[k] || (bins[k] = { n:0, r:0, g:0, b:0 });
         b.n++; b.r += px[i]; b.g += px[i + 1]; b.b += px[i + 2];
       }
+    }
+    __binCache.set(src, bins);
+    return bins;
+  }
+  async function paletteFrom(srcs, n){
+    const bins = {};
+    for(const src of srcs){
+      const one = await binsOf(src);
+      for(const k in one){ const a = one[k], b = bins[k] || (bins[k] = { n:0, r:0, g:0, b:0 }); b.n += a.n; b.r += a.r; b.g += a.g; b.b += a.b; }
     }
     const list = Object.keys(bins).map((k) => {
       const b = bins[k], c = { r:b.r / b.n, g:b.g / b.n, b:b.b / b.n }, mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b);
@@ -3055,7 +3120,7 @@
     let ids = Array.from(usedImageIds()); if(!ids.length) ids = T.images.map((x) => x.id);
     if(!ids.length){ notify("Upload or place some images first.", true); return; }
     notify("Reading colours…");
-    const got = await Promise.all(ids.slice(0, 24).map(ensureImg)), srcs = got.filter(Boolean).map((c) => c.src);
+    const got = await Promise.all(ids.slice(0, 24).map(ensureImg)), srcs = got.filter(Boolean).map((c) => c.thumb || c.src);
     if(!srcs.length){ notify("Couldn't read the images.", true); return; }
     const cols = await paletteFrom(srcs, sw.length);
     commit(() => { sw.forEach((e, i) => { if(cols[i]){ e.fill = cols[i]; syncPalLabel(e, pg); } }); }, "Palette");
@@ -3117,7 +3182,7 @@
         try{
           let ids = mode === "all" ? T.images.map((x) => x.id) : mode === "page" ? pageImgIds : [mode];
           if(!ids.length) ids = Array.from(usedImageIds());
-          const got = await Promise.all(ids.slice(0, 24).map(ensureImg)), srcs = got.filter(Boolean).map((c) => c.src);
+          const got = await Promise.all(ids.slice(0, 24).map(ensureImg)), srcs = got.filter(Boolean).map((c) => c.thumb || c.src);
           return srcs.length ? await paletteFrom(srcs, 40) : [];
         }catch(_e){ return []; }
       })());
@@ -3206,7 +3271,7 @@
         <button type="button" class="palSrcTile txt" data-src="all" title="Colours from every photo">All<br>photos</button>
         ${pageImgIds.length ? `<button type="button" class="palSrcTile txt" data-src="page" title="Colours from the photos on this page">This<br>page</button>` : ""}
         ${T.images.map((im) => `<button type="button" class="palSrcTile" data-src="${esc(im.id)}" title="${esc(im.name || "Photo")}"><img alt="" data-pimg="${esc(im.id)}"></button>`).join("")}`;
-      T.images.forEach((im) => ensureImg(im.id).then((c) => { const el = Array.from(railEl.querySelectorAll("img[data-pimg]")).find((x) => x.dataset.pimg === im.id); if(el && c && c.src) el.src = c.src; }));
+      T.images.forEach((im) => ensureImg(im.id).then((c) => { const el = Array.from(railEl.querySelectorAll("img[data-pimg]")).find((x) => x.dataset.pimg === im.id); if(el && c && c.src) el.src = c.thumb || c.src; }));
       markRail();
     }
     function markRail(){
@@ -3223,7 +3288,7 @@
       if(!id){ cv.hidden = true; pickImg = null; pickHint.textContent = "Add photos in the Photos panel to pick colours from them."; return; }
       pickId = id;
       const c = await ensureImg(id); if(!c || !c.src || pickId !== id) return;
-      const img = new Image(); img.src = c.src;
+      const img = new Image(); img.src = c.mid || c.src;
       try{ await img.decode(); }catch(_e){ return; }
       if(pickId !== id) return;
       pickImg = img; drawPicker();
@@ -3237,6 +3302,13 @@
       cv.style.width = w + "px"; cv.style.height = h + "px"; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
       cx.drawImage(pickImg, 0, 0, cv.width, cv.height); cv.hidden = false;
     }
+    // while the divider moves: just rescale the drawn photo (cheap); the sharp redraw happens on release
+    function fitPickerCss(){
+      if(!pickImg || cv.hidden) return;
+      const W = pickArea.clientWidth - 28, H = pickArea.clientHeight - 64; if(W < 40 || H < 40) return;
+      const r = Math.min(W / pickImg.naturalWidth, H / pickImg.naturalHeight);
+      cv.style.width = Math.round(pickImg.naturalWidth * r) + "px"; cv.style.height = Math.round(pickImg.naturalHeight * r) + "px";
+    }
     function sampleAt(e){
       const r = cv.getBoundingClientRect();
       const x = Math.round((e.clientX - r.left) / r.width * cv.width), y = Math.round((e.clientY - r.top) / r.height * cv.height);
@@ -3245,12 +3317,17 @@
       let R = 0, G = 0, B = 0, n = 0; for(let i = 0; i < d.length; i += 4){ R += d[i]; G += d[i + 1]; B += d[i + 2]; n++; }
       const h2 = (v) => Math.round(v / n).toString(16).padStart(2, "0"); return "#" + h2(R) + h2(G) + h2(B);
     }
+    let hovEv = null, hovRaf = 0;
     cv.addEventListener("pointermove", (e) => {
-      const hex = sampleAt(e), ar = pickArea.getBoundingClientRect();
-      loupe.hidden = false; loupe.style.background = hex; loupe.style.color = lumOf(hex) > 0.55 ? "#111" : "#fff"; loupe.textContent = hex.toUpperCase();
-      loupe.style.left = Math.min(ar.width - 110, e.clientX - ar.left + 16) + "px"; loupe.style.top = Math.max(4, e.clientY - ar.top - 46) + "px";
+      hovEv = e; if(hovRaf) return;
+      hovRaf = requestAnimationFrame(() => {
+        hovRaf = 0; const ev = hovEv; if(!ev) return;
+        const hex = sampleAt(ev), ar = pickArea.getBoundingClientRect();
+        loupe.hidden = false; loupe.style.background = hex; loupe.style.color = lumOf(hex) > 0.55 ? "#111" : "#fff"; loupe.textContent = hex.toUpperCase();
+        loupe.style.transform = `translate(${Math.min(ar.width - 110, ev.clientX - ar.left + 16)}px,${Math.max(4, ev.clientY - ar.top - 46)}px)`;
+      });
     });
-    cv.addEventListener("pointerleave", () => { loupe.hidden = true; });
+    cv.addEventListener("pointerleave", () => { hovEv = null; loupe.hidden = true; });
     cv.addEventListener("click", (e) => {
       const hex = sampleAt(e);
       if(e.shiftKey && cols.length < MAXC){ snap(); const nc = { hex, name:"", lock:true, k:++kseq }; cols.splice(Math.min(activeI + 1, cols.length), 0, nc); activeI = cols.indexOf(nc); landedK = nc.k; dirty = true; paint(); return; }
@@ -3266,8 +3343,9 @@
     split.addEventListener("pointerdown", (e) => {
       e.preventDefault(); split.setPointerCapture(e.pointerId); split.classList.add("on");
       const st = $p("#palStage").getBoundingClientRect(); let pct = 62;
-      const mv = (ev) => { pct = setSplit((ev.clientX - st.left) / st.width * 100); drawPicker(); updatePreview(); };
-      const up = () => { split.classList.remove("on"); split.removeEventListener("pointermove", mv); split.removeEventListener("pointerup", up); try{ localStorage.setItem(SPLIT_KEY, String(Math.round(pct))); }catch(_e){} };
+      let rq = 0, lastX = 0;
+      const mv = (ev) => { lastX = ev.clientX; if(!rq) rq = requestAnimationFrame(() => { rq = 0; pct = setSplit((lastX - st.left) / st.width * 100); fitPickerCss(); }); };
+      const up = () => { if(rq){ cancelAnimationFrame(rq); rq = 0; } split.classList.remove("on"); split.removeEventListener("pointermove", mv); split.removeEventListener("pointerup", up); drawPicker(); updatePreview(); try{ localStorage.setItem(SPLIT_KEY, String(Math.round(pct))); }catch(_e){} };
       split.addEventListener("pointermove", mv); split.addEventListener("pointerup", up);
     });
     // while the eyedropper is over the photo, everything but the swatch it fills steps back
@@ -3276,11 +3354,13 @@
     railEl.addEventListener("click", (e) => { const b = e.target.closest(".palSrcTile"); if(b) pickSource(b.dataset.src); });
 
     // ---- live preview: just the swatches and their labels, cropped tight, on the page's own background
-    let prevRaf = 0;
+    let prevRaf = 0, prevAt = 0, prevT = 0;
     function updatePreview(){
-      if(prevRaf) return;
+      if(prevRaf || prevT) return;
+      const wait = 100 - (performance.now() - prevAt);
+      if(wait > 0){ prevT = setTimeout(() => { prevT = 0; updatePreview(); }, wait); return; }
       prevRaf = requestAnimationFrame(() => {
-        prevRaf = 0;
+        prevRaf = 0; prevAt = performance.now();
         const stage = prevEl.parentElement, bw = stage.clientWidth - 36, bh = stage.clientHeight - 36;
         if(!shade.isConnected || bw < 60 || bh < 60) return;
         try{
@@ -3396,7 +3476,7 @@
     $p("#palUndo").onclick = doUndo; $p("#palRedo").onclick = doRedo;
     $p("#palPlus").onclick = () => addColour(); $p("#palMinus").onclick = removeColour;
     $p("#palCopy").onclick = async () => { try{ await navigator.clipboard.writeText(cols.map((c) => c.hex.toUpperCase()).join(" ")); notify("Hex codes copied"); }catch(_e){} };
-    const close = () => { shade.remove(); window.removeEventListener("resize", onRz); window.removeEventListener("resize", onPickRz); document.removeEventListener("keydown", onKey, true); };
+    const close = () => { clearTimeout(prevT); shade.remove(); window.removeEventListener("resize", onRz); window.removeEventListener("resize", onPickRz); document.removeEventListener("keydown", onKey, true); };
     const tryClose = async () => { if(dirty && !(await window.CampUI.confirm("Close without applying?\n\nYour palette changes will be lost.", "Discard changes", true))) return; close(); };
     $p("#palX").onclick = tryClose;
     shade.addEventListener("pointerdown", (e) => { if(e.target === shade) tryClose(); });
@@ -3778,12 +3858,12 @@
     const th = themeOf(pg), V = vOf(pg);
     let h = `<div><div class="pHead"><div class="section-title">${kind.toUpperCase()}</div><button type="button" class="iconBtn sm" id="epDone" title="Deselect (Esc)">${ICON.x}</button></div>`;
     if(el.t === "text"){
-      const L = textLook(el, th), size = el.size || Math.round(L.mm * 2.835 * 2) / 2, dec = el.ul || el.lt;
+      const L = textLook(el, th), size = shownPt(el), fitted = isFitted(el), dec = el.ul || el.lt;
       const styles = TOKENS.some(([k]) => k === el.s) ? TOKENS : TOKENS.concat([[el.s, "Older style"]]);
       const tcase = L.up ? "upper" : (el.tcase || "none"), va = el.va === true || el.va === 1 ? "middle" : (el.va || "top");
       h += `<label>Style</label><select id="epStyle">${styles.map(([k, n]) => `<option value="${k}"${k === el.s ? " selected" : ""}>${n}</option>`).join("")}</select>
         <label>Font</label><button type="button" class="fontBtn" id="epFont" style="font-family:${esc(L.font)}"><span>${esc(fontName(L.font))}${el.font ? "" : " <em>theme</em>"}</span>${ICON.caret}</button>
-        <div class="row2"><div><label>Size (pt)</label><div class="stepper"><button type="button" data-d="-1" aria-label="Smaller">−</button><input type="number" id="epSize" min="4" max="400" step="0.5" value="${size}"><button type="button" data-d="1" aria-label="Bigger">+</button></div></div>
+        <div class="row2"><div><label${fitted ? ' title="Shrunk to fit its box. Set a size to fix it, and the box grows to fit the text instead."' : ""}>Size (pt)${fitted ? " · fitted" : ""}</label><div class="stepper"><button type="button" data-d="-1" aria-label="Smaller">−</button><input type="number" id="epSize" min="4" max="400" step="0.5" value="${size}"><button type="button" data-d="1" aria-label="Bigger">+</button></div></div>
           <div><label>Weight</label><select id="epWeight">${WEIGHTS.map(([w, n]) => `<option value="${w}"${w === L.weight ? " selected" : ""}>${n}</option>`).join("")}</select></div></div>
         <label>Format</label>${seg("epFmt", [["b","<b>B</b>","Bold (Ctrl/Cmd+B)"],["i","<i>I</i>","Italic (Ctrl/Cmd+I)"],["u","<u>U</u>","Underline (Ctrl/Cmd+U)"],["s","<s>S</s>","Strikethrough"]], (v) => v === "b" ? Number(L.weight) >= 600 : v === "i" ? L.it : v === "u" ? !!el.ul : !!el.lt)}
         <label>Case</label>${seg("epCase", [["none","Aa","As typed"],["upper","AA","Capitals"],["lower","aa","Lower case"],["cap","Ab","Title Case"]], (v) => v === tcase)}
@@ -4150,7 +4230,7 @@
     const B = (k, icon, label, cls) => `<button type="button" data-q="${k}" class="${cls || ""}">${icon}<span>${label}</span></button>`;
     let h = "";
     if(el.t === "text"){
-      const L = textLook(el, themeOf(curPage())), pt = el.size || Math.round(L.mm * 2.835);
+      const L = textLook(el, themeOf(curPage())), pt = shownPt(el);
       h = B("edit", ICON.r_edit, "Edit text", "main") + B("font", "<b class='qAa'>Aa</b>", "Font") +
         `<div class="qSize"><button type="button" data-q="smaller" aria-label="Smaller">−</button><span>${Math.round(pt)}</span><button type="button" data-q="bigger" aria-label="Bigger">+</button></div>` +
         B("colour", `<i class="qDot" style="background:${esc(el.color || colOf(vOf(curPage()), el.ck || L.tk.c))}"></i>`, "Colour") + B("bold", "<b class='qAa'>B</b>", "Bold");
@@ -4165,7 +4245,7 @@
     const redo = () => { renderStage(); if(el.t === "text" && autoGrow(el)){ markDirty(); renderStage(); } refreshCurThumb(); renderQuick(); };
     if(q("edit")) q("edit").onclick = () => startEdit(el.id);
     if(q("font")) q("font").onclick = (e) => openFontMenu(e.currentTarget, el);
-    const step = (d) => { const L = textLook(el, themeOf(curPage())), pt = el.size || Math.round(L.mm * 2.835 * 2) / 2; commit(() => { el.size = Math.max(4, Math.min(400, Math.round(pt + d * (pt >= 40 ? 4 : pt >= 16 ? 2 : 1)))); }, "Text size"); redo(); };
+    const step = (d) => { const pt = shownPt(el); commit(() => { el.size = Math.max(4, Math.min(400, Math.round(pt + d * (pt >= 40 ? 4 : pt >= 16 ? 2 : 1)))); }, "Text size"); redo(); };
     if(q("smaller")) q("smaller").onclick = () => step(-1);
     if(q("bigger")) q("bigger").onclick = () => step(1);
     if(q("colour")) q("colour").onclick = (e) => colorEdit(e.currentTarget, el.color || colOf(vOf(curPage()), el.ck || textLook(el, themeOf(curPage())).tk.c), (c) => { delete el.ac; delete el.ck; el.color = c; }, "Text colour", renderQuick);
@@ -4604,6 +4684,130 @@
     T.pages.forEach((p) => p.els.forEach((e) => { if(e.t === "image" && !e.img) frames++; if(e.t === "text" && !e.auto && !String(e.text || "").trim()) texts++; }));
     return { frames, texts };
   }
+  /* ---------------- PDF file (download) ----------------
+     Each page is drawn by the browser itself (so it looks exactly like the stage), turned into a sharp image
+     and packed into an A4-landscape PDF. Print stays available for a vector PDF through the print dialog. */
+  const __dataUrlCache = new Map();
+  async function toDataUrl(url){
+    if(!url || /^data:/.test(url)) return url;
+    if(__dataUrlCache.has(url)) return __dataUrlCache.get(url);
+    const p = (async () => {
+      try{
+        const b = await (await fetch(url)).blob();
+        return await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ok(""); r.readAsDataURL(b); });
+      }catch(_e){ return ""; }
+    })();
+    __dataUrlCache.set(url, p);
+    return p;
+  }
+  // Every style rule the pages use, with web fonts embedded (only the families on the pages, Latin letters only)
+  async function pdfCss(families){
+    const want = new Set(Array.from(families).map((f) => f.toLowerCase()));
+    const parts = [];
+    for(const sh of Array.from(document.styleSheets)){
+      let txt = "";
+      try{ txt = Array.from(sh.cssRules).map((r) => r.cssText).join("\n"); }
+      catch(_e){ if(sh.href){ try{ txt = await (await fetch(sh.href)).text(); }catch(_e2){ txt = ""; } } }
+      if(!txt) continue;
+      const faces = [];
+      txt = txt.replace(/(\/\*\s*([\w-]+)\s*\*\/\s*)?@font-face\s*{[^}]*}/g, (m, _c, subset) => {
+        const fam = (m.match(/font-family:\s*['"]?([^;'"]+)['"]?/) || [])[1];
+        if(fam && want.has(fam.trim().toLowerCase()) && (!subset || subset === "latin")) faces.push(m.replace(/^\/\*[^*]*\*\/\s*/, ""));
+        return "";
+      });
+      for(const f of faces){
+        let out = f;
+        for(const m of f.matchAll(/url\((['"]?)([^)'"]+)\1\)/g)){ const d = await toDataUrl(new URL(m[2], sh.href || location.href).href); if(d) out = out.split(m[0]).join(`url(${d})`); }
+        parts.push(out);
+      }
+      parts.push(txt);
+    }
+    return parts.join("\n");
+  }
+  function pdfBytes(pages){
+    // pages: [{ jpg:Uint8Array, w, h }] drawn full-bleed on A4 landscape
+    const enc = new TextEncoder(), chunks = [], offs = [];
+    let len = 0;
+    const put = (x) => { const b = typeof x === "string" ? enc.encode(x) : x; chunks.push(b); len += b.length; };
+    const obj = (n, body) => { offs[n] = len; put(n + " 0 obj\n"); body(); put("\nendobj\n"); };
+    const PW = 841.89, PH = 595.28, n = pages.length, kids = [];
+    put("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+    obj(1, () => put("<< /Type /Catalog /Pages 2 0 R >>"));
+    for(let i = 0; i < n; i++) kids.push((3 + i * 3) + " 0 R");
+    obj(2, () => put(`<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${n} >>`));
+    pages.forEach((pg, i) => {
+      const o = 3 + i * 3, draw = `q ${PW} 0 0 ${PH} 0 0 cm /Im0 Do Q`;
+      obj(o, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${o + 1} 0 R >> >> /Contents ${o + 2} 0 R >>`));
+      obj(o + 1, () => { put(`<< /Type /XObject /Subtype /Image /Width ${pg.w} /Height ${pg.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${pg.jpg.length} >>\nstream\n`); put(pg.jpg); put("\nendstream"); });
+      obj(o + 2, () => put(`<< /Length ${draw.length} >>\nstream\n${draw}\nendstream`));
+    });
+    const xref = len, total = 3 + n * 3;
+    put(`xref\n0 ${total}\n0000000000 65535 f \n`);
+    for(let i = 1; i < total; i++) put(String(offs[i]).padStart(10, "0") + " 00000 n \n");
+    put(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+    return new Blob(chunks, { type:"application/pdf" });
+  }
+  let __pdfBusy = false;
+  async function exportPdfFile(){
+    if(__pdfBusy) return;
+    if(EDITING) finishEdit();
+    if(document.getElementById("preview").classList.contains("show")) closePreview();
+    const br = blankReport();
+    __pdfBusy = true;
+    const btns = ["exportBtn", "pvPdf"].map((id) => document.getElementById(id)).filter(Boolean);
+    btns.forEach((b) => { b.disabled = true; });
+    const root = document.getElementById("printRoot");
+    try{
+      notify("Making your PDF…", false, 60000);
+      const ids = Array.from(usedImageIds());
+      await Promise.all(ids.map(ensureImg));
+      root.innerHTML = ""; root.classList.add("measure");
+      T.pages.forEach((pg) => root.appendChild(pageDom(pg)));
+      await Promise.all([document.fonts ? document.fonts.ready : null, ...Array.from(root.querySelectorAll("img")).map((im) => im.decode ? im.decode().catch(() => {}) : null)]);
+      fitText(root);
+      // drop empty frames and empty text boxes, as print does
+      root.querySelectorAll(".el-image.empty").forEach((n) => { n.style.background = "transparent"; n.style.border = "0"; n.style.outline = "0"; n.removeAttribute("data-ph"); n.classList.remove("empty"); });
+      const fams = new Set();
+      root.querySelectorAll(".tpage, .tpage *").forEach((n) => { const f = getComputedStyle(n).fontFamily; if(f) f.split(",").forEach((x) => fams.add(x.replace(/['"]/g, "").trim())); });
+      const css = await pdfCss(fams);
+      const W = Math.round(PAGE_WPX), H = Math.round(PAGE_HPX), SC = 2400 / W, cw = Math.round(W * SC), ch = Math.round(H * SC);
+      const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch; const g = cv.getContext("2d");
+      const out = [], pages = Array.from(root.children);
+      for(let i = 0; i < pages.length; i++){
+        notify("Making your PDF… page " + (i + 1) + " of " + pages.length, false, 60000);
+        const node = pages[i].cloneNode(true);
+        node.style.transform = "none"; node.style.position = "relative"; node.style.left = node.style.top = "0";
+        for(const im of Array.from(node.querySelectorAll("img"))){ const d = await toDataUrl(im.currentSrc || im.src); if(d) im.setAttribute("src", d); im.removeAttribute("srcset"); im.removeAttribute("loading"); }
+        for(const el of [node, ...Array.from(node.querySelectorAll("[style*='url(']"))]){
+          const st = el.getAttribute("style") || ""; let ns = st;
+          for(const m of st.matchAll(/url\((['"]?)((?:blob|https?):[^)'"]+)\1\)/g)){ const d = await toDataUrl(m[2]); if(d) ns = ns.split(m[2]).join(d); }
+          if(ns !== st) el.setAttribute("style", ns);
+        }
+        const xml = new XMLSerializer().serializeToString(node);
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cw}" height="${ch}" viewBox="0 0 ${W} ${H}"><foreignObject x="0" y="0" width="${W}" height="${H}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${W}px;height:${H}px;overflow:hidden"><style>${css.replace(/<\/style/gi, "<\\/style")}
+.el-text:empty::before{ content:none !important; } .el-image.empty::after{ content:none !important; } .el-image.empty{ background:transparent !important; border-color:transparent !important; outline:0 !important; } .el-image.loading{ animation:none !important; background:transparent !important; }</style>${xml}</div></foreignObject></svg>`;
+        // a data: URL (not blob:) keeps the canvas exportable in Chrome
+        const im = new Image(); im.decoding = "sync"; im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+        await im.decode();
+        await new Promise((r) => setTimeout(r, 60));          // let embedded fonts settle before drawing
+        g.fillStyle = "#fff"; g.fillRect(0, 0, cw, ch); g.drawImage(im, 0, 0, cw, ch);
+        const jb = await new Promise((r) => cv.toBlob(r, "image/jpeg", 0.92));
+        if(!jb) throw new Error("couldn't draw page " + (i + 1));
+        out.push({ jpg:new Uint8Array(await jb.arrayBuffer()), w:cw, h:ch });
+      }
+      const pdf = pdfBytes(out), a = document.createElement("a");
+      a.href = URL.createObjectURL(pdf); a.download = (String(T.title || "Treatment").replace(/[\\/:*?"<>|]+/g, " ").trim() || "Treatment") + " - Treatment.pdf";
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      const left = []; if(br.frames) left.push(br.frames + " empty image frame" + (br.frames > 1 ? "s" : "")); if(br.texts) left.push(br.texts + " empty text box" + (br.texts > 1 ? "es" : ""));
+      notify("PDF downloaded (" + out.length + " page" + (out.length === 1 ? "" : "s") + ")" + (left.length ? ". Left out: " + left.join(" and ") : "") + ".", false, 5000);
+    }catch(e){
+      console.error(e);
+      notify("Couldn't make the PDF here (" + (e && e.message || e) + "). Use Print › Save as PDF instead.", true, 8000);
+    }finally{
+      root.innerHTML = ""; root.classList.remove("measure");
+      __pdfBusy = false; btns.forEach((b) => { b.disabled = false; });
+    }
+  }
   function exportPdf(){
     if(EDITING) finishEdit();
     if(document.getElementById("preview").classList.contains("show")) closePreview();
@@ -4751,12 +4955,14 @@
     document.getElementById("redoBtn").onclick = redo;
     document.getElementById("restyleBtn").onclick = () => openTemplatePicker("restyle");
     document.getElementById("previewBtn").onclick = openPreview;
-    document.getElementById("exportBtn").onclick = exportPdf;
+    document.getElementById("exportBtn").onclick = exportPdfFile;
+    document.getElementById("printBtn").onclick = exportPdf;
     document.getElementById("pvPrev").onclick = () => stepPreview(-1);
     document.getElementById("pvNext").onclick = () => stepPreview(1);
     document.getElementById("pvClose").onclick = closePreview;
     document.getElementById("pvFull").onclick = togglePvFull;
-    document.getElementById("pvPdf").onclick = exportPdf;
+    document.getElementById("pvPdf").onclick = exportPdfFile;
+    document.getElementById("pvPrint").onclick = exportPdf;
     document.getElementById("pvHitL").onclick = () => stepPreview(-1);
     document.getElementById("pvHitR").onclick = () => stepPreview(1);
     document.addEventListener("fullscreenchange", () => { if(document.getElementById("preview").classList.contains("show")) renderPreview(); });
@@ -4875,7 +5081,7 @@
     const items = (el) => {
       const a = [];
       if(el.t === "text"){
-        const step = (d) => { const L = textLook(el, themeOf(curPage())), pt = el.size || Math.round(L.mm * 2.835 * 2) / 2; commit(() => { el.size = Math.max(4, Math.min(400, Math.round(pt + d * (pt >= 40 ? 4 : pt >= 16 ? 2 : 1)))); }, "Text size"); after(el); };
+        const step = (d) => { const pt = shownPt(el); commit(() => { el.size = Math.max(4, Math.min(400, Math.round(pt + d * (pt >= 40 ? 4 : pt >= 16 ? 2 : 1)))); }, "Text size"); after(el); };
         a.push(["Edit text", () => startEdit(el.id)], ["Bold", () => { toggleFormat(el, "b"); after(el); }], ["Bigger", () => step(1)], ["Smaller", () => step(-1)], null);
       }else if(el.t === "image"){
         a.push([el.img ? "Replace photo…" : "Add photo…", () => file.click()]);
