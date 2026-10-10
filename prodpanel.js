@@ -22,6 +22,8 @@ const S = {
   doodOpen: lsGet(DOOD_KEY) === "1",
   scripts: {},           // scriptId -> { state:"loading"|"ok"|"error", bd, err, modified }
   notice: {},            // pid -> { added:[], removed:[], moved:[] } shown until dismissed
+  dayTab: {},            // pid -> day shown on a phone (-1 = Unscheduled)
+  setOpen: false,        // phone: the settings block
   pick: null,            // scene id chosen for "move to…" (click / touch)
   landed: null,          // { id, day } just moved: flashes once
   drag: null,            // scene id being dragged
@@ -157,11 +159,43 @@ const css = `
 .ctlLoad b{ color:var(--uiText); font-weight:600; font-size:14px; }
 .ctlEmpty{ padding:18px 6px; color:var(--uiMuted); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .ctlRO{ font-size:11.5px; color:var(--uiMuted); }
+/* settings: always open on a computer; a tap-to-open row on a phone */
+.setWrap > summary{ display:none; }
+.dayTabs{ display:none; }
 @media (max-width:760px){
-  .col{ flex-basis:78vw; scroll-snap-align:start; }
-  .col.none{ flex-basis:36vw; }
-  .board{ scroll-snap-type:x proximity; scroll-padding-left:2px; -webkit-overflow-scrolling:touch; }
-  .ctlActs{ margin-left:0; width:100%; }
+  .ctlHead{ padding:8px 10px; gap:6px; }
+  .ctlChip.hideSm{ display:none; }
+  .ctlActs{ margin-left:0; width:100%; display:flex; gap:6px; } .ctlActs .btn.primary{ flex:1; }
+  .ctlBody{ padding:0 10px 90px; }
+  .setWrap{ border-bottom:1px solid var(--uiBorder); }
+  .setWrap > summary{ display:flex; align-items:center; gap:10px; list-style:none; padding:10px 2px; font-size:13px; font-weight:600; cursor:pointer; min-height:44px; }
+  .setWrap > summary::-webkit-details-marker{ display:none; }
+  .setWrap > summary::before{ content:"▸"; font-size:11px; opacity:.6; } .setWrap[open] > summary::before{ content:"▾"; }
+  .setWrap > summary span{ margin-left:auto; font-weight:400; font-size:12px; color:var(--uiMuted); }
+  .ctlSet{ display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:2px 0 12px; border-bottom:0; }
+  .ctlSet label:first-child:nth-last-child(5), .ctlSet label:has(input[type=date]){ grid-column:auto; }
+  .ctlSet input[type=date]{ min-width:0; width:100%; }
+  .ctlSet input, .ctlSet select{ height:40px; width:100%; font-size:16px; }
+  .dayTabs{ display:flex; gap:6px; overflow-x:auto; padding:10px 0 6px; margin:0 -10px; padding-left:10px; padding-right:10px; scrollbar-width:none; position:sticky; top:0; z-index:4; background:#171717; }
+  .dayTabs::-webkit-scrollbar{ display:none; }
+  .dayTabs button{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; min-width:64px; height:46px; padding:0 12px; border-radius:11px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); font:600 13px Inter,system-ui,sans-serif; cursor:pointer; }
+  .dayTabs button small{ font:400 10.5px Inter,sans-serif; color:var(--uiMuted); }
+  .dayTabs button i{ font-style:normal; font-size:11px; margin-left:4px; color:var(--uiMuted); }
+  .dayTabs button.on{ background:#ececf0; color:#111; border-color:#ececf0; } .dayTabs button.on small, .dayTabs button.on i{ color:#444; }
+  .dayTabs button.warn:not(.on){ border-color:rgba(241,199,107,.6); } .dayTabs button.over:not(.on){ border-color:rgba(255,139,131,.7); }
+  .board{ display:block; overflow:visible; padding:6px 0; }
+  .board .col{ display:none; flex-basis:auto; max-height:none; width:100%; }
+  .board .col.sel{ display:flex; }
+  .col.none{ flex-basis:auto; }
+  .col .strips{ max-height:none; overflow:visible; }
+  .strip{ min-height:58px; padding:10px 12px; }
+  .strip.pick{ outline:3px solid var(--focus); outline-offset:1px; background:rgba(91,140,255,.16); }
+  .moveBar{ position:fixed; left:8px; right:8px; bottom:max(8px, env(safe-area-inset-bottom)); z-index:30; margin:0; padding:10px; box-shadow:0 10px 30px rgba(0,0,0,.55); background:#202634; }
+  .moveBar select{ flex:1 1 140px; height:40px; font-size:16px; } .moveBar .btn{ height:40px; }
+  .colHead .dtPick{ padding:6px 10px; font-size:13px; }
+  .fxRow{ flex-direction:column; align-items:stretch; }
+  .btn.sm{ min-height:36px; }
+  .doodWrap{ -webkit-overflow-scrolling:touch; }
 }`;
 const style = document.createElement("style"); style.textContent = css; document.head.appendChild(style);
 
@@ -308,8 +342,8 @@ function draw(pid){
   const warns = P.validate(pl, bd);
   const scheduled = bd.scenes.filter((s) => s.id).length - rec.unscheduled.length;
   const nWarn = warns.filter((w) => w.level === "warn").length;
-  const chips = `<span class="ctlChip">${st.days} shoot day${st.days === 1 ? "" : "s"}${st.start ? " · from " + esc(fmtDate(dates[0])) : ""}</span>
-    <span class="ctlChip">${bd.scenes.length} scenes · ${P.fmtEighths(bd.totals.eighths)} pages</span>
+  const chips = `<span class="ctlChip hideSm">${st.days} shoot day${st.days === 1 ? "" : "s"}${st.start ? " · from " + esc(fmtDate(dates[0])) : ""}</span>
+    <span class="ctlChip hideSm">${bd.scenes.length} scenes · ${P.fmtEighths(bd.totals.eighths)} pages</span>
     <span class="ctlChip ${rec.unscheduled.length ? "warn" : "ok"}">${scheduled}/${bd.scenes.filter((s) => s.id).length} scheduled</span>
     ${warns.length ? `<button type="button" class="ctlChip btnChip${nWarn ? " warn" : ""}" data-a="warns" aria-expanded="${S.warnOpen}">${nWarn ? "⚠ " + nWarn + " to check" : warns.length + " note" + (warns.length === 1 ? "" : "s")} ${S.warnOpen ? "▴" : "▾"}</button>` : ""}
     ${bd.cast.some((c) => c.minor) ? `<span class="ctlChip warn" title="${esc(bd.cast.filter((c) => c.minor).map((c) => c.name + (c.age != null ? " (" + c.age + ")" : " (age?)")).join(", "))}">${bd.cast.filter((c) => c.minor).length} under 18</span>` : ""}
@@ -332,14 +366,15 @@ function draw(pid){
   const scriptSel = ids.length > 1 ? `<label>Script<select data-s="script"${dis}>${ids.map((id) => `<option value="${esc(id)}"${id === scriptId ? " selected" : ""}>${esc(hub.scriptTitle(id))}</option>`).join("")}</select></label>` : "";
   const pageOpts = []; for(let e = 16; e <= 80; e += 4) pageOpts.push(e);
   if(pageOpts.indexOf(st.maxEighths) < 0) pageOpts.push(st.maxEighths), pageOpts.sort((a, b) => a - b);
-  const settings = `<div class="ctlSet">
+  const phone = matchMedia("(max-width:760px)").matches;
+  const settings = `<details class="setWrap"${!phone || S.setOpen ? " open" : ""}><summary>Settings<span>${st.days} day${st.days === 1 ? "" : "s"} · ${st.perWeek}/wk · ${P.fmtEighths(st.maxEighths)} pg/day</span></summary><div class="ctlSet">
       ${scriptSel}
       <label>Shoot days<span class="ctlStep"><button type="button" data-a="days-" aria-label="One fewer day"${dis}>−</button><input type="number" min="1" max="${P.MAX_DAYS}" value="${st.days}" data-s="days"${dis}><button type="button" data-a="days+" aria-label="One more day"${dis}>+</button></span></label>
       <label>First shoot day<input type="date" value="${esc(st.start)}" data-s="start"${dis}></label>
       <label>Shooting week<select data-s="perWeek"${dis}>${[[5, "5 days (Mon–Fri)"], [6, "6 days (Mon–Sat)"], [7, "7 days"]].map(([v, n]) => `<option value="${v}"${v === st.perWeek ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <label>Pages per day (limit)<select data-s="maxEighths"${dis}>${pageOpts.map((e) => `<option value="${e}"${e === st.maxEighths ? " selected" : ""}>${P.fmtEighths(e)}</option>`).join("")}</select></label>
       <label>Default call<input type="time" value="${esc(st.call)}" data-s="call"${dis}></label>
-    </div>`;
+    </div></details>`;
 
   const hasDocs = hub.hasSheets(pid);
   const docsNudge = hasDocs === false ? `<div class="ctlDocs">No budget or schedule sheets yet.${hub.isOwner(p) ? ` <button class="btn sm" type="button" data-a="create">Create production docs…</button>` : " The owner can create them."}</div>` : "";
@@ -361,18 +396,23 @@ function draw(pid){
       <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div></button>`;
   };
   const unsched = rec.unscheduled.slice().sort((a, b) => byId[a].n - byId[b].n);
-  const cols = [`<div class="col${unsched.length ? "" : " none"}" data-day="-1"><div class="colHead"><b>Unscheduled</b><span class="dt">${unsched.length}</span>
+  let tabDay = S.dayTab[pid]; if(tabDay == null || tabDay < -1 || tabDay >= pl.days.length) tabDay = pl.days.length ? 0 : -1;
+  const cols = [`<div class="col${unsched.length ? "" : " none"}${tabDay === -1 ? " sel" : ""}" data-day="-1"><div class="colHead"><b>Unscheduled</b><span class="dt">${unsched.length}</span>
       <div class="colMeta"><span>${P.fmtEighths(unsched.reduce((a, id) => a + byId[id].eighths, 0))} pages</span></div></div>
       <div class="strips">${unsched.length ? unsched.map(strip).join("") : `<div class="colEmpty">Every scene has a day ✓</div>`}</div></div>`]
     .concat(pl.days.map((d, i) => {
       const x = stats[i], pct = Math.min(100, Math.round(x.eighths / st.maxEighths * 100));
-      return `<div class="col${x.over ? " over" : ""}${S.landed && S.landed.day === i ? " bump" : ""}" data-day="${i}">
+      return `<div class="col${x.over ? " over" : ""}${S.landed && S.landed.day === i ? " bump" : ""}${tabDay === i ? " sel" : ""}" data-day="${i}">
         <div class="colHead"><b>Day ${i + 1}</b><label class="dtPick${d.date ? " pinned" : ""}" title="${d.date ? "Set to this date. Click to change it" : "Click to choose this day's date. The days after it follow on"}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(fmtDate(dates[i]) || "Set date")}</span><input type="date" value="${esc(dates[i] || "")}" data-date="${i}"${dis}></label>${d.date && canEdit ? `<button type="button" class="unpin" data-a="unpin" data-day="${i}" title="Unpin: follow on from the day before">✕</button>` : ""}
           <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc · ${x.cast.length} cast</span></div>
           <div class="cap"><i style="width:${pct}%"></i></div>
           <div class="colCall">Call <input type="time" value="${esc(d.call || st.call)}" data-call="${i}"${dis}>${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
         <div class="strips">${d.scenes.length ? d.scenes.map(strip).join("") : `<div class="colEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`}</div></div>`;
     })).join("");
+  const dayTabs = `<div class="dayTabs" role="tablist" aria-label="Shoot days">
+      <button type="button" role="tab" class="${tabDay === -1 ? "on" : ""}${unsched.length ? " warn" : ""}" data-a="dtab" data-i="-1" aria-selected="${tabDay === -1}">Unscheduled<i>${unsched.length}</i></button>
+      ${pl.days.map((d, i) => `<button type="button" role="tab" class="${tabDay === i ? "on" : ""}${stats[i].over ? " over" : ""}" data-a="dtab" data-i="${i}" aria-selected="${tabDay === i}">Day ${i + 1}<small>${esc(fmtDate(dates[i]).replace(/^\w+,? /, "")) || "no date"}</small></button>`).join("")}
+    </div>`;
   const moveBar = S.pick && byId[S.pick] && canEdit ? (() => {
     const cur = pl.days.findIndex((d) => d.scenes.indexOf(S.pick) >= 0), sug = cur < 0 ? P.suggestDay(S.pick, pl, bd) : -1;
     return `<div class="moveBar"><b>Sc ${byId[S.pick].n}</b> ${esc(byId[S.pick].heading)} → <select data-move="${esc(S.pick)}">
@@ -392,7 +432,7 @@ function draw(pid){
   const offs = (st.off || []);
   const cal = offs.length ? `<div class="offRow"><b>Days off</b>${offs.map((iso) => `<button type="button" class="offChip" data-a="cal" data-iso="${esc(iso)}" title="Shoot on this date again"${canEdit ? "" : " disabled"}>${esc(fmtDate(iso))} ✕</button>`).join("")}</div>` : "";
   const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit);
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}${flagSec}${locSec}
+  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${flagSec}${locSec}
     <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it" : "Drag scenes between days, or click one to move it"}. Saves for everyone as you go.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
 }
@@ -469,6 +509,7 @@ function wire(box, pid, ctx){
       const k = a.dataset.a;
       if(k !== "menu") S.menu = false;
       if(k === "menu"){ S.menu = !S.menu; render(pid); return; }
+      if(k === "dtab"){ S.dayTab[pid] = Number(a.dataset.i); render(pid); return; }
       if(k === "undo" || k === "redo"){ stepHist(pid, k === "undo"); return; }
       if(k === "warns"){ S.warnOpen = !S.warnOpen; render(pid); return; }
       if(k === "create"){ hub.createDocs(a); return; }
@@ -535,6 +576,7 @@ function wire(box, pid, ctx){
     if(S.menu && !e.target.closest(".ctlMenu")){ S.menu = false; render(pid); return; }
     if(sEl && canEdit){ S.pick = S.pick === sEl.dataset.sid ? null : sEl.dataset.sid; render(pid); }
   };
+  box.querySelectorAll("details.setWrap").forEach((d) => { d.ontoggle = () => { if(matchMedia("(max-width:760px)").matches) S.setOpen = d.open; }; });
   box.onchange = (e) => {
     const t = e.target; if(!canEdit) return;
     if(t.dataset.move){ moveScene(pid, t.dataset.move, Number(t.value), -1); S.pick = null; return; }
