@@ -18172,6 +18172,7 @@ function clearHighlights(){
   /* Blank-line caret: drawn by us so it can never go missing on an empty line */
   #blankCaret{ position:fixed; z-index:40; width:2px; border-radius:1px; pointer-events:none; animation: blankBlink 1.06s steps(1) infinite; }
   #blankCaret[hidden]{ display:none; }
+  body.ownCaret #scriptEditor, body.ownCaret #scriptEditor *{ caret-color: transparent !important; }
   @keyframes blankBlink{ 0%,58%{ opacity:1; } 59%,100%{ opacity:.14; } }
 
   /* Comment cards (hover + editor): docked beside the script, topic kept apart from resolve / delete */
@@ -18250,7 +18251,7 @@ function clearHighlights(){
   const isBlank = (el) => !(el.textContent || "").replace(/[\u200B\u00A0\s]/g, "") && !el.querySelector("br,img");
   function update(){
     raf = 0;
-    const hide = () => { bar.hidden = true; lastKey = ""; };
+    const hide = () => { bar.hidden = true; lastKey = ""; document.body.classList.remove("ownCaret"); };
     const sel = window.getSelection();
     if(!sel || !sel.rangeCount || !sel.isCollapsed) return hide();
     if(document.body.classList.contains("previewLock") || document.body.classList.contains("notesMode")) return hide();
@@ -18269,7 +18270,7 @@ function clearHighlights(){
     const h = Math.min(r.height, (parseFloat(cs.lineHeight) || r.height) * scale);
     const key = Math.round(x) + "," + Math.round(r.top);
     bar.style.left = x + "px"; bar.style.top = r.top + "px"; bar.style.height = h + "px"; bar.style.background = cs.color;
-    bar.hidden = false;
+    bar.hidden = false; document.body.classList.add("ownCaret");   // one caret only: ours on blank lines, the browser's otherwise
     if(key !== lastKey){ lastKey = key; bar.style.animation = "none"; void bar.offsetWidth; bar.style.animation = ""; }   // solid right after you move, then blinks
   }
   const later = () => { if(!raf) raf = requestAnimationFrame(update); };
@@ -18279,6 +18280,86 @@ function clearHighlights(){
   ed.addEventListener("input", later); ed.addEventListener("keyup", later); ed.addEventListener("mouseup", later);
   new MutationObserver(later).observe(ed, { childList: true, subtree: true, characterData: true });
   later();
+})();
+</script>
+<style>
+  /* Right-click quick menu (script): small, themed, closes on any action */
+  #qMenu{ position:fixed; z-index:9500; min-width:176px; padding:4px; border-radius:10px; background:var(--uiPanel); color:var(--uiText); border:1px solid var(--uiBorder); box-shadow:0 10px 28px rgba(0,0,0,.4); font:500 12.5px/1 Inter,system-ui,sans-serif; user-select:none; }
+  #qMenu[hidden]{ display:none; }
+  #qMenu .qRow{ display:flex; gap:2px; padding:2px; }
+  #qMenu .qRow button{ flex:1; height:26px; padding:0; }
+  #qMenu button{ font:inherit; color:inherit; background:none; border:0; border-radius:6px; cursor:pointer; text-align:left; }
+  #qMenu button:hover, #qMenu .qSub:hover > button{ background:rgba(128,128,128,.18); }
+  #qMenu .qRow button{ text-align:center; }
+  #qMenu .qItem{ display:block; width:100%; height:28px; padding:0 9px; }
+  #qMenu .qSep{ height:1px; margin:3px 4px; background:var(--uiBorder); }
+  #qMenu .qSub{ position:relative; }
+  #qMenu .qSub > button::after{ content:"›"; float:right; opacity:.55; }
+  #qMenu .qFly{ display:none; position:absolute; left:100%; top:-5px; margin-left:3px; min-width:150px; padding:4px; border-radius:10px; background:var(--uiPanel); border:1px solid var(--uiBorder); box-shadow:0 10px 28px rgba(0,0,0,.4); }
+  #qMenu .qSub:hover .qFly, #qMenu .qSub.open .qFly{ display:block; }
+  #qMenu.up .qFly{ top:auto; bottom:-5px; }
+  #qMenu.flip .qFly{ left:auto; right:100%; margin:0 3px 0 0; }
+  #qMenu .qFly button.on::before{ content:"✓ "; opacity:.8; }
+  #qMenu .qFly button:not(.on){ padding-left:calc(9px + 1.1em); }
+</style>
+<div id="qMenu" hidden role="menu">
+  <div class="qRow">
+    <button type="button" data-q="mBold" title="Bold"><b>B</b></button>
+    <button type="button" data-q="mItalic" title="Italic"><i>I</i></button>
+    <button type="button" data-q="mUnderline" title="Underline"><u>U</u></button>
+    <button type="button" data-q="mStrike" title="Strike"><s>S</s></button>
+  </div>
+  <div class="qSep"></div>
+  <button type="button" class="qItem" data-q="mCut">Cut</button>
+  <button type="button" class="qItem" data-q="mCopy">Copy</button>
+  <button type="button" class="qItem" data-q="mPaste">Paste</button>
+  <div class="qSep"></div>
+  <div class="qSub"><button type="button" class="qItem">Line type</button>
+    <div class="qFly">
+      <button type="button" class="qItem" data-t="scene">Scene heading</button>
+      <button type="button" class="qItem" data-t="action">Action</button>
+      <button type="button" class="qItem" data-t="character">Character</button>
+      <button type="button" class="qItem" data-t="dialogue">Dialogue</button>
+      <button type="button" class="qItem" data-t="parenthetical">Parenthetical</button>
+      <button type="button" class="qItem" data-t="transition">Transition</button>
+      <button type="button" class="qItem" data-t="dual">Dual dialogue</button>
+    </div>
+  </div>
+  <button type="button" class="qItem" data-q="mAddComment">Add comment</button>
+</div>
+<script>
+(function(){
+  const ed = document.getElementById("scriptEditor"), m = document.getElementById("qMenu");
+  if(!ed || !m) return;
+  const hide = () => { m.hidden = true; };
+  m.addEventListener("mousedown", (e) => e.preventDefault());   // keep the selection in the script
+  m.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if(!b) return;
+    if(b.parentElement.classList.contains("qSub")){ b.parentElement.classList.toggle("open"); return; }
+    const id = b.dataset.q, t = b.dataset.t;
+    hide();
+    if(id){ const el = document.getElementById(id); if(el) el.click(); }
+    else if(t){ const pill = document.querySelector('#typeButtons .pill[data-type="' + t + '"], .typeList .pill[data-type="' + t + '"]'); if(pill) pill.click(); }
+  });
+  ed.addEventListener("contextmenu", (e) => {
+    if(e.defaultPrevented) return;                                  // spelling / grammar menu already took it
+    if(e.target.closest && e.target.closest(".proof-miss,.proof-gram")) return;
+    try{ if(typeof __isNativeSpellMode === "function" && __isNativeSpellMode()) return; }catch(_e){}
+    if(document.body.classList.contains("previewLock")) return;
+    e.preventDefault();
+    const cur = (document.getElementById("typeSel") || {}).value;
+    m.querySelectorAll(".qFly button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
+    m.querySelector(".qSub").classList.remove("open");
+    m.hidden = false; m.classList.remove("flip"); m.classList.remove("up");
+    const w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(6, Math.min(e.clientX, innerWidth - w - 6)) + "px";
+    m.style.top = Math.max(6, Math.min(e.clientY, innerHeight - h - 6)) + "px";
+    if(parseFloat(m.style.left) + w + 160 > innerWidth) m.classList.add("flip");
+    if(parseFloat(m.style.top) + 300 > innerHeight) m.classList.add("up");
+  });
+  document.addEventListener("mousedown", (e) => { if(!m.hidden && !m.contains(e.target)) hide(); }, true);
+  document.addEventListener("keydown", (e) => { if(e.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, true); window.addEventListener("resize", hide); window.addEventListener("blur", hide);
 })();
 </script>
 </body>

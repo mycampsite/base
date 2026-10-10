@@ -595,6 +595,13 @@
     .el-image.empty{ background:transparent !important; border-color:transparent !important; outline:0 !important; }
     .el-image.loading{ animation:none; background:transparent; }
   }
+  /* Right-click quick menu: small, same look as the other pop-ups */
+  #cxMenu{ position:fixed; z-index:9500; min-width:164px; padding:4px; border-radius:10px; background:var(--uiPanel); color:var(--uiText); border:1px solid var(--uiBorder); box-shadow:0 10px 28px rgba(0,0,0,.4); font:500 12.5px/1 Inter,system-ui,sans-serif; user-select:none; }
+  #cxMenu[hidden]{ display:none; }
+  #cxMenu button{ display:block; width:100%; height:28px; padding:0 9px; text-align:left; font:inherit; color:inherit; background:none; border:0; border-radius:6px; cursor:pointer; }
+  #cxMenu button:hover{ background:rgba(128,128,128,.18); }
+  #cxMenu button.danger{ color:var(--err); }
+  #cxMenu .sep{ height:1px; margin:3px 4px; background:var(--uiBorder); }
 </style>
 </head>
 <body data-own-offline>
@@ -4854,6 +4861,52 @@
     dup:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/></svg>`,
     trash:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>`
   };
+
+
+  /* ---------------- Right-click quick menu ---------------- */
+  (function(){
+    const menu = document.createElement("div"); menu.id = "cxMenu"; menu.hidden = true; menu.setAttribute("role", "menu");
+    const file = document.createElement("input"); file.type = "file"; file.accept = "image/*"; file.hidden = true;
+    document.body.appendChild(menu); document.body.appendChild(file);
+    const hide = () => { menu.hidden = true; };
+    let target = null;
+    file.onchange = async () => { const f = file.files && file.files[0]; file.value = ""; if(!f || !target) return; const ids = await uploadFiles([f]); const t = findEl(target); if(ids[0] && t) setImage(t, ids[0]); };
+    const after = (el) => { renderStage(); if(el.t === "text" && autoGrow(el)){ markDirty(); renderStage(); } refreshCurThumb(); if(RTAB === "edit") renderRight(); };
+    const items = (el) => {
+      const a = [];
+      if(el.t === "text"){
+        const step = (d) => { const L = textLook(el, themeOf(curPage())), pt = el.size || Math.round(L.mm * 2.835 * 2) / 2; commit(() => { el.size = Math.max(4, Math.min(400, Math.round(pt + d * (pt >= 40 ? 4 : pt >= 16 ? 2 : 1)))); }, "Text size"); after(el); };
+        a.push(["Edit text", () => startEdit(el.id)], ["Bold", () => { toggleFormat(el, "b"); after(el); }], ["Bigger", () => step(1)], ["Smaller", () => step(-1)], null);
+      }else if(el.t === "image"){
+        a.push([el.img ? "Replace photo…" : "Add photo…", () => file.click()]);
+        if(el.img) a.push([CROPPING === el.id ? "Done repositioning" : "Reposition", () => { CROPPING = CROPPING === el.id ? null : el.id; if(CROPPING) focusOn(el, true); else unfocus(); renderStage(); renderRight(); }]);
+        a.push(null);
+      }
+      a.push(["Duplicate", () => dupEl(el)], ["Bring forward", () => arrange(el, "up")], ["Send back", () => arrange(el, "down")], null, ["Delete", () => delEl(el), "danger"]);
+      return a;
+    };
+    document.getElementById("stage").addEventListener("contextmenu", (e) => {
+      if(RO || EDITING) return;                                   // while typing keep the browser's own menu (spelling, paste)
+      const n = e.target.closest(".tpage .el"), el = n && findEl(n.dataset.id);
+      if(!el) return;
+      e.preventDefault();
+      target = el.id; if(SEL !== el.id) selectEl(el.id);
+      menu.innerHTML = "";
+      for(const it of items(el)){
+        if(!it){ const d = document.createElement("div"); d.className = "sep"; menu.appendChild(d); continue; }
+        const b = document.createElement("button"); b.type = "button"; b.textContent = it[0]; if(it[2]) b.className = it[2];
+        b.onclick = () => { hide(); it[1](); };
+        menu.appendChild(b);
+      }
+      menu.hidden = false;
+      menu.style.left = Math.max(6, Math.min(e.clientX, innerWidth - menu.offsetWidth - 6)) + "px";
+      menu.style.top = Math.max(6, Math.min(e.clientY, innerHeight - menu.offsetHeight - 6)) + "px";
+    });
+    document.addEventListener("pointerdown", (e) => { if(!menu.hidden && !menu.contains(e.target)) hide(); }, true);
+    document.addEventListener("keydown", (e) => { if(e.key === "Escape") hide(); });
+    window.addEventListener("scroll", hide, true); window.addEventListener("resize", hide); window.addEventListener("blur", hide);
+  })();
+
 
   boot();
 })();
