@@ -72,7 +72,7 @@
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms || 30000);
     try{
       const r = await fetch(url, Object.assign({ cache:"no-store", signal: ctl.signal }, opts || {}));
-      try{ return await r.json(); }catch(_e){ return { ok:false, error:"Drive's reply couldn't be read. Check the Apps Script is deployed." }; }
+      try{ return await r.json(); }catch(_e){ return { ok:false, transient:true, error:"Drive's reply couldn't be read. Check the Apps Script is deployed." }; }
     }catch(err){
       return { ok:false, network:true, error: err && err.name === "AbortError" ? "Drive took too long to answer." : "Couldn't reach Drive. Check your connection." };
     }finally{ clearTimeout(t); }

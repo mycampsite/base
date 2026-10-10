@@ -203,6 +203,8 @@
   .b3dRow{ display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px; font-size:12.5px; }
   .railBack{ width:100%; margin-bottom:12px; text-align:left; }
   .tbBack{ display:none; }
+  .sbHoldPill{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:9000; padding:8px 14px; border-radius:999px; background:rgba(30,30,30,.95); border:1px solid var(--border); color:#f2f0ec; font-size:12.5px; box-shadow:0 8px 24px rgba(0,0,0,.45); max-width:calc(100vw - 24px); text-align:center; }
+  body.sbHeld .card, body.sbHeld .scene-item, body.sbHeld #newSceneBtn{ cursor:progress; }
   /* Undo / Redo / Clear stay together; if the toolbar must wrap they move down as one group, right-aligned */
   .tbActs{ display:flex; gap:6px; margin-left:auto; }
   #toolbar > .grow{ display:none; }
@@ -1085,6 +1087,7 @@ window.SB3D={
   function showFatal(msg){
     const box = document.getElementById("loading");
     box.style.display = "flex";
+    const app = document.getElementById("app"); if(app) app.style.display = "none";   // (an instant-open board may be showing)
     box.innerHTML = `<div class="loadBox"><div style="color:#f2f0ec;font-size:14px">${escapeHtml(msg)}</div>
       <div class="row"><a class="btn" href="index.html">&larr; Library</a><button class="btn primary" type="button" id="retryBoot">Try again</button></div></div>`;
     document.getElementById("retryBoot").onclick = () => location.reload();
@@ -1241,12 +1244,18 @@ window.SB3D={
       const l = document.createElement("link"); l.rel = "preload"; l.as = "script"; l.href = LIVE_SDK + f; document.head.appendChild(l); } }catch(_e){}
     // The script and its shot list don't depend on each other: ask for both at once.
     const slEarly = S.fileId ? apiGet("shotlistdata", { fileId: S.fileId }) : null;
-    const loadRes = await apiGet("load", S.fileId ? { fileId: S.fileId } : { pid: r.pid });
-    if(!loadRes || loadRes.ok === false){ showFatal((loadRes && loadRes.error) || "Couldn't open that script."); return; }
-    S.fileId = loadRes.fileId || S.fileId;
-    S.title = (loadRes.doc && loadRes.doc.title && loadRes.doc.title.title) || String(loadRes.name || "").replace(/\.json$/i, "") || "Untitled Script";
-    S.roomKey = loadRes.live && loadRes.live.room || "";
-    S.prevRooms = (loadRes.live && Array.isArray(loadRes.live.prev)) ? loadRes.live.prev.filter((k) => k && k !== S.roomKey) : [];
+    const loadP = apiGet("load", S.fileId ? { fileId: S.fileId } : { pid: r.pid });
+    // Instant open: the board this device showed last time (title, live room, shot list) goes up straight
+    // away; the drawings come live from the shared board as usual. Drive is checked in the background.
+    const cached = sbCacheGet(S.fileId);
+    if(cached){
+      S.title = cached.title || "Untitled Script"; S.roomKey = cached.room || ""; S.prevRooms = cached.prev || [];
+    }else{
+      const loadRes = await loadP;
+      if(!loadRes || loadRes.ok === false){ showFatal((loadRes && loadRes.error) || "Couldn't open that script."); return; }
+      S.fileId = loadRes.fileId || S.fileId;
+      Object.assign(S, sbMetaOf(loadRes));
+    }
     document.getElementById("pageTitle").textContent = S.title + " — Storyboard";
     document.title = S.title + " · Storyboard — Camp";
     const hub = new URLSearchParams(location.search).get("hub");
@@ -1265,7 +1274,7 @@ window.SB3D={
       };
     }
 
-    const sl = (slEarly && S.fileId === r.fileId) ? await slEarly : await apiGet("shotlistdata", { fileId: S.fileId });
+    const sl = cached ? cached.sl : (slEarly && S.fileId === r.fileId) ? await slEarly : await apiGet("shotlistdata", { fileId: S.fileId });
     if(!sl || sl.ok === false){
       if(sl && sl.error && !sl.reason){ showFatal(sl.error); return; }
       showEmptyBoard(sl && sl.reason);
@@ -1308,6 +1317,100 @@ window.SB3D={
     renderLeftRailScenes();
     renderOverview();
     startShotlistWatch();
+    if(cached){ sbHold(true); sbConfirm(loadP, slEarly, cached); }
+    else sbCachePut({ title: S.title, room: S.roomKey, prev: S.prevRooms, sl });
+  }
+
+  /* ---------------- Instant open (this device's last copy of the board) ---------------- */
+  const SB_CACHE = "Camp_SB_CACHE_V1:";
+  function sbCacheGet(fileId){
+    if(!fileId) return null;
+    try{ const v = JSON.parse(localStorage.getItem(SB_CACHE + fileId) || "null"); return v && v.sl && Array.isArray(v.sl.shots) && Array.isArray(v.sl.scenes) ? v : null; }catch(_e){ return null; }
+  }
+  function sbCachePut(v){
+    if(!S.fileId || !v || !v.sl || !Array.isArray(v.sl.shots)) return;
+    try{ localStorage.setItem(SB_CACHE + S.fileId, JSON.stringify({ title: v.title, room: v.room, prev: v.prev || [], sl: { ok: true, scenes: v.sl.scenes || [], shots: v.sl.shots || [] }, at: Date.now() })); }catch(_e){}
+  }
+  // Until Drive confirms the shot list, the board is look-only: shots are numbered by position, so acting on
+  // an out-of-date list could edit or draw on the wrong shot. Scrolling still works; taps, drags, drawing and keys wait.
+  let __sbHeld = false, __sbHoldMsg = "Checking for changes…";
+  function sbHoldBlock(e){
+    if(!__sbHeld) return;
+    const t = e.target;
+    if(t && t.closest && (t.closest("#backLink") || t.closest("#scriptLink") || t.closest("#loading"))) return;   // leaving is fine
+    if(e.type === "keydown" && (e.key === "Tab" || /^(Arrow|Page|Home|End)/.test(e.key))) return;
+    e.preventDefault(); e.stopPropagation();
+    if(e.type !== "keydown") sbHoldPill(true);
+  }
+  function sbHoldPill(on){
+    let p = document.getElementById("sbHoldPill");
+    if(on && __sbHeld){
+      if(!p){ p = document.createElement("div"); p.id = "sbHoldPill"; p.className = "sbHoldPill"; p.setAttribute("role", "status"); document.body.appendChild(p); }
+      p.textContent = __sbHoldMsg;
+    }else if(p) p.remove();
+  }
+  function sbHold(on, msg){
+    if(msg) __sbHoldMsg = msg;
+    if(on && !__sbHeld){ ["pointerdown", "mousedown", "touchstart", "click", "dblclick", "keydown", "dragstart"].forEach((t) => document.addEventListener(t, sbHoldBlock, true)); }
+    if(!on && __sbHeld){ ["pointerdown", "mousedown", "touchstart", "click", "dblclick", "keydown", "dragstart"].forEach((t) => document.removeEventListener(t, sbHoldBlock, true)); }
+    __sbHeld = !!on;
+    document.body.classList.toggle("sbHeld", __sbHeld);
+    sbHoldPill(__sbHeld && !!msg);
+  }
+  function sbMetaOf(res){
+    const title = (res.doc && res.doc.title && res.doc.title.title) || String(res.name || "").replace(/\.json$/i, "") || "Untitled Script";
+    const room = res.live && res.live.room || "";
+    const prev = (res.live && Array.isArray(res.live.prev)) ? res.live.prev.filter((k) => k && k !== room) : [];
+    return { title, roomKey: room, prevRooms: prev };
+  }
+  // After an instant open: check Drive. Same room → just bring the shot list up to date if it changed.
+  // Different room (the script was re-shared) → reload once so drawings come from the right board.
+  async function sbConfirm(loadP, slP, cached){
+    let res = null;
+    try{ res = await loadP; }catch(_e){ res = null; }
+    const transient = (x) => !x || (x.ok === false && (x.network || x.transient));   // connection trouble, not a real answer
+    if(transient(res)){
+      // Drive unreachable: still take a fresh shot list if that request got through
+      let sl = null; try{ sl = slP ? await slP : null; }catch(_e){ sl = null; }
+      if(sl && sl.ok !== false && Array.isArray(sl.shots)){ adoptShotlist(sl); sbCachePut({ title: S.title, room: S.roomKey, prev: S.prevRooms, sl }); sbHold(false); return; }
+      sbHold(true, "Couldn't reach Drive: this is the copy on this device (look only). Reload to try again.");
+      setStatus("Couldn't reach Drive: showing the board from this device.");
+      return;
+    }
+    if(res.ok === false){
+      try{ localStorage.removeItem(SB_CACHE + S.fileId); }catch(_e){}
+      showFatal(res.error || "Couldn't open that script.");
+      return;
+    }
+    const m = sbMetaOf(res);
+    if(m.roomKey !== (cached.room || "")){
+      sbCachePut({ title: m.title, room: m.roomKey, prev: m.prevRooms, sl: cached.sl });
+      let again = false; try{ again = sessionStorage.getItem("Camp_SB_RELOADED") === S.fileId; sessionStorage.setItem("Camp_SB_RELOADED", S.fileId); }catch(_e){}
+      // Second time round (the copy couldn't be updated, e.g. storage full): drop it and open fresh
+      if(again){ try{ localStorage.removeItem(SB_CACHE + S.fileId); sessionStorage.removeItem("Camp_SB_RELOADED"); }catch(_e){} }
+      location.reload(); return;
+    }
+    try{ sessionStorage.removeItem("Camp_SB_RELOADED"); }catch(_e){}
+    if(m.title !== S.title){
+      S.title = m.title;
+      document.getElementById("pageTitle").textContent = S.title + " — Storyboard";
+      document.title = S.title + " · Storyboard — Camp";
+    }
+    let sl = null;
+    try{ sl = slP ? await slP : null; }catch(_e){ sl = null; }
+    if(sl && sl.ok !== false && Array.isArray(sl.shots)){
+      adoptShotlist(sl);
+      sbCachePut({ title: S.title, room: S.roomKey, prev: S.prevRooms, sl });
+      sbHold(false);
+    }else if(transient(sl)){
+      // the first shot-list request failed: ask once more before allowing changes
+      let sl2 = null; try{ sl2 = await apiGet("shotlistdata", { fileId: S.fileId }); }catch(_e){ sl2 = null; }
+      if(sl2 && sl2.ok !== false && Array.isArray(sl2.shots)){ adoptShotlist(sl2); sbCachePut({ title: S.title, room: S.roomKey, prev: S.prevRooms, sl: sl2 }); sbHold(false); }
+      else sbHold(true, "Couldn't load the latest Shot List: this is the copy on this device (look only). Reload to try again.");
+    }else if(sl && sl.ok === false && (sl.reason || sl.error)){
+      try{ localStorage.removeItem(SB_CACHE + S.fileId); }catch(_e){}
+      location.reload();   // the shot list is gone: start again without the copy
+    }
   }
 
   function showEmptyBoard(reason){
@@ -2785,13 +2888,21 @@ window.SB3D={
     document.addEventListener("visibilitychange", () => { if(!document.hidden) refreshShotlist(false); });
   }
   async function refreshShotlist(force){
-    if(__slBusy || document.hidden || !S.fileId) return;
+    if(__slBusy || __sbHeld || document.hidden || !S.fileId) return;
     if(!force && Date.now() - __slLast < 5000) return;
     if(__dragShot || document.querySelector(".modalShade")) return;
     __slBusy = true; __slLast = Date.now();
     try{
       const sl = await apiGet("shotlistdata", { fileId: S.fileId });
       if(!sl || sl.ok === false || !Array.isArray(sl.shots)) return;
+      if(adoptShotlist(sl)) sbCachePut({ title: S.title, room: S.roomKey, prev: S.prevRooms, sl });
+    }catch(_e){
+    }finally{ __slBusy = false; }
+  }
+  // Bring the board up to date with a fresh shot list (keeps edits still on their way to the Sheet).
+  // Returns true if anything changed.
+  function adoptShotlist(sl){
+    {
       const now = Date.now();
       Object.keys(__pendingEdits).forEach((k) => {
         const pe = __pendingEdits[k];
@@ -2800,7 +2911,7 @@ window.SB3D={
         const sh = sl.shots.find((x) => x.key === key); if(sh) sh[field] = pe.v;
       });
       const sig = shotlistSig(sl);
-      if(sig === __slSig) return;
+      if(sig === __slSig) return false;
       __slSig = sig;
       const before = S.shots.find((x) => x.key === S.curShotKey);
       const camBefore = before ? { size: before.size || "", angle: before.angle || "", lens: before.lens || "" } : null;
@@ -2811,15 +2922,15 @@ window.SB3D={
         const g2 = document.getElementById("gridScroll"); if(g2) g2.scrollTop = top;
       }else if(S.view === "focus"){
         const cur = S.shots.find((x) => x.key === S.curShotKey);
-        if(!cur){ notify("This shot was removed from the Shot List."); goToOverview(); return; }
+        if(!cur){ notify("This shot was removed from the Shot List."); goToOverview(); return true; }
         refreshShotDetails(cur); sheetShotTag();
         updateShotNav();
         if(window.SB3D && SB3D.loaded() && SB3D.isMounted()) SB3D.setCast(boardCast());
         if(camBefore && ["size","angle","lens"].some((f) => camBefore[f] !== (cur[f] || ""))) sheetToCamera(cur);
       }
       setStatus("Updated from the Shot List · " + new Date().toLocaleTimeString());
-    }catch(_e){
-    }finally{ __slBusy = false; }
+      return true;
+    }
   }
   // Updates the open shot's detail fields in place (never the one you're typing in) and points
   // their save handlers at the fresh shot record.

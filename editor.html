@@ -509,6 +509,8 @@
   .liveFace:first-child{ margin-left:0; }
   .liveFace.more{ background:#3a3b40; }
   .liveFace:hover{ transform:translateY(-1px); }
+  .previewPill{ background:rgba(30,30,30,.94) !important; }
+  body.previewLock #scriptEditor, body.previewLock .titleField{ caret-color:transparent; }
   .roBanner{ position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:9000; display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:999px; background:rgba(28,40,64,.94); color:#fff; font:13px/1.3 Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; box-shadow:0 8px 24px rgba(0,0,0,.35); pointer-events:none; }
   .roBanner svg{ width:14px; height:14px; }
   .livePill{ display:inline-flex; align-items:center; gap:7px; }
@@ -10619,17 +10621,37 @@ function getPreferredCloudName_(doc, route){
     }
   }
 
+  // Big saves go gzip-compressed (about 8x smaller to upload) once the server says it can read them
+  async function __gzipB64(text){
+    const cs = new CompressionStream("gzip");
+    const buf = await new Response(new Blob([text]).stream().pipeThrough(cs)).arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let bin = "";
+    for(let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  async function __saveBody(payload){
+    const plain = JSON.stringify(Object.assign({ key: getCloudKey() }, payload || {}));
+    if(!(__cloud && __cloud.gz) || typeof CompressionStream !== "function" || plain.length < 16000) return plain;
+    try{
+      const rest = Object.assign({}, payload || {}); const action = rest.action; delete rest.action;
+      const gz = await __gzipB64(JSON.stringify(rest));
+      return gz.length < plain.length ? JSON.stringify({ key: getCloudKey(), action, gz }) : plain;
+    }catch(_e){ return plain; }
+  }
+
   async function driveSaveDoc_(endpoint, payload){
   const ep = normalizeEndpoint(endpoint);
   if(!ep) throw new Error("Cloud URL not set.");
   
+  const body = await __saveBody(payload);
   const ctl = new AbortController();
   const t = setTimeout(()=>ctl.abort(), 20000);
   try{
     const r = await fetch(ep, {
       method:"POST",
       headers: { "Content-Type":"text/plain;charset=UTF-8" },
-      body: JSON.stringify(Object.assign({ key: getCloudKey() }, payload || {})),
+      body,
       cache:"no-store",
       signal: ctl.signal
     });
@@ -11084,6 +11106,22 @@ async function __handleConflict(source, d, name){
   return true;
 }
 
+  // What decides whether two versions look the same (text, title page, page setup)
+  function __previewSig(d){
+    try{ return JSON.stringify(Object.assign({}, d, { meta: null })); }catch(_e){ return "x" + Math.random(); }   // everything except the save stamp
+  }
+  // Read-only while Drive is checked (or when Drive can't be reached)
+  function __previewLock(on, text){
+    const ids = ["scriptEditor", "tp_title", "tp_writtenby", "tp_name", "tp_contact", "notesEditor"];
+    ids.forEach((id) => { const el = document.getElementById(id); if(el) el.setAttribute("contenteditable", on ? "false" : "true"); });
+    document.body.classList.toggle("previewLock", !!on);
+    let pill = document.getElementById("previewPill");
+    if(on){
+      if(!pill){ pill = document.createElement("div"); pill.id = "previewPill"; pill.className = "roBanner previewPill"; document.body.appendChild(pill); }
+      pill.textContent = text || "Checking Drive for the latest version…";
+    }else if(pill) pill.remove();
+  }
+
   async function bootLoadFromCloudIfNeeded_(){
     const route = getEditorRoute_();
 
@@ -11125,10 +11163,30 @@ async function __handleConflict(source, d, name){
       return false;
     }
 
-// Always load the latest version from Drive (the old "quick copy" could show an outdated version).
+// Instant open: show the copy this device saved last time straight away, read-only, while Drive is
+// checked. Nothing can be typed or saved until Drive answers; then the Drive version is what you edit
+// (it replaces the preview only if it's different, so usually nothing even moves).
+let __preview = null;
+try{
+  if(route.fileId && !lsGetRaw(__unsyncKey())){
+    // Only this script's own copy (never another script's, never the old shared keys)
+    const loc = JSON.parse(lsGetRaw(STORAGE_KEY_V2) || "null");
+    const fid = loc && loc.meta && loc.meta.fileId;
+    if(loc && Array.isArray(loc.lines) && loc.lines.length && fid && fid === route.fileId){
+      __cloudBlocked = true;                       // no autosave of the preview, ever
+      applyDocSettings(loc);
+      renderFromDoc(loc);
+      __previewLock(true);
+      __preview = __previewSig(loc);
+      __autosaveDirty = false;                     // anything that changes the page from here on forces a fresh render from Drive
+    }
+  }
+}catch(_e){ __preview = null; __previewLock(false); __cloudBlocked = false; }
+
+// Always load the latest version from Drive (the preview above is only for looking at).
 setStatus("Loading from Drive...");
 try {
-  bootLoading(true, "Loading script…");
+  if(!__preview) bootLoading(true, "Loading script…");
   let payload = await driveLoadDoc_(__cloud.endpoint, route);
   // Locked: ask for the password, then try again
   for(let i = 0; i < 4 && payload && payload.auth === false; i++){
@@ -11163,18 +11221,25 @@ try {
   doc.meta.pid = doc.meta.pid || __cloud.pid || "";
   if(!doc.meta.createdAt) doc.meta.createdAt = new Date().toISOString();
   __cloud.lastKnownRemoteRev = doc.meta.rev;
+  __cloud.gz = Number(payload && payload.server || 0) >= 23;   // this server reads compressed saves
 
       // If backend returns fileId, keep it
       const id = extractFileIdFromPayload_(payload) || __cloud.fileId;
       if(id) __cloud.fileId = id;
 
-      // Apply and snapshot clean state
+      // Apply and snapshot clean state (if the preview already shows exactly this, leave the page as it is)
       undoStack = [];
       redoStack = [];
+      const keepY = window.scrollY;
+      const same = __preview && !__autosaveDirty && __preview === __previewSig(doc);
       applyDocSettings(doc);
-      renderFromDoc(doc);
+      if(!same){ renderFromDoc(doc); if(__preview) window.scrollTo(window.scrollX, keepY); }
+      else { try{ DOC = doc; __docSyncDirty = false; if(!DOC.meta) DOC.meta = {}; }catch(_e){} }
+      if(__preview){ __cloudBlocked = false; __previewLock(false); __preview = null; }
       snapshot("drive-open");
       __autosaveDirty = false;
+      // Remember this Drive version on this device, for the next instant open
+      try{ if(!lsGetRaw(__unsyncKey())) lsSet(STORAGE_KEY_V2, JSON.stringify(doc)); }catch(_e){}
       setStatus("Loaded from Drive.");
       try{ setTimeout(() => { if(window.__scriptyReadOnly) __applyReadOnly(); else __liveCheck(payload); }, 60); }catch(_e){}
       setTimeout(() => { try{ __checkOfflineLeftovers(doc); }catch(_e){} }, 600);
@@ -11191,7 +11256,19 @@ try {
       __cloudBlocked = true;
       updateSaveState();
       setStatus("Drive open failed: " + msg);
-      showSaveToast("err", "Couldn't open this script: " + msg + " — nothing will be saved over it. Go back to the Library and try again.", 10000);
+      if(__preview && !__isNetErr(msg)){
+        // A real "no" from Drive (private, wrong password, removed): don't keep showing this device's copy
+        try{ lsRemove(STORAGE_KEY_V2); }catch(_e){}
+        try{ const ed = document.getElementById("scriptEditor"); if(ed) ed.innerHTML = ""; ["tp_title","tp_writtenby","tp_name","tp_contact"].forEach((id) => { const el = document.getElementById(id); if(el) el.textContent = ""; }); }catch(_e){}
+        __previewLock(true, "Couldn't open this script");
+        showSaveToast("err", "Couldn't open this script: " + msg + " — nothing will be saved over it. Go back to the Library and try again.", 10000);
+      }else if(__preview){
+        // The copy on this device stays on screen to read, but nothing can be typed or saved
+        __previewLock(true, "Showing the copy on this device (read only): couldn't reach Drive");
+        showSaveToast("err", "Couldn't reach Drive: " + msg + ". You're looking at the copy saved on this device; reopen the script to edit.", 10000);
+      }else{
+        showSaveToast("err", "Couldn't open this script: " + msg + " — nothing will be saved over it. Go back to the Library and try again.", 10000);
+      }
       return true; // stop boot (don't load a local draft into this file)
     }
   }

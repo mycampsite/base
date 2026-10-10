@@ -329,7 +329,10 @@ function budgetAnalyze_(doc) {
   const addFlag = function (id, s, word) {
     const f = flagById[id]; if (!f) return;
     if (f.scenes.indexOf(s.n) < 0) { f.scenes.push(s.n); f.eighths += s.eighths; }
-    if (word) { const w = String(word).toLowerCase().replace(/\s+/g, " "); f.words[w] = (f.words[w] || 0) + 1; }
+    if (word) {
+      const w = String(word).toLowerCase().replace(/\s+/g, " "); f.words[w] = (f.words[w] || 0) + 1;
+      const fw = s.fw = s.fw || {}; if (!fw[id]) fw[id] = []; if (fw[id].indexOf(w) < 0) fw[id].push(w);   // which words, per scene
+    }
     if (s.flags.indexOf(id) < 0) s.flags.push(id);
   };
   scenes.forEach(function (s) {
@@ -411,7 +414,7 @@ function budgetAnalyze_(doc) {
     if (c.age != null && c.age < 18) notes.push("Minor (age " + c.age + ")");
     if (c.voLines && onCam.length) notes.push("Also has voice-over");
     return { name: c.name, type: type, scenes: onCam.length ? onCam : all, onCamCount: onCam.length, lines: c.lines, words: c.words, eighths: eighths,
-      first: all.length ? all[0] : 0, note: notes.join("; "), minor: c.age != null && c.age < 18 };
+      first: all.length ? all[0] : 0, note: notes.join("; "), minor: c.age != null && c.age < 18, age: c.age != null ? c.age : null };
   });
   // Non-speaking featured roles: introduced as NAME (30s) in action but never speak
   const speaking = {}; cast.forEach(function (c) { speaking[c.name] = true; });
@@ -428,7 +431,7 @@ function budgetAnalyze_(doc) {
     const sEighths = seen.reduce(function (a, n) { return a + (scenes[n - 1] ? scenes[n - 1].eighths : 0); }, 0);
     seen.forEach(function (n) { const sc = scenes[n - 1]; if (sc && !sc.castSeen[nm]) { sc.castSeen[nm] = true; sc.cast.push(nm); } });
     cast.push({ name: nm, type: "Featured (non-speaking)", scenes: seen, onCamCount: seen.length, lines: 0, words: 0, eighths: sEighths || 1, first: it.scene,
-      note: minor ? "Minor (age " + it.age + ")" : "", minor: minor });
+      note: minor ? "Minor (age " + it.age + ")" : "", minor: minor, age: it.age != null ? it.age : null });
     speaking[nm] = true;
   });
   const typeOrder = { "Lead": 0, "Supporting": 1, "Day player": 2, "Featured (non-speaking)": 3, "Voice only": 4 };
@@ -467,7 +470,7 @@ function budgetAnalyze_(doc) {
 
   return {
     title: title, writer: writer, pageSize: pageSize,
-    scenes: scenes.map(function (s) { return { n: s.n, id: s.id, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, dn: s.dn, eighths: s.eighths, cast: s.cast, bg: s.bg, flags: s.flags, syn: bgOneLiner_(s.action) }; }),
+    scenes: scenes.map(function (s) { return { n: s.n, id: s.id, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, dn: s.dn, eighths: s.eighths, cast: s.cast, bg: s.bg, flags: s.flags, fw: s.fw || {}, syn: bgOneLiner_(s.action) }; }),
     cast: cast, locs: locs, flags: flags,
     totals: { eighths: scenes.reduce(function (a, s) { return a + s.eighths; }, 0), scenes: scenes.length }
   };
