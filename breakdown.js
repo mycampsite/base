@@ -217,8 +217,14 @@ function bgKidCue_(name) {
   return m ? m[1].toLowerCase() : null;
 }
 
-function budgetAnalyze_(doc) {
+// opts (from the Production plan, optional):
+//   locs:  { "KITCHEN": "HOUSE" }  rooms that are part of one real location
+//   flags: { "weapons": "ignore", "drone@<sceneId>": "keep", "stunts": "watch" }  keep / watch / ignore, for a flag
+//          everywhere or for one scene (a scene's own choice wins)
+function budgetAnalyze_(doc, opts) {
   doc = (doc && typeof doc === "object") ? doc : {};
+  opts = (opts && typeof opts === "object") ? opts : {};
+  const LOCMERGE = opts.locs || {}, FSTAT = opts.flags || {};
   const lines = Array.isArray(doc.lines) ? doc.lines : [];
   const W = BG_COLS_;
   const scenes = [];
@@ -501,7 +507,37 @@ function budgetAnalyze_(doc) {
   const typeOrder = { "Lead": 0, "Supporting": 1, "Day player": 2, "Featured (non-speaking)": 3, "Voice only": 4 };
   cast.sort(function (a, b) { return (typeOrder[a.type] - typeOrder[b.type]) || (b.words - a.words) || (a.first - b.first); });
   // Minors from the cast list count as child scenes
+  // A "possible minor" (no age given) is dropped when you ignore the children flag everywhere
+  if (FSTAT.minors === "ignore") cast.forEach(function (c) {
+    if (!c.minorHint) return;
+    c.minor = false; c.minorHint = false; c.note = String(c.note || "").split("; ").filter(function (x) { return !/^Possible minor/.test(x); }).join("; ");
+  });
   cast.forEach(function (c) { if (c.minor) c.scenes.forEach(function (n) { if (scenes[n - 1]) addFlag("minors", scenes[n - 1], "character " + c.name + (c.minorHint ? " may be under 18" : " is under 18")); }); });
+
+  // Flag decisions: "ignore" takes a flag off (one scene or everywhere), "watch" keeps it but marks it to check
+  const flagState = function (id, s) { return FSTAT[id + "@" + (s.id || ("n" + s.n))] || FSTAT[id] || ""; };
+  const ignoredBy = {}, watchedBy = {};
+  flagDefs.forEach(function (f) {
+    const id = f.def.id; ignoredBy[id] = []; watchedBy[id] = [];
+    f.scenes = f.scenes.filter(function (n) {
+      const s = scenes[n - 1], st = s ? flagState(id, s) : "";
+      if (st === "ignore") {
+        ignoredBy[id].push(n); f.eighths -= s.eighths;
+        s.flags = s.flags.filter(function (x) { return x !== id; }); if (s.fw) delete s.fw[id];
+        return false;
+      }
+      if (st === "watch") watchedBy[id].push(n);
+      return true;
+    });
+  });
+
+  // Locations you've said are one place ("KITCHEN" is in the "HOUSE"): the room becomes a set of it
+  scenes.forEach(function (s) {
+    s.oloc = s.loc;
+    const to = LOCMERGE[s.loc]; if (!to || to === s.loc) return;
+    const sub = s.set && s.set !== s.loc ? s.set : s.loc;
+    s.loc = to; s.set = sub.indexOf(to + " - ") === 0 ? sub : to + " - " + sub;
+  });
 
   // ---- Locations ----
   const locMap = {};
@@ -523,7 +559,8 @@ function budgetAnalyze_(doc) {
 
   const flags = flagDefs.map(function (f) {
     const words = Object.keys(f.words).sort(function (a, b) { return f.words[b] - f.words[a]; }).slice(0, 8);
-    return { id: f.def.id, label: f.def.label, use: f.def.use, scenes: f.scenes.sort(function (a, b) { return a - b; }), eighths: f.eighths, words: words };
+    return { id: f.def.id, label: f.def.label, use: f.def.use, scenes: f.scenes.sort(function (a, b) { return a - b; }), eighths: f.eighths, words: words,
+      ignored: ignoredBy[f.def.id] || [], watch: watchedBy[f.def.id] || [] };
   });
 
   let title = "";
@@ -534,7 +571,7 @@ function budgetAnalyze_(doc) {
 
   return {
     title: title, writer: writer, pageSize: pageSize,
-    scenes: scenes.map(function (s) { return { n: s.n, id: s.id, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, dn: s.dn, eighths: s.eighths, cast: s.cast, bg: s.bg, flags: s.flags, fw: s.fw || {}, syn: bgOneLiner_(s.action) }; }),
+    scenes: scenes.map(function (s) { return { n: s.n, id: s.id, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, oloc: s.oloc || s.loc, dn: s.dn, eighths: s.eighths, cast: s.cast, bg: s.bg, flags: s.flags, fw: s.fw || {}, syn: bgOneLiner_(s.action) }; }),
     cast: cast, locs: locs, flags: flags,
     totals: { eighths: scenes.reduce(function (a, s) { return a + s.eighths; }, 0), scenes: scenes.length }
   };

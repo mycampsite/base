@@ -170,5 +170,25 @@ test("child cues (LITTLE GIRL) count, GIRLFRIEND does not", () => {
   assert.ok(!r.cast.filter((c) => c.name === "GIRLFRIEND")[0].minor);
 });
 
+test("plan choices: ignore a flag everywhere or for one scene, watch one, merge rooms into a location", () => {
+  const d = doc([
+    ["scene", "INT. KITCHEN - DAY"], ["action", "JO pulls a gun from the drawer."],
+    ["scene", "INT. LOUNGE - NIGHT"], ["action", "JO waves the gun at the TV."],
+    ["scene", "EXT. PARK - DAY"], ["action", "A drone hovers. JO fires the gun."]
+  ], 3);
+  const base = B.analyze(d), w0 = base.flags.find((f) => f.id === "weapons");
+  assert.deepStrictEqual(w0.scenes, [1, 2, 3]);
+  const sid = (n) => base.scenes[n - 1].id || ("n" + n);
+  const r = B.analyze(d, { flags: { weapons: "ignore", ["weapons@" + sid(3)]: "keep", drone: "watch" }, locs: { KITCHEN: "HOUSE", LOUNGE: "HOUSE" } });
+  const w = r.flags.find((f) => f.id === "weapons"), dr = r.flags.find((f) => f.id === "drone");
+  assert.deepStrictEqual(w.scenes, [3]);                       // ignored everywhere except the scene kept by hand
+  assert.deepStrictEqual(w.ignored, [1, 2]);
+  assert.ok(r.scenes[0].flags.indexOf("weapons") < 0 && r.scenes[2].flags.indexOf("weapons") >= 0);
+  assert.deepStrictEqual(dr.scenes, [3]); assert.deepStrictEqual(dr.watch, [3]);
+  assert.deepStrictEqual(r.locs.map((l) => l.name).sort(), ["HOUSE", "PARK"]);
+  assert.strictEqual(r.scenes[0].set, "HOUSE - KITCHEN"); assert.strictEqual(r.scenes[0].oloc, "KITCHEN");
+  assert.deepStrictEqual(r.locs.find((l) => l.name === "HOUSE").sets.sort(), ["KITCHEN", "LOUNGE"]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

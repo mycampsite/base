@@ -82,9 +82,21 @@ function normalize(plan){
   days.forEach((d) => { d.scenes = d.scenes.filter((id) => !seen.has(id) && seen.add(id)); });
   // `known` = every scene id the plan has already seen, so a scene added to the script later is spotted as new
   const out = { v: 1, scriptId: String(plan.scriptId || ""), settings, days, known: arr(plan.known).map(String) };
+  // rooms merged into one location, and keep / watch / ignore choices for script flags
+  // (lists, not maps: location names can hold characters the database won't take as keys)
+  out.locMerge = arr(plan.locMerge).filter((m) => m && m.from && m.to && m.from !== m.to).map((m) => ({ from: String(m.from), to: String(m.to) }));
+  out.flagStatus = arr(plan.flagStatus).filter((f) => f && f.id && /^(keep|watch|ignore)$/.test(f.s)).map((f) => ({ id: String(f.id), scene: f.scene ? String(f.scene) : "", s: f.s }));
   // links to the call sheets made by the last Sync (kept as they are)
   if(plan.callsheets && typeof plan.callsheets === "object") out.callsheets = plan.callsheets;
   return out;
+}
+
+// The plan's choices in the shape breakdown.js takes: analyze(doc, analyzeOpts(plan))
+function analyzeOpts(plan){
+  const locs = {}, flags = {};
+  (plan && plan.locMerge || []).forEach((m) => { locs[m.from] = m.to; });
+  (plan && plan.flagStatus || []).forEach((f) => { flags[f.id + (f.scene ? "@" + f.scene : "")] = f.s; });
+  return { locs, flags };
 }
 
 // Changing the number of shoot days. Scenes on days that are removed go back to Unscheduled
@@ -221,6 +233,6 @@ function validate(plan, breakdown){
   return out;
 }
 
-const api = { DEFAULTS, MAX_DAYS, fmtEighths, parseISO, shootDates, planDates, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate };
+const api = { DEFAULTS, MAX_DAYS, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);

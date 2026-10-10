@@ -132,6 +132,23 @@ const css = `
 .moveBar{ position:sticky; left:0; display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; padding:8px 10px; border-radius:10px; background:#202634; border:1px solid rgba(91,140,255,.35); font-size:12.5px; }
 .moveBar select{ height:30px; border-radius:8px; border:1px solid var(--uiBorder); background:#111; padding:0 8px; }
 .dood{ margin-top:12px; border:1px solid var(--uiBorder); border-radius:12px; overflow:hidden; }
+.fx .fxNote{ padding:0 12px 10px; font-size:12px; color:var(--uiMuted); line-height:1.5; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.fxRow{ display:flex; align-items:center; gap:12px; padding:8px 12px; border-top:1px solid var(--uiBorder); flex-wrap:wrap; }
+.fxRow.ign .fxName b{ text-decoration:line-through; opacity:.6; }
+.fxRow.wat .fxName b::after{ content:" · watching"; color:#f1c76b; font-weight:600; font-size:11.5px; }
+.fxName{ flex:1 1 240px; min-width:0; display:flex; flex-direction:column; gap:2px; font-size:12.5px; }
+.fxName span{ color:var(--uiMuted); font-size:11.5px; }
+.fxScenes{ display:flex; gap:4px; flex-wrap:wrap; flex:1 1 200px; }
+.fxSc{ border:1px solid var(--uiBorder); background:rgba(255,255,255,.05); border-radius:7px; padding:2px 7px; font-size:11.5px; cursor:pointer; }
+.fxSc:hover:not(:disabled){ border-color:rgba(255,255,255,.4); }
+.fxSc.off{ text-decoration:line-through; opacity:.5; }
+.fxSeg{ display:inline-flex; gap:2px; padding:2px; border-radius:9px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); }
+.fxSeg button{ border:0; background:none; border-radius:7px; padding:4px 10px; font-size:12px; font-weight:600; color:rgba(255,255,255,.6); cursor:pointer; }
+.fxSeg button.on{ background:rgba(255,255,255,.14); color:#fff; }
+.fxRow.ign .fxSeg button.on{ background:rgba(255,139,131,.25); color:#ffb4ae; }
+.fxRow.wat .fxSeg button.on{ background:rgba(241,199,107,.22); color:#f1c76b; }
+.fxIn{ display:flex; gap:8px; align-items:center; font-size:12px; color:var(--uiMuted); }
+.fxIn select{ height:30px; border-radius:8px; border:1px solid var(--uiBorder); background:#111; padding:0 8px; }
 .dood summary{ cursor:pointer; padding:9px 12px; font-weight:700; font-size:13px; }
 .doodWrap{ overflow-x:auto; }
 .dood table{ border-collapse:collapse; font-size:12px; min-width:100%; }
@@ -169,12 +186,12 @@ const H = () => window.__CampHub;
 async function loadScript(id, force){
   const hub = H(), cur = S.scripts[id], mod = hub.scriptModified(id);
   if(cur && !force && (cur.state === "loading" || (cur.state === "ok" && cur.modified === mod))) return;
-  S.scripts[id] = { state: "loading", bd: cur && cur.bd, modified: mod };
+  S.scripts[id] = { state: "loading", bd: cur && cur.bd, doc: cur && cur.doc, akey: cur && cur.akey, modified: mod };
   rerender();
   try{
     const res = await hub.ripGet({ action: "load", fileId: id });
     if(!res || res.ok === false || !res.doc) throw new Error((res && res.error) || "Couldn't read the script.");
-    S.scripts[id] = { state: "ok", bd: B.analyze(res.doc), modified: mod, at: Date.now() };
+    S.scripts[id] = { state: "ok", doc: res.doc, bd: B.analyze(res.doc), akey: null, modified: mod, at: Date.now() };
   }catch(err){
     S.scripts[id] = { state: "error", err: (err && err.message) || String(err), bd: cur && cur.bd, modified: mod };
   }
@@ -235,6 +252,9 @@ function render(pid){
   const modNow = hub.scriptModified(scriptId);
   if(sc.state === "ok" && modNow && sc.modified && sc.modified !== modNow) loadScript(scriptId);
   else if(sc.state === "ok" && modNow && !sc.modified) sc.modified = modNow;   // library details arrived after we read the script
+  // the plan's flag and location choices shape the breakdown everywhere (re-read when they change)
+  const aopts = P.analyzeOpts(plan), akey = JSON.stringify(aopts);
+  if(sc.doc && sc.akey !== akey){ sc.bd = B.analyze(sc.doc, aopts); sc.akey = akey; }
   const bd = sc.bd, byId = P.sceneMap(bd); S.lastBd = bd;
 
   // No plan yet: one click starts it from the script
@@ -340,9 +360,45 @@ function render(pid){
     </table></div></details>`;
 
   const cal = calendar(pl, dates, canEdit);
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}
+  const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit);
+  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}${flagSec}${locSec}
     <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it to another day" : "Drag scenes between days (or click a scene to move it)"}. Changes save for the whole team straight away.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
+}
+
+/* ---------- script flags: keep / watch / ignore, for a flag everywhere or one scene ---------- */
+const FLAGS_KEY = "Camp_PROD_FLAGS_OPEN_V1", LOCS_KEY = "Camp_PROD_LOCS_OPEN_V1";
+function flagsView(pl, bd, canEdit){
+  const list = bd.flags.filter((f) => f.scenes.length || (f.ignored || []).length);
+  if(!list.length) return "";
+  const glob = {}; (pl.flagStatus || []).forEach((x) => { if(!x.scene) glob[x.id] = x.s; });
+  const sid = (n) => { const s = bd.scenes[n - 1]; return s ? (s.id || "n" + n) : ""; };
+  const nIgn = list.filter((f) => glob[f.id] === "ignore").length, nWatch = list.filter((f) => glob[f.id] === "watch").length;
+  return `<details class="dood fx" data-sec="flags"${lsGet(FLAGS_KEY) === "1" ? " open" : ""}><summary>Script flags · ${list.length}${nWatch ? " · " + nWatch + " watching" : ""}${nIgn ? " · " + nIgn + " ignored" : ""}</summary>
+    <div class="fxNote">Wrong flag? Ignore it and it drops out of the warnings, budget and call sheets on the next Sync. Click a scene to ignore it just there. Watch keeps it, marked to check.</div>
+    ${list.map((f) => {
+      const g = glob[f.id] || "keep", all = f.scenes.concat(f.ignored || []).sort((a, b) => a - b);
+      return `<div class="fxRow${g === "ignore" ? " ign" : g === "watch" ? " wat" : ""}">
+        <div class="fxName"><b>${esc(f.label)}</b><span>${esc(f.use || "")}${f.words && f.words.length ? " · found: " + esc(f.words.slice(0, 4).join(", ")) : ""}</span></div>
+        <div class="fxScenes">${all.map((n) => { const off = (f.ignored || []).indexOf(n) >= 0; return `<button type="button" class="fxSc${off ? " off" : ""}" data-a="fxsc" data-f="${esc(f.id)}" data-s="${esc(sid(n))}" data-on="${off ? 0 : 1}" title="${off ? "Ignored here: click to keep" : "Click to ignore in this scene"}"${canEdit ? "" : " disabled"}>Sc ${n}</button>`; }).join("")}</div>
+        <div class="seg fxSeg">${["keep", "watch", "ignore"].map((v) => `<button type="button" class="${g === v ? "on" : ""}" data-a="fx" data-f="${esc(f.id)}" data-v="${v}"${canEdit ? "" : " disabled"}>${v[0].toUpperCase() + v.slice(1)}</button>`).join("")}</div>
+      </div>`;
+    }).join("")}</details>`;
+}
+/* ---------- locations: rooms that are really one place ---------- */
+const ROOM_RE = /^(KITCHEN|LOUNGE|LOUNGE ROOM|LIVING ROOM|SITTING ROOM|DINING ROOM|FAMILY ROOM|BEDROOM|MASTER BEDROOM|.*'S BEDROOM|.*'S ROOM|BATHROOM|ENSUITE|TOILET|LAUNDRY|HALLWAY|HALL|CORRIDOR|STAIRS|STAIRCASE|LANDING|ATTIC|BASEMENT|CELLAR|GARAGE|STUDY|OFFICE|NURSERY|PANTRY|FRONT DOOR|BACK DOOR|PORCH|VERANDAH|VERANDA|BALCONY|BACKYARD|BACK YARD|FRONT YARD|YARD|GARDEN|DRIVEWAY|SHED|ROOFTOP)$/;
+function locsView(pl, bd, canEdit){
+  const orig = {}; bd.scenes.forEach((s) => { const o = s.oloc || s.loc; if(!o) return; (orig[o] = orig[o] || { n: 0, e: 0 }).n++; orig[o].e += s.eighths; });
+  const names = Object.keys(orig); if(names.length < 2 && !(pl.locMerge || []).length) return "";
+  const to = {}; (pl.locMerge || []).forEach((m) => { to[m.from] = m.to; });
+  const groups = Array.from(new Set(names.map((n) => to[n] || n)));
+  const rooms = names.filter((n) => ROOM_RE.test(n) && !to[n]);
+  return `<details class="dood fx" data-sec="locs"${lsGet(LOCS_KEY) === "1" ? " open" : ""}><summary>Locations · ${groups.length} place${groups.length === 1 ? "" : "s"}${names.length !== groups.length ? " (" + names.length + " in the script)" : ""}</summary>
+    <div class="fxNote">Rooms written as their own location (INT. KITCHEN, INT. LOUNGE) count as separate places, with company moves between them. If they're all one house, put them in one place: the schedule, budget and call sheets then treat them as sets of it.
+      ${rooms.length > 1 && canEdit ? `<button type="button" class="btn sm" data-a="rooms" data-rooms="${esc(rooms.join("|"))}">Put ${rooms.length} rooms in one place…</button>` : ""}</div>
+    ${names.sort((a, b) => orig[b].e - orig[a].e).map((n) => `<div class="fxRow"><div class="fxName"><b>${esc(n)}</b><span>${orig[n].n} scene${orig[n].n === 1 ? "" : "s"} · ${P.fmtEighths(orig[n].e)} pg</span></div>
+      <label class="fxIn">Part of <select data-loc="${esc(n)}"${canEdit ? "" : " disabled"}><option value="">Its own location</option>${groups.filter((g) => g !== n).map((g) => `<option value="${esc(g)}"${to[n] === g ? " selected" : ""}>${esc(g)}</option>`).join("")}<option value="__new">New place…</option></select></label></div>`).join("")}
+  </details>`;
 }
 
 /* ---------- calendar: the shoot at a glance; click a date to make it a day off (or a shoot day again) ---------- */
@@ -403,6 +459,29 @@ function wire(box, pid, ctx){
       if(k === "menu"){ S.menu = !S.menu; render(pid); return; }
       if(k === "warns"){ S.warnOpen = !S.warnOpen; render(pid); return; }
       if(k === "create"){ hub.createDocs(a); return; }
+      if(k === "fx" && canEdit){
+        const id = a.dataset.f, v = a.dataset.v;
+        update((plan) => { plan.flagStatus = (plan.flagStatus || []).filter((x) => x.scene || x.id !== id); if(v !== "keep") plan.flagStatus.push({ id, scene: "", s: v }); if(v === "keep") plan.flagStatus = plan.flagStatus.filter((x) => x.id !== id); });
+        H().toast(v === "ignore" ? "Flag ignored. It drops out of the docs on the next Sync." : v === "watch" ? "Flag kept and marked to watch." : "Flag kept.", "ok", 2200); return;
+      }
+      if(k === "fxsc" && canEdit){
+        const id = a.dataset.f, sc = a.dataset.s, on = a.dataset.on === "1";
+        update((plan) => {
+          const glob = (plan.flagStatus || []).find((x) => x.id === id && !x.scene);
+          plan.flagStatus = (plan.flagStatus || []).filter((x) => !(x.id === id && x.scene === sc));
+          // on → ignore here; off → back on (an explicit keep when the flag is ignored everywhere)
+          if(on) plan.flagStatus.push({ id, scene: sc, s: "ignore" });
+          else if(glob && glob.s === "ignore") plan.flagStatus.push({ id, scene: sc, s: "keep" });
+        });
+        return;
+      }
+      if(k === "rooms" && canEdit){
+        const rooms = (a.dataset.rooms || "").split("|").filter(Boolean);
+        const name = (prompt("What's the location called? (e.g. HOUSE)\n\nThese rooms become sets of it: " + rooms.join(", "), "HOUSE") || "").trim().toUpperCase();
+        if(!name) return;
+        update((plan) => { plan.locMerge = (plan.locMerge || []).filter((m) => rooms.indexOf(m.from) < 0).concat(rooms.filter((r) => r !== name).map((r) => ({ from: r, to: name }))); });
+        H().toast(rooms.length + " rooms are now sets of " + name + ".", "ok", 2200); return;
+      }
       if(k === "unpin" && canEdit){ update((plan) => { const d = plan.days[Number(a.dataset.day)]; if(d) d.date = ""; }); return; }
       if(k === "cal" && canEdit){
         const iso = a.dataset.iso;
@@ -446,6 +525,12 @@ function wire(box, pid, ctx){
   box.onchange = (e) => {
     const t = e.target; if(!canEdit) return;
     if(t.dataset.move){ moveScene(pid, t.dataset.move, Number(t.value), -1); S.pick = null; return; }
+    if(t.dataset.loc != null){
+      const from = t.dataset.loc; let to = t.value;
+      if(to === "__new"){ to = (prompt("Name of the place " + from + " is part of (e.g. HOUSE):", "") || "").trim().toUpperCase(); if(!to){ rerender(); return; } }
+      update((plan) => { plan.locMerge = (plan.locMerge || []).filter((m) => m.from !== from); if(to && to !== from) plan.locMerge.push({ from, to }); });
+      return;
+    }
     if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }
     if(t.dataset.call != null){ update((plan) => { const d = plan.days[Number(t.dataset.call)]; if(d) d.call = t.value === plan.settings.call ? "" : t.value; }); return; }
     const k = t.dataset.s; if(!k) return;
@@ -453,7 +538,8 @@ function wire(box, pid, ctx){
     if(k === "script"){ update((plan) => { plan.scriptId = t.value; }); return; }
     update((plan) => { plan.settings[k] = (k === "start" || k === "call") ? t.value : Number(t.value); });
   };
-  const det = box.querySelector("details.dood"); if(det) det.ontoggle = () => { S.doodOpen = det.open; lsSet(DOOD_KEY, det.open ? "1" : "0"); };
+  const det = box.querySelector("details.dood:not(.fx)"); if(det) det.ontoggle = () => { S.doodOpen = det.open; lsSet(DOOD_KEY, det.open ? "1" : "0"); };
+  box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : LOCS_KEY, d.open ? "1" : "0"); });
   if(!canEdit) return;
   // drag and drop between columns
   const line = document.createElement("div"); line.className = "dropLine";
