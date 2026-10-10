@@ -246,5 +246,14 @@ test("the viewer asks Drive for a bigger picture; only real images upload", () =
   assert.strictEqual(B.imageOk("image/jpeg", 1000), true); assert.strictEqual(B.imageOk("application/pdf", 1000), false); assert.strictEqual(B.imageOk("image/png", 0), false);
 });
 
+test("several showreels and audition tapes, each its own button", () => {
+  const d = { cast: [{ name: "A", candidates: [{ key: "cast:A:1", n: 1, row: 1, actor: "X", showreel: "https://youtu.be/1\n vimeo.com/2 \nhttps://youtu.be/1", audition: "https://a.com/t" }] }] };
+  const c = B.groupsOf(d, "cast", "f")[0].cards[0];
+  assert.deepStrictEqual(c.links.map((l) => l.label), ["Showreel 1", "Showreel 2", "Audition"]);
+  assert.strictEqual(B.tidyValues("cast", { showreel: "vimeo.com/2\n\nhttps://youtu.be/1\nvimeo.com/2" }).showreel, "https://vimeo.com/2\nhttps://youtu.be/1");
+  assert.match(B.checkEdit("cast", { showreel: "https://youtu.be/1\nnope" }, ["Cast"]), /showreel/);
+  assert.strictEqual(B.checkEdit("cast", { showreel: "https://youtu.be/1\nvimeo.com/2" }, ["Cast"]), "");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

@@ -128,13 +128,16 @@ function withBrief(data, kind, group, text){
 // ---------- editing (the Board writes back to the Sheet through Code.gs "boardsave") ----------
 // Casting also has a showreel and an audition tape; a location has neither (just its map link and notes)
 function fieldsOf(kind){ return [KINDS[kind].field, "photo", "phone", "email", "status", "notes"].concat(kind === "cast" ? ["showreel", "audition"] : []); }
-const LINK_FIELDS = ["photo", "showreel", "audition"];
+const LINK_FIELDS = ["photo"];
+const MULTI_FIELDS = ["showreel", "audition"];          // several links each, one per line in the Sheet
+function linesOf(v){ return String(v == null ? "" : v).split(/\n/).map((x) => x.trim()).filter(Boolean); }
 // The Sheet's own text for each field (notes keep their line breaks), used as the starting point of an edit
 function rawOf(kind, c){ const o = {}; fieldsOf(kind).forEach((f) => { o[f] = String(c && c[f] != null ? c[f] : "").trim(); }); return o; }
 // A web link is tidied ("imdb.com/x" becomes https://imdb.com/x); anything else is returned untouched
 function tidyValues(kind, vals){
   const o = {}; fieldsOf(kind).forEach((f) => { if(vals && f in vals) o[f] = String(vals[f] == null ? "" : vals[f]).trim(); });
   LINK_FIELDS.forEach((f) => { if(o[f]){ const u = safeUrl(o[f]); if(u) o[f] = u; } });
+  MULTI_FIELDS.forEach((f) => { if(f in o) o[f] = linesOf(o[f]).map((x) => safeUrl(x) || x).filter((u, i, a) => a.indexOf(u) === i).join("\n"); });
   return o;
 }
 // "" when fine, else what to tell the person
@@ -142,8 +145,8 @@ function checkEdit(kind, vals, statuses, needSomething){
   const v = tidyValues(kind, vals);
   if(v.status && statuses.indexOf(v.status) < 0) return "“" + v.status + "” isn't a status the Sheet knows.";
   if(v.photo && !safeUrl(v.photo)) return "The photo needs to be a web link, like https://… or a Drive share link.";
-  if(v.showreel && !safeUrl(v.showreel)) return "The showreel needs to be a web link.";
-  if(v.audition && !safeUrl(v.audition)) return "The audition tape needs to be a web link.";
+  if(linesOf(v.showreel).some((x) => !safeUrl(x))) return "Each showreel needs to be a web link.";
+  if(linesOf(v.audition).some((x) => !safeUrl(x))) return "Each audition tape needs to be a web link.";
   if(v.email && !mailUrl(v.email)) return "That email address doesn't look right.";
   if(needSomething && !fieldsOf(kind).some((f) => v[f])) return "Type something first.";
   return "";
@@ -186,10 +189,10 @@ function cardOf(kind, group, c, fileId){
   // Phone and email are only in the detail view (contact).
   const links = [], contact = [];
   if(kind === "loc" && mapUrl(main)) links.push({ kind: "map", label: "Map", url: mapUrl(main) });
-  const sr = safeUrl(c.showreel), au = safeUrl(c.audition);
-  if(sr) links.push({ kind: "web", label: "Showreel", url: sr });
-  if(au) links.push({ kind: "web", label: "Audition", url: au });
-  np.links.forEach((l) => { if(l.url !== sr && l.url !== au) links.push({ kind: "web", label: l.label, url: l.url }); });
+  const seen = {};
+  const many = (v, label) => { const l = linesOf(v).map(safeUrl).filter((u) => u && !seen[u] && (seen[u] = 1)); l.forEach((u, i) => links.push({ kind: "web", label: l.length > 1 ? label + " " + (i + 1) : label, url: u })); };
+  many(c.showreel, "Showreel"); many(c.audition, "Audition");
+  np.links.forEach((l) => { if(!seen[l.url]) links.push({ kind: "web", label: l.label, url: l.url }); });
   const ph = telUrl(c.phone), em = mailUrl(c.email);
   if(ph) contact.push({ kind: "tel", label: "Call", url: ph });
   if(em) contact.push({ kind: "mail", label: "Email", url: em });
@@ -244,6 +247,6 @@ function neighbour(groups, id, dir){
   return flat[i + dir] || "";
 }
 
-const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
+const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, linesOf, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampBoard = Object.assign(root.CampBoard || {}, { logic: api });
 })(typeof window !== "undefined" ? window : this);
