@@ -86,6 +86,21 @@ function statusList(data, kind){
   const s = data && data.statuses && data.statuses[kind]; if(Array.isArray(s) && s.length) return s.map(String);
   return kind === "cast" ? ["Considering", "Callback", "Offered", "Cast", "Passed"] : ["Considering", "Scouted", "Confirmed", "Passed"];
 }
+// ---------- photos: the first one is the display photo; the rest are kept in order ----------
+const MAX_PHOTOS = 12;
+function viewSrc(u, big){ const s = photoSrc(u); return s && big ? s.replace(/sz=w\d+/, "sz=w1600") : s; }
+// The list as it is saved: the display photo goes in "photo", the others in "photos"
+function photoFields(list){
+  const l = (list || []).map(safeUrl).filter((u, i, a) => u && a.indexOf(u) === i).slice(0, MAX_PHOTOS);
+  return { photo: l[0] || "", photos: l.slice(1) };
+}
+function addPhotos(list, urls){ const f = photoFields((list || []).concat(urls || [])); return f.photo ? [f.photo].concat(f.photos) : []; }
+function makeDisplay(list, url){ const i = (list || []).indexOf(url); if(i <= 0) return (list || []).slice(); const a = list.slice(); a.splice(i, 1); return [url].concat(a); }
+function removePhoto(list, url){ return (list || []).filter((u) => u !== url); }
+function samePhotos(a, b){ return JSON.stringify(photoFields(a)) === JSON.stringify(photoFields(b)); }
+// "Is this one an image file the browser can read?" (checked before it is resized and uploaded)
+function imageOk(type, size){ return /^image\/(jpeg|png|webp|gif|heic|heif)$/i.test(String(type || "")) && size > 0 && size <= 40 * 1024 * 1024; }
+
 // Favourite cards from every visible group, in group order (they also stay in their own group)
 function favoritesOf(groups){ const out = []; groups.forEach((g) => g.cards.forEach((c) => { if(c.fav) out.push(c); })); return out; }
 // The keys of a group's cards after moving one: to a position before another card, or one step earlier / later
@@ -227,6 +242,6 @@ function neighbour(groups, id, dir){
   return flat[i + dir] || "";
 }
 
-const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, withOrder, withBrief };
+const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampBoard = Object.assign(root.CampBoard || {}, { logic: api });
 })(typeof window !== "undefined" ? window : this);
