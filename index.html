@@ -1765,6 +1765,7 @@ window.__CampHub = {
   scriptTitle: id => scriptTitle(id),
   scriptModified: id => (RIP.files && RIP.files[id] && RIP.files[id].modified) || null,
   ripGet: params => ripGet(params, 30000),
+  ripPost: body => ripPost(body),
   // The plan lives with the project, so every member sees changes live. ⚠ needs the production rule.
   writeProduction: (pid, plan) => set(ref(db, "projects/" + pid + "/production"), Object.assign({}, plan, { updatedAt: Date.now(), by: (me && me.email) || "" })),
   toast: (m, kind, ms) => toast(m, kind, ms),

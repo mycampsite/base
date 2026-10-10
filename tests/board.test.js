@@ -142,5 +142,40 @@ test("no data at all gives nothing, never an error", () => {
   assert.deepStrictEqual(B.statusList(null, "loc"), ["Considering", "Scouted", "Confirmed", "Passed"]);
 });
 
+/* ---------- editing ---------- */
+test("a card remembers the Sheet's own text, so an edit starts from it", () => {
+  const mia = cast()[0].cards[0];
+  assert.strictEqual(mia.raw.notes, "Reel https://vimeo.com/123");   // links stay in the notes
+  assert.strictEqual(mia.raw.actor, "Mia Lee"); assert.strictEqual(mia.raw.status, "Callback");
+  assert.deepStrictEqual(Object.keys(B.groupsOf(data, "loc", "f")[0].cards[0].raw), ["address", "photo", "phone", "email", "status", "notes"]);
+});
+test("an edit is checked before it is sent", () => {
+  const st = data.statuses.cast;
+  assert.strictEqual(B.checkEdit("cast", { actor: "Jo", status: "Cast" }, st), "");
+  assert.match(B.checkEdit("cast", { status: "Maybe" }, st), /isn't a status/);
+  assert.match(B.checkEdit("cast", { photo: "javascript:alert(1)" }, st), /web link/);
+  assert.match(B.checkEdit("cast", { email: "jo@x" }, st), /email/);
+  assert.match(B.checkEdit("cast", { actor: "  " }, st, true), /something/);
+  assert.strictEqual(B.checkEdit("cast", { actor: "", photo: "" }, st), "");       // clearing a field is fine when editing
+  assert.strictEqual(B.checkEdit("cast", { photo: "imdb.com/x" }, st), "");
+});
+test("only what changed is sent, and a pasted link is tidied", () => {
+  const base = { actor: "Mia Lee", photo: "", phone: "", email: "", status: "Callback", notes: "Reel https://vimeo.com/123" };
+  assert.deepStrictEqual(B.changes("cast", base, { actor: "Mia Lee ", status: "Offered", notes: "Reel https://vimeo.com/123", photo: "www.x.com/a.jpg" }), { status: "Offered", photo: "https://www.x.com/a.jpg" });
+  assert.deepStrictEqual(B.changes("cast", base, Object.assign({}, base)), {});
+  assert.deepStrictEqual(B.changes("cast", base, { notes: "" }), { notes: "" });   // emptying a field counts
+});
+test("a saved option is put back into the data; clearing empties it or removes it", () => {
+  const cand = { key: "cast:BEN:1", n: 1, row: 12, actor: "Bo", photo: "", phone: "", email: "", status: "Considering", notes: "" };
+  const d2 = B.withCandidate(data, "cast", cand);
+  assert.strictEqual(B.groupsOf(d2, "cast", "f")[1].cards[0].title, "Bo");
+  assert.strictEqual(data.cast[1].candidates[0].actor, "");                                      // the original is untouched
+  const added = B.withCandidate(d2, "cast", Object.assign({}, cand, { key: "cast:BEN:2", n: 2, row: 13, actor: "Bea" }));
+  assert.deepStrictEqual(B.groupsOf(added, "cast", "f")[1].cards.map((c) => c.title), ["Bo", "Bea"]);
+  assert.strictEqual(B.groupsOf(B.withoutCandidate(d2, "cast", "cast:BEN:1", false), "cast", "f")[1].cards.length, 0);
+  assert.strictEqual(B.withoutCandidate(added, "cast", "cast:BEN:2", true).cast[1].candidates.length, 1);
+  assert.deepStrictEqual(B.keyParts("loc:HOUSE B:3"), { kind: "loc", group: "HOUSE B", n: 3 }); assert.strictEqual(B.keyParts("nope"), null);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

@@ -84,6 +84,55 @@ function statusList(data, kind){
   const s = data && data.statuses && data.statuses[kind]; if(Array.isArray(s) && s.length) return s.map(String);
   return kind === "cast" ? ["Considering", "Callback", "Offered", "Cast", "Passed"] : ["Considering", "Scouted", "Confirmed", "Passed"];
 }
+// ---------- editing (the Board writes back to the Sheet through Code.gs "boardsave") ----------
+function fieldsOf(kind){ return [KINDS[kind].field, "photo", "phone", "email", "status", "notes"]; }
+// The Sheet's own text for each field (notes keep their line breaks), used as the starting point of an edit
+function rawOf(kind, c){ const o = {}; fieldsOf(kind).forEach((f) => { o[f] = String(c && c[f] != null ? c[f] : "").trim(); }); return o; }
+// A web link is tidied ("imdb.com/x" becomes https://imdb.com/x); anything else is returned untouched
+function tidyValues(kind, vals){
+  const o = {}; fieldsOf(kind).forEach((f) => { if(vals && f in vals) o[f] = String(vals[f] == null ? "" : vals[f]).trim(); });
+  if(o.photo){ const u = safeUrl(o.photo); if(u) o.photo = u; }
+  return o;
+}
+// "" when fine, else what to tell the person
+function checkEdit(kind, vals, statuses, needSomething){
+  const v = tidyValues(kind, vals);
+  if(v.status && statuses.indexOf(v.status) < 0) return "“" + v.status + "” isn't a status the Sheet knows.";
+  if(v.photo && !safeUrl(v.photo)) return "The photo needs to be a web link, like https://… or a Drive share link.";
+  if(v.email && !mailUrl(v.email)) return "That email address doesn't look right.";
+  if(needSomething && !fieldsOf(kind).some((f) => v[f])) return "Type something first.";
+  return "";
+}
+// Only the fields that differ from what the Board last showed
+function changes(kind, base, vals){
+  const v = tidyValues(kind, vals), b = rawOf(kind, base), out = {};
+  Object.keys(v).forEach((f) => { if(v[f] !== b[f]) out[f] = v[f]; });
+  return out;
+}
+const keyRe = /^(cast|loc):(.+):(\d+)$/;
+function keyParts(key){ const m = keyRe.exec(String(key || "")); return m ? { kind: m[1], group: m[2], n: Number(m[3]) } : null; }
+// A copy of the data with one saved option put in place (replaced by key, or added to its role / location)
+function withCandidate(data, kind, cand){
+  const list = KINDS[kind].list, kp = keyParts(cand.key), out = Object.assign({}, data);
+  out[list] = ((data && data[list]) || []).map((g) => {
+    const has = (g.candidates || []).some((c) => c.key === cand.key);
+    if(has) return Object.assign({}, g, { candidates: g.candidates.map((c) => c.key === cand.key ? Object.assign({}, c, cand) : c) });
+    if(kp && g.name === kp.group) return Object.assign({}, g, { candidates: (g.candidates || []).concat([cand]) });
+    return g;
+  });
+  return out;
+}
+// A copy with one option emptied (its slot stays) or gone altogether
+function withoutCandidate(data, kind, key, removed){
+  const list = KINDS[kind].list, f = fieldsOf(kind), out = Object.assign({}, data);
+  out[list] = ((data && data[list]) || []).map((g) => Object.assign({}, g, { candidates: (g.candidates || []).reduce((a, c) => {
+    if(c.key !== key){ a.push(c); return a; }
+    if(!removed){ const e = Object.assign({}, c); f.forEach((k) => { e[k] = ""; }); a.push(e); }
+    return a;
+  }, []) }));
+  return out;
+}
+
 // One card from one filled candidate row
 function cardOf(kind, group, c, fileId){
   const f = KINDS[kind].field, main = clean(c[f]), np = notesParts(c.notes);
@@ -96,7 +145,7 @@ function cardOf(kind, group, c, fileId){
   np.links.forEach((l) => links.push({ kind: "web", label: l.label, url: l.url }));
   const photoLink = safeUrl(c.photo);
   return { id: (fileId || "") + "|" + c.key, key: c.key, row: c.row, n: c.n, kind, group: group.name, groupType: clean(group.type), title, main,
-    status: clean(c.status), phone: clean(c.phone), email: clean(c.email), notes: np.text, photo: photoSrc(c.photo), photoLink, links,
+    status: clean(c.status), phone: clean(c.phone), email: clean(c.email), notes: np.text, photo: photoSrc(c.photo), photoLink, links, raw: rawOf(kind, c),
     passed: clean(c.status) === PASSED, done: clean(c.status) === DONE[kind] };
 }
 // All cards for one tab, grouped by role / location in the Sheet's order. Passed options sink to the end of their group.
@@ -141,6 +190,6 @@ function neighbour(groups, id, dir){
   return flat[i + dir] || "";
 }
 
-const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour };
+const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampBoard = Object.assign(root.CampBoard || {}, { logic: api });
 })(typeof window !== "undefined" ? window : this);
