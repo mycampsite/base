@@ -83,18 +83,28 @@ const css = `
 .bdNone a{ color:var(--uiText); }
 .bdEmpty{ margin:30px 0; }
 .bdShade{ position:fixed; inset:0; z-index:99; background:rgba(0,0,0,.66); display:flex; align-items:center; justify-content:center; padding:16px; }
-.bdDlg{ width:min(760px,100%); max-height:100%; overflow:auto; background:#1a1b1f; border:1px solid rgba(255,255,255,.16); border-radius:14px; box-shadow:0 24px 60px rgba(0,0,0,.6); display:grid; grid-template-columns:minmax(0,300px) 1fr; }
-.bdDlg .bdPh{ aspect-ratio:auto; min-height:260px; height:100%; border-radius:0; font-size:72px; }
-.bdDlg.loc .bdPh{ min-height:200px; }
-.bdDBody{ padding:16px 18px 18px; display:flex; flex-direction:column; gap:10px; min-width:0; }
-.bdDHead{ display:flex; align-items:flex-start; gap:10px; }
-.bdDHead h2{ margin:0; font-size:18px; line-height:1.25; flex:1; overflow-wrap:anywhere; }
-.bdDMeta{ font-size:12px; color:var(--uiMuted); }
-.bdRows{ display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:13px; }
+.bdDlg{ width:min(720px,100%); max-height:100%; overflow:auto; background:#1a1b1f; border:1px solid rgba(255,255,255,.16); border-radius:14px; box-shadow:0 24px 60px rgba(0,0,0,.6); display:grid; grid-template-columns:240px 1fr; align-items:start; }
+.bdDlg.loc{ grid-template-columns:300px 1fr; }
+/* the photo keeps the card's frame (a headshot crop for actors, a wide crop for places) whatever the picture's own shape */
+.bdDlg .bdPh{ aspect-ratio:3/4; height:auto; min-height:0; margin:16px 0 16px 16px; border-radius:10px; font-size:64px; }
+.bdDlg.loc .bdPh{ aspect-ratio:4/3; }
+.bdDBody{ padding:16px 18px 16px; display:flex; flex-direction:column; gap:14px; min-width:0; min-height:100%; box-sizing:border-box; }
+.bdDHead{ display:flex; align-items:flex-start; gap:8px; }
+.bdDHead h2{ margin:0; font-size:19px; line-height:1.25; flex:1; overflow-wrap:anywhere; }
+.bdDMeta{ font-size:12px; color:var(--uiMuted); margin-top:3px; }
+.bdFavT{ flex:0 0 auto; width:32px; height:32px; border-radius:50%; border:1px solid var(--uiBorder); background:transparent; color:var(--uiMuted); font-size:16px; cursor:pointer; padding:0; line-height:30px; }
+.bdFavT:hover{ color:var(--uiText); border-color:rgba(255,255,255,.35); }
+.bdFavT.on{ color:var(--gold); border-color:rgba(242,201,76,.5); background:rgba(242,201,76,.08); }
+.bdSec{ display:grid; gap:6px; }
+.bdLbl{ font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--uiMuted); }
+.bdSec .bdLinks{ margin:0; padding:0; }
+.bdRows{ display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:13px; margin:0; }
 .bdRows dt{ color:var(--uiMuted); } .bdRows dd{ margin:0; overflow-wrap:anywhere; } .bdRows a{ color:var(--uiText); }
 .bdDNotes{ font-size:13.5px; white-space:pre-wrap; overflow-wrap:anywhere; }
 .bdHint{ font-size:12px; color:#f1d39a; background:rgba(224,161,58,.1); border:1px solid rgba(224,161,58,.25); border-radius:9px; padding:7px 10px; }
-.bdDFoot{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:auto; padding-top:6px; }
+.bdDFoot{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:auto; padding-top:12px; border-top:1px solid var(--uiBorder); }
+.bdDel{ background:none; border:0; color:var(--err); font-size:12.5px; cursor:pointer; padding:0; opacity:.8; }
+.bdDel:hover{ opacity:1; text-decoration:underline; text-underline-offset:3px; }
 .bdDFoot .sp{ flex:1; }
 .bdKeys{ font-size:11px; color:var(--uiMuted); }
 .bdAdd{ min-height:64px; border:1px dashed rgba(255,255,255,.22); background:transparent; color:var(--uiMuted); border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
@@ -111,7 +121,7 @@ const css = `
 .bdErr{ font-size:12.5px; color:var(--err); background:rgba(255,139,131,.08); border:1px solid rgba(255,139,131,.3); border-radius:9px; padding:7px 10px; }
 .bdConf{ font-size:12.5px; color:#f1d39a; background:rgba(224,161,58,.1); border:1px solid rgba(224,161,58,.3); border-radius:9px; padding:8px 10px; display:grid; gap:8px; }
 .bdConf div{ display:flex; gap:8px; flex-wrap:wrap; }
-.bdQuick{ height:30px; border-radius:9px; max-width:150px; }
+.bdQuick{ height:32px; border-radius:9px; max-width:200px; padding:0 8px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); }
 .bdStar{ position:absolute; top:6px; right:6px; z-index:2; width:28px; height:28px; border-radius:50%; border:0; background:rgba(0,0,0,.5); color:#fff; font-size:15px; line-height:28px; text-align:center; padding:0; cursor:pointer; opacity:.75; }
 .bdStar:hover{ opacity:1; background:rgba(0,0,0,.7); }
 .bdStar.on{ color:var(--gold); opacity:1; }
@@ -156,8 +166,9 @@ span.bdStar{ cursor:default; }
 @media (max-width:640px){ .bdForm .two{ grid-template-columns:1fr; } }
 @media (max-width:640px){
   .bdShade{ align-items:flex-end; padding:0; }
-  .bdDlg{ grid-template-columns:1fr; border-radius:14px 14px 0 0; max-height:92%; }
-  .bdDlg .bdPh, .bdDlg.loc .bdPh{ min-height:0; height:auto; aspect-ratio:4/3; }
+  .bdDlg, .bdDlg.loc{ grid-template-columns:1fr; border-radius:14px 14px 0 0; max-height:92%; }
+  .bdDlg .bdPh{ width:min(62%, 240px); margin:16px auto 0; }
+  .bdDlg.loc .bdPh{ width:auto; margin:16px 16px 0; }
   #boardPane .bdTools{ padding:8px 10px 0; } .bdBody{ padding:4px 10px 24px; }
   .bdSearch{ flex:1 1 100%; }
 }
@@ -231,8 +242,7 @@ function render(pid){
 }
 function drawBar(pid, p, ids){
   const { rec, d, groups } = current();
-  const n = (k) => d ? L.groupsOf(d, k, S.fileId).reduce((a, g) => a + g.cards.length, 0) : "";
-  const tab = (k, label) => `<button class="tab${S.tab === k ? " on" : ""}" type="button" role="tab" aria-selected="${S.tab === k}" data-bt="${k}">${label}${d ? ` <span style="opacity:.6;font-weight:600">${n(k)}</span>` : ""}</button>`;
+  const tab = (k, label) => `<button class="tab${S.tab === k ? " on" : ""}" type="button" role="tab" aria-selected="${S.tab === k}" data-bt="${k}">${label}</button>`;
   const sel = ids.length > 1 ? `<select id="bdScript" aria-label="Script" title="Which script's casting and locations to show" style="height:30px;border-radius:9px;max-width:220px">${ids.map((id) => `<option value="${esc(id)}"${id === S.fileId ? " selected" : ""}>${esc(H().scriptTitle(id))}</option>`).join("")}</select>` : "";
   const gid = d && (S.tab === "cast" ? d.castGid : d.locGid);
   const sheet = d && d.url ? `<a class="btn sm" href="${esc(d.url + (gid ? "#gid=" + gid : ""))}" target="_blank" rel="noopener" title="Open this list in Google Sheets">${ICON.ext}<span class="lbl">Open Sheet</span></a>` : "";
@@ -345,30 +355,29 @@ function showDetail(id, keep){
   const rec = S.data[S.fileId], d = rec && rec.d, gid = d && (c.kind === "cast" ? d.castGid : d.locGid);
   if(!keep && !document.getElementById("bdShade")) lastFocus = document.activeElement;
   S.open = id;
-  const { groups } = current(), vis = L.filterGroups(groups, S.status[S.tab], S.q);
-  const prev = L.neighbour(vis, id, -1), next = L.neighbour(vis, id, 1);
   const bad = S.bad[id];
   const rows = [];
   if(c.kind === "loc" && c.main) rows.push(["Address", esc(c.main)]);
   if(c.phone) rows.push(["Phone", `<a href="${esc(L.telUrl(c.phone) || "#")}">${esc(c.phone)}</a>`]);
   if(c.email) rows.push(["Email", L.mailUrl(c.email) ? `<a href="${esc(L.mailUrl(c.email))}">${esc(c.email)}</a>` : esc(c.email)]);
   const hint = c.photoLink && !c.photo ? `This photo link can't be shown here. Use the Photo button to open it.` : (c.photo && bad ? `The photo didn't load. If it's a Drive file, set sharing to “Anyone with the link”.` : "");
-  const links = c.links.concat(c.contact).map((l) => `<a class="bdBtn" href="${esc(l.url)}"${l.kind === "tel" || l.kind === "mail" ? "" : ` target="_blank" rel="noopener noreferrer"`}>${esc(l.label)}</a>`).join("");
   const can = canWrite(S.hubP);
-  const mv = can ? `<button class="btn sm" type="button" data-bd="earlier" title="Move this option earlier in its list">Earlier</button><button class="btn sm" type="button" data-bd="later" title="Move this option later in its list">Later</button>` : "";
-  const favBtn = can ? `<button class="btn sm" type="button" data-bd="fav" aria-pressed="${c.fav}">${c.fav ? "★ Favorite" : "☆ Favorite"}</button>` : "";
-  const quick = can ? `<select class="bdQuick" data-bd="status" aria-label="Set the status" title="Set the status (saved to the Sheet)"><option value="">No status</option>${statusOptions(L.statusList(d, c.kind), c.raw.status)}</select>` : "";
+  const btn = (l) => `<a class="bdBtn" href="${esc(l.url)}"${l.kind === "tel" || l.kind === "mail" ? "" : ` target="_blank" rel="noopener noreferrer"`}>${esc(l.label)}</a>`;
+  const favT = can ? `<button class="bdFavT${c.fav ? " on" : ""}" type="button" data-bd="fav" aria-pressed="${c.fav}" aria-label="${c.fav ? "Remove from favorites" : "Add to favorites"}" title="${c.fav ? "Favorite" : "Add to favorites"}">${c.fav ? "★" : "☆"}</button>` : (c.fav ? `<span class="bdFavT on" title="Favorite">★</span>` : "");
+  const status = can ? `<select class="bdQuick" data-bd="status" aria-label="Status" title="Saved to the Sheet"><option value="">No status</option>${statusOptions(L.statusList(d, c.kind), c.raw.status)}</select>`
+    : (c.status ? `<span class="bdSt ${slug(c.status)}">${esc(c.status)}</span>` : `<span class="bdDMeta">No status</span>`);
+  const sec = (label, body) => body ? `<div class="bdSec"><div class="bdLbl">${label}</div>${body}</div>` : "";
   const rowLink = d && d.url ? esc(d.url + (gid ? "#gid=" + gid + "&range=A" + c.row : "")) : "";
   const html = `<div class="bdShade" id="bdShade"><div class="bdDlg ${c.kind}" role="dialog" aria-modal="true" aria-label="${esc(c.title)}">
-    <div class="bdPh"${c.photos.length ? ` data-bd="view" title="View ${c.photos.length > 1 ? "all " + c.photos.length + " photos" : "the photo"}"` : ""}>${esc(initial(c))}${c.photos.length > 1 ? `<span class="bdCount">▣ ${c.photos.length}</span>` : ""}${c.photo && !bad ? `<img referrerpolicy="no-referrer" src="${esc(c.photo)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}</div>
-    <div class="bdDBody"><div class="bdDHead"><h2>${esc(c.title)}</h2><button class="iconBtn" type="button" data-bd="close" aria-label="Close" title="Close (Esc)">${ICON.close}</button></div>
-      <div class="bdDMeta">${esc(c.group)}${c.groupType ? " · " + esc(c.groupType) : ""}</div>
-      ${c.status ? `<span class="bdSt ${slug(c.status)}">${esc(c.status)}</span>` : ""}
-      ${rows.length ? `<dl class="bdRows">${rows.map((r) => `<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join("")}</dl>` : ""}
-      ${c.notes ? `<div class="bdDNotes">${esc(c.notes)}</div>` : ""}
+    <div class="bdPh"${c.photos.length ? ` data-bd="view" title="View ${c.photos.length > 1 ? "all " + c.photos.length + " photos" : "the photo"}"` : ""}>${esc(initial(c))}${c.photo && !bad ? `<img referrerpolicy="no-referrer" src="${esc(c.photo)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}${c.photos.length > 1 ? `<span class="bdCount">▣ ${c.photos.length}</span>` : ""}</div>
+    <div class="bdDBody">
+      <div class="bdDHead"><div style="flex:1;min-width:0"><h2>${esc(c.title)}</h2><div class="bdDMeta">${esc(c.group)}${c.groupType ? " · " + esc(c.groupType) : ""}</div></div>${favT}<button class="iconBtn" type="button" data-bd="close" aria-label="Close" title="Close (Esc)">${ICON.close}</button></div>
+      ${sec("Status", status)}
+      ${sec(c.kind === "loc" ? "Address &amp; contact" : "Contact", rows.length ? `<dl class="bdRows">${rows.map((r) => `<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join("")}</dl>` : "")}
+      ${sec("Links", c.links.length ? `<div class="bdLinks">${c.links.map(btn).join("")}</div>` : "")}
+      ${sec("Notes", c.notes ? `<div class="bdDNotes">${esc(c.notes)}</div>` : "")}
       ${hint ? `<div class="bdHint">${esc(hint)}</div>` : ""}
-      ${links ? `<div class="bdLinks">${links}</div>` : ""}
-      <div class="bdDFoot"><button class="btn sm" type="button" data-bd="prev"${prev ? "" : " disabled"} aria-label="Previous option" title="Previous (←)">←</button><button class="btn sm" type="button" data-bd="next"${next ? "" : " disabled"} aria-label="Next option" title="Next (→)">→</button>${quick}${favBtn}${mv}<span class="sp"></span>${can ? `<button class="btn sm danger" type="button" data-bd="delete" title="Delete this option">Delete</button><button class="btn sm" type="button" data-bd="edit" title="Change this option and save it to the Sheet">Edit</button>` : ""}${rowLink ? `<a class="btn sm" href="${rowLink}" target="_blank" rel="noopener" title="Open this row in Google Sheets">${ICON.ext}<span class="lbl">Edit in Sheet</span></a>` : ""}</div>
+      <div class="bdDFoot">${can ? `<button class="bdDel" type="button" data-bd="delete">Delete option</button>` : ""}<span class="sp"></span>${rowLink ? `<a class="btn sm" href="${rowLink}" target="_blank" rel="noopener" title="Open this row in Google Sheets">${ICON.ext}<span class="lbl">Sheet</span></a>` : ""}${can ? `<button class="btn sm primary" type="button" data-bd="edit">Edit</button>` : ""}</div>
     </div></div></div>`;
   const old = document.getElementById("bdShade");
   if(old) old.remove();
@@ -378,13 +387,9 @@ function showDetail(id, keep){
     if(e.target === shade){ closeDetail(); return; }
     const b = e.target.closest("[data-bd]"); if(!b) return;
     if(b.dataset.bd === "close") closeDetail();
-    else if(b.dataset.bd === "prev" && prev) showDetail(prev);
-    else if(b.dataset.bd === "next" && next) showDetail(next);
     else if(b.dataset.bd === "edit") openEditor(c);
     else if(b.dataset.bd === "view") openViewer(c.id, 0);
     else if(b.dataset.bd === "fav") toggleFav(c);
-    else if(b.dataset.bd === "earlier") moveCard(c, -1);
-    else if(b.dataset.bd === "later") moveCard(c, 1);
     else if(b.dataset.bd === "delete") deleteCard(c);
   });
   shade.addEventListener("change", (e) => {
@@ -427,18 +432,32 @@ async function quickStatus(c, status){
   if(S.pid) render(S.pid);
   if(S.open) showDetail(S.open, true);
 }
+// Favorite shows at once; the Sheet catches up behind it (and it flips back if the save fails)
+const favSeq = {};
 async function toggleFav(c){
+  const want = !c.fav, seq = (favSeq[c.key] = (favSeq[c.key] || 0) + 1);
+  setData((d) => L.withCandidate(d, c.kind, { key: c.key, fav: want }));
+  redrawAfterChange();
   try{
-    const res = await post({ kind: c.kind, op: "set", rowKey: c.key, fields: { favorite: c.fav ? "" : "1" } });
+    const res = await post({ kind: c.kind, op: "set", rowKey: c.key, fields: { favorite: want ? "1" : "" } });
+    if(favSeq[c.key] !== seq) return;                     // a newer click is on its way
     setData((d) => L.withCandidate(d, c.kind, res.candidate));
-  }catch(err){ H().toast("Couldn't save: " + ((err && err.message) || err), "err"); if(err && err.gone) afterSheetMoved(); }
-  if(S.pid) render(S.pid);
-  if(S.open && findCard(S.open)) showDetail(S.open, true);
+  }catch(err){
+    if(favSeq[c.key] !== seq) return;
+    setData((d) => L.withCandidate(d, c.kind, { key: c.key, fav: !want }));
+    H().toast("Couldn't save the favorite: " + ((err && err.message) || err), "err");
+    if(err && err.gone) afterSheetMoved();
+  }
+  redrawAfterChange();
 }
-// Put a card earlier / later in its list, or (drag) before another; the order is written to the Sheet
+function redrawAfterChange(){
+  if(S.pid) render(S.pid);
+  if(S.open && !S.edit && findCard(S.open)) showDetail(S.open, true);
+}
+// Drag a card onto another and they swap places; the order is written to the Sheet
 async function moveCard(c, to, silent){
   const g = current().groups.find((x) => x.name === c.group); if(!g) return;
-  const keys = L.reorder(g.cards.map((x) => x.key), c.key, to);
+  const keys = to && to.swap ? L.swap(g.cards.map((x) => x.key), c.key, to.swap) : L.reorder(g.cards.map((x) => x.key), c.key, to);
   if(keys.join("|") === g.cards.map((x) => x.key).join("|")) return;
   const before = S.data[S.fileId] && S.data[S.fileId].d;
   setData((d) => L.withOrder(d, c.kind, keys));
@@ -762,7 +781,7 @@ function wire(box, pid, p){
     if(!card || !d || card.dataset.group !== d.group || card.closest(".bdFav")) return;
     e.preventDefault();
     const moving = current().groups.reduce((a, g) => a || g.cards.find((c) => c.key === d.key), null);
-    if(moving && card.dataset.key !== d.key) moveCard(moving, card.dataset.key, true);
+    if(moving && card.dataset.key !== d.key) moveCard(moving, { swap: card.dataset.key }, true);
   };
   box.onchange = (e) => {
     if(e.target.id === "bdScript"){ S.script[pid] = e.target.value; render(pid); }

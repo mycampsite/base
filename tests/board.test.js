@@ -140,7 +140,7 @@ test("arrow keys in the detail view step through the cards on screen", () => {
 test("no data at all gives nothing, never an error", () => {
   assert.deepStrictEqual(B.groupsOf(null, "cast", "f"), []);
   assert.deepStrictEqual(B.groupsOf({}, "loc", "f"), []);
-  assert.deepStrictEqual(B.statusList(null, "loc"), ["Considering", "Scouted", "Confirmed", "Passed"]);
+  assert.deepStrictEqual(B.statusList(null, "loc"), ["Passed", "Considering", "Scouted", "Confirmed"]);   // lowest to highest
 });
 
 /* ---------- editing ---------- */
@@ -209,6 +209,8 @@ test("moving a card by one step or before another", () => {
   assert.deepStrictEqual(B.reorder(k, "a", "c"), ["b", "a", "c", "d"]);
   assert.deepStrictEqual(B.reorder(k, "d", "b"), ["a", "d", "b", "c"]);
   assert.deepStrictEqual(B.reorder(k, "x", 1), k);
+  assert.deepStrictEqual(B.swap(k, "a", "c"), ["c", "b", "a", "d"]);                         // dragging one onto another swaps them
+  assert.deepStrictEqual(B.swap(k, "a", "zz"), k);
   const d = B.withOrder(extra, "cast", ["cast:ANA:4", "cast:ANA:1", "cast:ANA:2", "cast:ANA:3"]);
   assert.deepStrictEqual(B.groupsOf(d, "cast", "f")[0].cards.map((c) => c.title), ["D", "A", "B", "C"]);
   assert.strictEqual(B.withBrief(extra, "cast", "ANA", "x").cast[0].brief, "x");

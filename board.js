@@ -84,7 +84,7 @@ function notesParts(notes){
 function isFilled(kind, c){ return !!(c && [c[KINDS[kind].field], c.photo, c.phone, c.email, c.status, c.notes].some((v) => clean(v))); }
 function statusList(data, kind){
   const s = data && data.statuses && data.statuses[kind]; if(Array.isArray(s) && s.length) return s.map(String);
-  return kind === "cast" ? ["Considering", "Callback", "Offered", "Cast", "Passed"] : ["Considering", "Scouted", "Confirmed", "Passed"];
+  return kind === "cast" ? ["Passed", "Considering", "Callback", "Offered", "Cast"] : ["Passed", "Considering", "Scouted", "Confirmed"];
 }
 // ---------- photos: the first one is the display photo; the rest are kept in order ----------
 const MAX_PHOTOS = 12;
@@ -112,6 +112,8 @@ function reorder(keys, key, to){
   if(j < 0 || j >= a.length || j === i) return a;
   a.splice(i, 1); a.splice(j, 0, key); return a;
 }
+// Two cards trade places
+function swap(keys, a, b){ const k = keys.slice(), i = k.indexOf(a), j = k.indexOf(b); if(i < 0 || j < 0 || i === j) return k; k[i] = b; k[j] = a; return k; }
 function withOrder(data, kind, keys){
   const list = KINDS[kind].list, out = Object.assign({}, data);
   out[list] = ((data && data[list]) || []).map((g) => Object.assign({}, g, { candidates: (g.candidates || []).map((c) => { const i = keys.indexOf(c.key); return i < 0 ? c : Object.assign({}, c, { order: i + 1 }); }) }));
@@ -242,6 +244,6 @@ function neighbour(groups, id, dir){
   return flat[i + dir] || "";
 }
 
-const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
+const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampBoard = Object.assign(root.CampBoard || {}, { logic: api });
 })(typeof window !== "undefined" ? window : this);
