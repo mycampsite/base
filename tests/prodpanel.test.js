@@ -18,6 +18,7 @@ const bd = {
 };
 const mk = (days, extra) => P.normalize(Object.assign({ scriptId: "doc1", settings: { days: days.length, maxEighths: 40 }, days: days.map((scenes) => ({ scenes })) }, extra || {}));
 const all = (plan) => plan.days.map((d) => d.scenes);
+const baseOf = (b) => b.scenes.map(P.sceneLook);   // every scene recorded as it is now
 
 console.log("Production panel");
 
@@ -103,7 +104,7 @@ test("first open: no known list, so it saves and records every scene", () => {
   assert.deepStrictEqual(r.plan.known, ["s1", "s2", "s3", "s4"]);
 });
 test("nothing changed: no save (so the panel doesn't write on every draw)", () => {
-  const r = P.syncWithScript(mk([["s1"]]), ["s1", "s2", "s3", "s4"], bd, "doc1");
+  const r = P.syncWithScript(mk([["s1"]], { base: baseOf(bd) }), ["s1", "s2", "s3", "s4"], bd, "doc1");
   assert.strictEqual(r.save, false);
   assert.deepStrictEqual(r.unscheduled, ["s2", "s3", "s4"]);
 });
@@ -125,7 +126,7 @@ test("switching script saves the new script id", () => {
   assert.strictEqual(r.plan.scriptId, "doc2");
 });
 test("the database handing lists back as objects doesn't lose scheduled scenes", () => {
-  const raw = { scriptId: "doc1", settings: { days: 2 }, days: { 0: { scenes: { 0: "s1", 1: "s2" } }, 1: { scenes: { 0: "s3" } } } };
+  const raw = { scriptId: "doc1", base: Object.assign({}, baseOf(bd)), settings: { days: 2 }, days: { 0: { scenes: { 0: "s1", 1: "s2" } }, 1: { scenes: { 0: "s3" } } } };
   const r = P.syncWithScript(P.normalize(raw), ["s1", "s2", "s3", "s4"], bd, "doc1");
   assert.deepStrictEqual(all(r.plan), [["s1", "s2"], ["s3"]]);
   assert.strictEqual(r.save, false);
@@ -176,6 +177,79 @@ test("a day's shots follow the day's scene order and add up", () => {
   assert.deepStrictEqual(ds.scenes.map((x) => [x.id, x.shots.length]), [["s3", 1], ["s2", 0], ["s1", 2]]);
   assert.strictEqual(ds.total, 3);
   assert.strictEqual(P.dayShots({ scenes: [] }, m).total, 0);
+});
+
+/* ---------- script revisions on the stripboard ---------- */
+const edit = (id, ch) => ({ scenes: bd.scenes.map((s) => s.id === id ? Object.assign({}, s, ch) : s), cast: bd.cast });
+const KNOWN = ["s1", "s2", "s3", "s4"];
+test("an older plan records each scene's look once, with nothing flagged", () => {
+  const r = P.syncWithScript(mk([["s1"]]), KNOWN, bd, "doc1");
+  assert.strictEqual(r.save, true);
+  assert.deepStrictEqual(r.changed, []);
+  assert.strictEqual(r.plan.base.length, 4);
+  const again = P.syncWithScript(P.normalize(r.plan), KNOWN, bd, "doc1");   // and then it's quiet
+  assert.strictEqual(again.save, false);
+});
+test("a scheduled scene that got longer, gained cast, moved location or switched to night is flagged", () => {
+  const plan = mk([["s1", "s3"], []], { base: baseOf(bd) });
+  const r = P.syncWithScript(plan, KNOWN, edit("s1", { eighths: 24, cast: ["ANA", "CAL"], oloc: "BARN", loc: "BARN", dn: "N" }), "doc1");
+  assert.strictEqual(r.changed.length, 1);
+  assert.deepStrictEqual(r.changed[0].what, ["length", "cast", "location", "day/night"]);
+  assert.strictEqual(r.changed[0].day, 1);
+  assert.strictEqual(r.changed[0].from.e, 16); assert.strictEqual(r.changed[0].to.e, 24);
+  assert.strictEqual(r.save, false);   // the flag stays until accepted: nothing to write
+});
+test("the flag stays on every draw until accepted, then clears", () => {
+  const bd2 = edit("s1", { eighths: 24 });
+  let plan = mk([["s1"]], { base: baseOf(bd) });
+  assert.strictEqual(P.syncWithScript(plan, KNOWN, bd2, "doc1").changed.length, 1);
+  assert.strictEqual(P.syncWithScript(plan, KNOWN, bd2, "doc1").changed.length, 1);
+  plan = P.normalize(P.acceptChanges(plan, bd2, []));
+  const r = P.syncWithScript(plan, KNOWN, bd2, "doc1");
+  assert.deepStrictEqual(r.changed, []); assert.strictEqual(r.save, false);
+});
+test("accepting one scene leaves the others flagged", () => {
+  const bd2 = { scenes: edit("s1", { eighths: 24 }).scenes.map((s) => s.id === "s3" ? Object.assign({}, s, { dn: "D" }) : s), cast: bd.cast };
+  const plan = P.normalize(P.acceptChanges(mk([["s1", "s3"]], { base: baseOf(bd) }), bd2, ["s1"]));
+  assert.deepStrictEqual(P.syncWithScript(plan, KNOWN, bd2, "doc1").changed.map((c) => c.id), ["s3"]);
+});
+test("unscheduled scenes are re-recorded quietly, so they aren't flagged once placed", () => {
+  const bd2 = edit("s2", { eighths: 40 });
+  const r = P.syncWithScript(mk([["s1"]], { base: baseOf(bd) }), KNOWN, bd2, "doc1");
+  assert.deepStrictEqual(r.changed, []);
+  assert.strictEqual(r.save, true);                               // s2's new look is recorded
+  const placed = P.moveSceneIn(P.normalize(r.plan), "s2", 0, -1).plan;
+  assert.deepStrictEqual(P.syncWithScript(placed, KNOWN, bd2, "doc1").changed, []);
+});
+test("renumbering scenes and merging rooms into one location aren't revisions", () => {
+  const renum = { scenes: bd.scenes.map((s) => Object.assign({}, s, { n: s.n + 1 })), cast: bd.cast };
+  assert.deepStrictEqual(P.syncWithScript(mk([["s1"]], { base: baseOf(bd) }), KNOWN, renum, "doc1").changed, []);
+  const merged = edit("s1", { oloc: "HOUSE", loc: "FARM" });       // locMerge changes loc, not oloc
+  assert.deepStrictEqual(P.syncWithScript(mk([["s1"]], { base: baseOf(bd) }), KNOWN, merged, "doc1").changed, []);
+});
+test("cast order doesn't count as a change", () => {
+  const two = edit("s1", { cast: ["ANA", "BEN"] }), plan = mk([["s1"]], { base: baseOf(two) });
+  assert.deepStrictEqual(P.syncWithScript(plan, KNOWN, edit("s1", { cast: ["BEN", "ANA"] }), "doc1").changed, []);
+});
+test("switching to another script records it fresh instead of flagging everything", () => {
+  const other = { scenes: bd.scenes.map((s) => Object.assign({}, s, { eighths: 99 })), cast: bd.cast };
+  const r = P.syncWithScript(mk([["s1"]], { base: baseOf(bd) }), KNOWN, other, "doc2");
+  assert.deepStrictEqual(r.changed, []);
+  assert.strictEqual(r.plan.base[0].e, 99);
+});
+test("a deleted scene drops out of the record", () => {
+  const less = { scenes: bd.scenes.filter((s) => s.id !== "s4"), cast: bd.cast };
+  const r = P.syncWithScript(mk([["s1"]], { base: baseOf(bd) }), KNOWN, less, "doc1");
+  assert.strictEqual(r.save, true);
+  assert.deepStrictEqual(r.plan.base.map((b) => b.id), ["s1", "s2", "s3"]);
+});
+test("undo snapshots include the record, so undoing an accept brings the flag back", () => {
+  const bd2 = edit("s1", { eighths: 24 }), h = P.histNew();
+  let plan = mk([["s1"]], { base: baseOf(bd) });
+  P.histRemember(h, plan, 1000);
+  plan = P.normalize(P.acceptChanges(plan, bd2, []));
+  const back = P.normalize(P.histStep(h, plan, true));
+  assert.strictEqual(P.syncWithScript(back, KNOWN, bd2, "doc1").changed.length, 1);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

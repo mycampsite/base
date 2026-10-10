@@ -107,6 +107,11 @@ const css = `
 .strip:hover{ border-color:rgba(255,255,255,.22); border-left-color:var(--sc, #ddd); }
 .strip.pick{ outline:2px solid var(--focus); }
 .strip.new{ box-shadow:0 0 0 1px #8fe3a6 inset; }
+.strip.rev{ box-shadow:0 0 0 1px #f1c76b inset; }
+.strip .revTag{ color:#f1c76b; font-size:10.5px; font-weight:700; }
+.ctlNote.rev{ background:rgba(241,199,107,.08); border-color:rgba(241,199,107,.35); }
+.ctlNote.rev li{ margin:3px 0; }
+.ctlNote.rev .btn{ margin-left:6px; padding:1px 8px; }
 .strip.dragging{ opacity:.35; transform:scale(.97); }
 @keyframes stripLand{ 0%{ transform:scale(1.06); box-shadow:0 0 0 2px #fff, 0 0 22px rgba(255,255,255,.5); } 100%{ transform:scale(1); box-shadow:0 0 0 0 transparent; } }
 .strip.landed{ animation:stripLand .7s cubic-bezier(.2,.9,.3,1); position:relative; z-index:1; }
@@ -214,6 +219,19 @@ function stripColor(s){
   return ext ? "#f2c94c" : both ? "#f5dc8a" : "#e8e8e8";
 }
 const DN = { D: "Day", N: "Night", M: "Dawn/Dusk" };
+// One line saying how a revised scene changed: "length 2 → 3 pg; cast +CAL −BEN; location HOUSE → BARN; Day → Night"
+function revText(c){
+  const out = [], f = c.from, t = c.to;
+  if(f.e !== t.e) out.push("length " + P.fmtEighths(f.e) + " → " + P.fmtEighths(t.e) + " pg");
+  if(f.c !== t.c){
+    const a = f.c ? f.c.split("|") : [], b = t.c ? t.c.split("|") : [];
+    const plus = b.filter((n) => a.indexOf(n) < 0).map((n) => "+" + n), minus = a.filter((n) => b.indexOf(n) < 0).map((n) => "−" + n);
+    out.push("cast " + plus.concat(minus).join(" "));
+  }
+  if(f.l !== t.l) out.push("location " + (f.l || "?") + " → " + (t.l || "?"));
+  if(f.dn !== t.dn) out.push((DN[f.dn] || f.dn || "?") + " → " + (DN[t.dn] || t.dn || "?"));
+  return out.join("; ");
+}
 function fmtDate(iso){
   const d = P.parseISO(iso); if(!d) return "";
   return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
@@ -344,6 +362,7 @@ function draw(pid){
 
   // The script is the truth: take deleted scenes off their days, list new ones
   const rec = P.syncWithScript(plan, raw.known, bd, scriptId), added = rec.added;
+  const revOf = {}; rec.changed.forEach((c) => { revOf[c.id] = c; });
   if(canEdit && rec.save){
     if(rec.removed.length || added.length) S.notice[pid] = { added, removed: rec.removed };
     save(pid, rec.plan, true);
@@ -359,6 +378,7 @@ function draw(pid){
     <span class="ctlChip ${rec.unscheduled.length ? "warn" : "ok"}">${scheduled}/${bd.scenes.filter((s) => s.id).length} scheduled</span>
     ${warns.length ? `<button type="button" class="ctlChip btnChip${nWarn ? " warn" : ""}" data-a="warns" aria-expanded="${S.warnOpen}">${nWarn ? "⚠ " + nWarn + " to check" : warns.length + " note" + (warns.length === 1 ? "" : "s")} ${S.warnOpen ? "▴" : "▾"}</button>` : ""}
     ${bd.cast.some((c) => c.minor) ? `<span class="ctlChip warn" title="${esc(bd.cast.filter((c) => c.minor).map((c) => c.name + (c.age != null ? " (" + c.age + ")" : " (age?)")).join(", "))}">${bd.cast.filter((c) => c.minor).length} under 18</span>` : ""}
+    ${rec.changed.length ? `<span class="ctlChip warn" title="Scenes on shoot days that changed in the script">⚠ ${rec.changed.length} revised</span>` : ""}
     ${badOrder ? `<span class="ctlChip warn" title="A pinned date is on or before the day ahead of it">⚠ Days out of date order</span>` : ""}
     ${sc.state === "loading" ? `<span class="ctlChip">Updating from script…</span>` : ""}
     ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}`;
@@ -397,15 +417,19 @@ function draw(pid){
       ${n.removed.length ? `<li>${n.removed.length} deleted scene${n.removed.length === 1 ? " was" : "s were"} taken off ${Array.from(new Set(n.removed.map((r) => "Day " + r.day))).join(", ")}.</li>` : ""}
       ${(n.moved || []).length ? `<li>${n.moved.length} scene${n.moved.length === 1 ? "" : "s"} from removed days ${n.moved.length === 1 ? "is" : "are"} back in Unscheduled.</li>` : ""}
     </ul></div><button class="iconBtn x" type="button" data-a="dismiss" aria-label="Dismiss">✕</button></div>` : "";
+  const revBox = rec.changed.length ? `<div class="ctlNote rev"><div><b>Script revisions on scheduled days</b>${canEdit && rec.changed.length > 1 ? `<button class="btn sm" type="button" data-a="acceptAll">Accept all</button>` : ""}<ul>
+      ${rec.changed.map((c) => `<li>Sc ${byId[c.id] ? byId[c.id].n : "?"} (Day ${c.day}): ${esc(revText(c))}${canEdit ? `<button class="btn sm" type="button" data-a="accept" data-id="${esc(c.id)}">Accept</button>` : ""}</li>`).join("")}
+    </ul><div style="color:var(--uiMuted);margin-top:4px">Check each day still works, then accept. Call sheets update on the next Sync.</div></div></div>` : "";
   const warnBox = warns.length && S.warnOpen ? `<div class="ctlWarn">${warns.map((w) => `<div class="${w.level}">${w.level === "warn" ? "⚠ " : "• "}${esc(w.text)}</div>`).join("")}</div>` : "";
 
   const strip = (id) => {
     const s = byId[id]; if(!s) return "";
     const isNew = n && n.added.indexOf(id) >= 0;
-    return `<button class="strip${S.pick === id ? " pick" : ""}${isNew ? " new" : ""}${S.landed && S.landed.id === id ? " landed" : ""}" type="button" data-sid="${esc(id)}" draggable="${canEdit}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}">
+    const rv = revOf[id];
+    return `<button class="strip${S.pick === id ? " pick" : ""}${isNew ? " new" : ""}${rv ? " rev" : ""}${S.landed && S.landed.id === id ? " landed" : ""}" type="button" data-sid="${esc(id)}" draggable="${canEdit}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}">
       <div class="t">Sc ${s.n} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}<span>${shotMap[id] ? shotMap[id].length + " sh · " : ""}${P.fmtEighths(s.eighths)} pg</span></div>
       <div class="l">${esc(s.set || s.loc || "")}</div>
-      <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div></button>`;
+      <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div>${rv ? `<div class="revTag" title="${esc(revText(rv))}">⚠ Revised: ${esc(rv.what.join(", "))}</div>` : ""}</button>`;
   };
   const shotsOn = Object.keys(shotMap).length > 0;
   const unsched = rec.unscheduled.slice().sort((a, b) => byId[a].n - byId[b].n);
@@ -459,7 +483,7 @@ function draw(pid){
   const offs = (st.off || []);
   const cal = offs.length ? `<div class="offRow"><b>Days off</b>${offs.map((iso) => `<button type="button" class="offChip" data-a="cal" data-iso="${esc(iso)}" title="Shoot on this date again"${canEdit ? "" : " disabled"}>${esc(fmtDate(iso))} ✕</button>`).join("")}</div>` : "";
   const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit);
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${locSec}
+  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${locSec}
     <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it" : "Drag scenes between days, or click one to move it"}. Saves for everyone as you go.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
 }
@@ -593,6 +617,11 @@ function wire(box, pid, ctx){
       if(k === "days-" || k === "days+"){ const plan = planOf(pid), r = P.resizeDays(plan, plan.settings.days + (k === "days+" ? 1 : -1)); confirmShrink(pid, r); return; }
       if(k === "reauto"){ H().confirm("Re-plan every scene?", "Every scene is laid out again from scratch. Scenes you've placed by hand will move. Undo puts them back.", "Re-plan all", false).then((ok) => { if(ok) autoPlan(pid, ctx, true); }); return; }
       if(k === "auto"){ autoPlan(pid, ctx, false); return; }
+      if(k === "accept" || k === "acceptAll"){
+        update((plan) => { P.acceptChanges(plan, ctx.bd, k === "accept" ? [a.dataset.id] : []); });
+        H().toast(k === "accept" ? "Revision accepted." : "All revisions accepted.", "ok", 1500);
+        return;
+      }
       if(k === "placeNew"){
         const n = S.notice[pid]; if(!n) return;
         update((plan) => { P.placeScenes(plan, n.added, ctx.bd); });

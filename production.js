@@ -85,6 +85,8 @@ function normalize(plan){
   // rooms merged into one location, and keep / watch / ignore choices for script flags
   // (lists, not maps: location names can hold characters the database won't take as keys)
   out.locMerge = arr(plan.locMerge).filter((m) => m && m.from && m.to && m.from !== m.to).map((m) => ({ from: String(m.from), to: String(m.to) }));
+  // what each scene looked like when it was last checked (see sceneChanges): a list, as ids may not suit keys
+  out.base = arr(plan.base).filter((b) => b && b.id).map((b) => ({ id: String(b.id), e: Math.max(0, Math.round(Number(b.e) || 0)), c: String(b.c || ""), l: String(b.l || ""), dn: String(b.dn || "") }));
   out.flagStatus = arr(plan.flagStatus).filter((f) => f && f.id && /^(keep|watch|ignore)$/.test(f.s)).map((f) => ({ id: String(f.id), scene: f.scene ? String(f.scene) : "", s: f.s }));
   // links to the call sheets made by the last Sync (kept as they are)
   if(plan.callsheets && typeof plan.callsheets === "object") out.callsheets = plan.callsheets;
@@ -273,13 +275,52 @@ function histStep(h, plan, back){
 // Returns the reconciled plan, what changed, and whether it needs saving.
 // `known` comes from the stored plan (not an edit still waiting to save).
 function syncWithScript(plan, knownList, breakdown, scriptId){
+  const switched = !!(plan && plan.scriptId) && plan.scriptId !== scriptId;
   const rec = reconcile(plan, breakdown);
   const scenes = (breakdown && breakdown.scenes || []).filter((s) => s.id);
   const known = new Set(Array.isArray(knownList) ? knownList : []);
   const added = known.size ? scenes.filter((s) => !known.has(s.id)).map((s) => s.id) : [];
-  const save = !!(rec.removed.length || added.length || !known.size || rec.plan.scriptId !== scriptId);
+  let save = !!(rec.removed.length || added.length || !known.size || rec.plan.scriptId !== scriptId);
   if(save){ rec.plan.scriptId = scriptId; rec.plan.known = scenes.map((s) => s.id); }
-  return { plan: rec.plan, unscheduled: rec.unscheduled, removed: rec.removed, added, save };
+  // revisions: scheduled scenes keep their last-checked look until someone accepts the change
+  const ch = sceneChanges(rec.plan, breakdown, switched);
+  if(ch.baseChanged){ rec.plan.base = ch.base; save = true; }
+  return { plan: rec.plan, unscheduled: rec.unscheduled, removed: rec.removed, added, changed: ch.changed, save };
+}
+
+// ---------- script revisions on the stripboard ----------
+// What matters to a shoot day about a scene: its length, cast, location (before any merging of rooms)
+// and day/night. Scene numbers are left out: inserting a scene renumbers everything after it.
+function sceneLook(s){ return { id: s.id, e: Math.max(0, Math.round(Number(s.eighths) || 0)), c: (s.cast || []).slice().sort().join("|"), l: String(s.oloc || s.loc || ""), dn: String(s.dn || "") }; }
+// Compares scheduled scenes with how they looked when last checked. Scenes seen for the first time,
+// and unscheduled scenes, are simply (re)recorded: a change only matters once a scene is on a day.
+// `reset` (switching script) records everything afresh. Returns the new base, whether it differs from
+// the stored one, and the changed scheduled scenes: [{ id, day, what:["length","cast","location","day/night"], from, to }].
+function sceneChanges(plan, breakdown, reset){
+  const old = {}; (plan.base || []).forEach((b) => { old[b.id] = b; });
+  const dayOf = {}; plan.days.forEach((d, i) => d.scenes.forEach((id) => { dayOf[id] = i + 1; }));
+  const base = [], changed = [];
+  let baseChanged = false;
+  (breakdown && breakdown.scenes || []).filter((s) => s.id).forEach((s) => {
+    const now = sceneLook(s), was = old[s.id];
+    if(reset || !was || !dayOf[s.id]){ base.push(now); if(!was || was.e !== now.e || was.c !== now.c || was.l !== now.l || was.dn !== now.dn) baseChanged = true; return; }
+    base.push(was);
+    const what = [];
+    if(was.e !== now.e) what.push("length");
+    if(was.c !== now.c) what.push("cast");
+    if(was.l !== now.l) what.push("location");
+    if(was.dn !== now.dn) what.push("day/night");
+    if(what.length) changed.push({ id: s.id, day: dayOf[s.id], what, from: was, to: now });
+  });
+  if(base.length !== (plan.base || []).length) baseChanged = true;   // deleted scenes drop out
+  return { base, baseChanged, changed };
+}
+// Accept revisions: record the current look of these scenes (all changed ones when ids is empty)
+function acceptChanges(plan, breakdown, ids){
+  const want = ids && ids.length ? new Set(ids) : null;
+  const now = {}; (breakdown && breakdown.scenes || []).forEach((s) => { if(s.id) now[s.id] = sceneLook(s); });
+  plan.base = (plan.base || []).map((b) => (now[b.id] && (!want || want.has(b.id))) ? now[b.id] : b);
+  return plan;
 }
 
 // Call sheets are out of date when the plan was saved more than 5 s after they were made
@@ -312,6 +353,6 @@ function dayShots(day, shotMap){
 }
 
 const api = { DEFAULTS, MAX_DAYS, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate,
-  moveSceneIn, placeScenes, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, shotsBySceneId, dayShots };
+  moveSceneIn, placeScenes, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);
