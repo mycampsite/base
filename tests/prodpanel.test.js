@@ -143,5 +143,40 @@ test("normalize keeps call-sheet links as they are", () => {
   assert.strictEqual(P.normalize({ callsheets: cs }).callsheets, cs);
 });
 
+/* ---------- shot list ---------- */
+const sl = {
+  scenes: [{ n: 1, id: "s1" }, { n: 2, id: "s2" }, { n: 3, id: "s3" }, { n: 9, id: "x9", isExtra: true }],
+  shots: [
+    { key: "k1", scene: 1, shot: "1A", size: "WS", desc: "Wide", status: "Shot" },
+    { key: "k2", scene: 1, shot: "1B", size: "CU" },
+    { key: "k3", scene: 3, shot: 1, size: "MS" },
+    { key: "k4", scene: 9, shot: "9A" },       // a scene added only on the storyboard
+    { key: "k5", scene: 7, shot: "7A" }        // no such scene
+  ]
+};
+test("shots join to scenes by the heading's permanent id, in shot order", () => {
+  const m = P.shotsBySceneId(sl);
+  assert.deepStrictEqual(Object.keys(m).sort(), ["s1", "s3"]);
+  assert.deepStrictEqual(m.s1.map((x) => x.shot), ["1A", "1B"]);
+  assert.strictEqual(m.s1[0].status, "Shot");
+  assert.strictEqual(m.s3[0].shot, "1");   // numbers come back as text
+});
+test("renumbered scenes keep their shots (the id, not the number, is the link)", () => {
+  const renum = { scenes: [{ n: 5, id: "s1" }], shots: [{ scene: 5, shot: "1A" }] };
+  assert.deepStrictEqual(P.shotsBySceneId(renum).s1.map((x) => x.shot), ["1A"]);
+});
+test("a bad or missing shot list gives no shots, never an error", () => {
+  assert.deepStrictEqual(P.shotsBySceneId(null), {});
+  assert.deepStrictEqual(P.shotsBySceneId({ ok: false }), {});
+  assert.deepStrictEqual(P.shotsBySceneId({ scenes: [{ n: 1 }], shots: [{ scene: 1 }] }), {});   // scene without an id
+});
+test("a day's shots follow the day's scene order and add up", () => {
+  const m = P.shotsBySceneId(sl);
+  const ds = P.dayShots({ scenes: ["s3", "s2", "s1"] }, m);
+  assert.deepStrictEqual(ds.scenes.map((x) => [x.id, x.shots.length]), [["s3", 1], ["s2", 0], ["s1", 2]]);
+  assert.strictEqual(ds.total, 3);
+  assert.strictEqual(P.dayShots({ scenes: [] }, m).total, 0);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
