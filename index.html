@@ -417,7 +417,7 @@
           <span>Sheets show a login wall? Sign into the Google account that owns them in this browser.</span>
           <button id="dismiss" class="iconBtn" type="button" aria-label="Dismiss" title="Dismiss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
-        <div id="budgetHint" class="hidden"><b>Rates</b><span>Come from your master sheet. To compare full vs indie rates, open the <b>Settings</b> tab (gold, last tab) in this sheet and change <b>Pay basis</b> (Indie / MEAA / Award) or <b>Prices</b> (Low / Typical / High). The budget recalculates straight away.</span><button id="hintX" class="iconBtn" type="button" aria-label="Hide" title="Hide">✕</button></div>
+        <div id="budgetHint" class="hidden"><b>Rates</b><span>Compare rates on this sheet's <b>Settings</b> tab: <b>Pay basis</b> (Indie / MEAA / Award) and <b>Prices</b> (Low / Typical / High).</span><button id="hintX" class="iconBtn" type="button" aria-label="Hide" title="Hide">✕</button></div>
         <div id="frames"><div class="empty" id="empty"></div></div>
       </div>
     </div>
@@ -1065,7 +1065,7 @@ function showFrame() {
     const why = c && c.state === "error" ? "Couldn't read the Drive folder: " + c.err : "";
     const retry = { label: "Check again", onclick: refreshSheets };
     if (!c || (c.state === "loading" && !c.list.length)) setEmpty(null);
-    else if (isOwner(p)) setEmpty("No production docs yet", "Create a budget, schedule, shot list or crew docs from your script. They're saved straight into this project's Drive folder.", [{ label: "Create production docs…", primary: true, onclick: () => createDocsFlow($("createDocs")) }, retry], why);
+    else if (isOwner(p)) setEmpty("No production docs yet", "Make a budget, schedule, shot list and crew docs from your script.", [{ label: "Create production docs…", primary: true, onclick: () => createDocsFlow($("createDocs")) }, retry], why);
     else setEmpty("No production docs yet", "The owner hasn't created any yet.", [retry], why);
     return;
   }
@@ -1511,7 +1511,8 @@ function projCard(pid) {
 }
 function renderProjectList() {
   const box = $("projects"), all = liveIds();
-  $("projCount").textContent = all.length ? String(all.length) : "";
+  const nLive = all.filter(pid => !projects[pid].archived).length;   // archived ones aren't counted
+  $("projCount").textContent = nLive ? String(nLive) : "";
   $("projSort").value = prefs.sort;
   if (!all.length) {
     box.innerHTML = projectsLoaded
@@ -1745,6 +1746,8 @@ window.__CampHub = {
   // The plan lives with the project, so every member sees changes live. ⚠ needs the production rule.
   writeProduction: (pid, plan) => set(ref(db, "projects/" + pid + "/production"), Object.assign({}, plan, { updatedAt: Date.now(), by: (me && me.email) || "" })),
   toast: (m, kind, ms) => toast(m, kind, ms),
+  confirm: (title, text, ok, danger) => confirmDlg(title, text, ok, !!danger),
+  prompt: (title, label, value) => dialog({ title, fields: [{ name: "v", label, value: value || "" }], ok: "OK" }).then(v => v ? String(v.v || "").trim() : ""),
   layoutChanged: () => {},
   isOwner: p => isOwner(p),
   // Rebuild the schedule (with Day Out of Days) and the budget from the plan, then show them

@@ -224,14 +224,22 @@
   .palSrcTile:hover{ border-color:rgba(255,255,255,.28); }
   .palSrcTile.on{ border-color:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.16); transform:scale(1.02); }
   .palStage{ flex:1; min-width:0; display:flex; background:#0e0f11; }
-  .palPickArea{ flex:1 1 62%; min-width:0; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:14px; border-right:1px solid var(--uiBorder); }
+  .palPickArea{ flex:0 0 62%; min-width:0; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:14px; }
   .palPickArea canvas{ border-radius:8px; cursor:crosshair; box-shadow:0 10px 36px rgba(0,0,0,.5); touch-action:none; }
   .palPickHint{ font-size:12px; color:var(--uiMuted); text-align:center; }
   .palPickHint b{ color:var(--uiText); }
   .palLoupe{ position:absolute; z-index:3; pointer-events:none; padding:8px 12px; border-radius:10px; border:2px solid #fff; box-shadow:0 6px 20px rgba(0,0,0,.5); font:700 12px "JetBrains Mono", ui-monospace, monospace; }
-  .palPrevWrap{ flex:1 1 38%; min-width:0; display:flex; align-items:center; justify-content:center; padding:18px; }
-  .palCol.active{ box-shadow:inset 0 0 0 3px currentColor; }
-  .palCol.active::after{ content:"PICKING"; position:absolute; bottom:4px; left:50%; transform:translateX(-50%); font:700 9px Inter,sans-serif; letter-spacing:.1em; opacity:.7; }
+  .palPrevWrap{ flex:1 1 0; min-width:0; display:flex; align-items:center; justify-content:center; padding:18px; }
+  .palCol.active{ box-shadow:inset 0 0 0 4px #fff, inset 0 0 0 6px rgba(0,0,0,.55); z-index:1; }
+  .palCol.active::after{ content:"● SELECTED"; position:absolute; top:-1px; left:50%; transform:translateX(-50%); font:800 9.5px Inter,sans-serif; letter-spacing:.12em; color:#111; background:#fff; padding:3px 8px; border-radius:0 0 7px 7px; white-space:nowrap; }
+  .palCols.picking .palCol:not(.active){ opacity:.45; filter:saturate(.7); transition:opacity .15s; }
+  .palCols.picking .palCol.active::after{ content:"● PICKING"; }
+  .palSplit{ flex:0 0 8px; cursor:col-resize; position:relative; background:transparent; }
+  .palSplit::after{ content:""; position:absolute; top:50%; left:50%; width:4px; height:44px; border-radius:3px; background:rgba(255,255,255,.22); transform:translate(-50%,-50%); transition:background .12s, height .12s; }
+  .palSplit:hover::after, .palSplit.on::after{ background:#fff; height:72px; }
+  .palWt{ display:inline-flex; align-items:center; gap:2px; border-radius:9px; background:rgba(127,127,127,.2); padding:0 2px; }
+  .palWt button{ width:22px !important; height:26px !important; background:none !important; font-size:13px !important; }
+  .palWt b{ font:700 11px Inter,sans-serif; min-width:20px; text-align:center; }
   .palPrevHost{ position:relative; overflow:hidden; border-radius:10px; box-shadow:0 12px 44px rgba(0,0,0,.55); }
   .palPrevHost > .tpage{ position:absolute; top:0; left:0; transform-origin:0 0; }
   .palCols{ flex:0 0 27%; display:flex; min-height:0; border-top:1px solid var(--uiBorder); }
@@ -280,7 +288,7 @@
     .palMain{ flex:0 0 auto; }
     .palStage{ height:240px; }
     .palPrevWrap{ display:none; }
-    .palPickArea{ border-right:0; }
+    .palPickArea{ flex:1 1 auto !important; } .palSplit{ display:none; }
     .palRail{ flex:1 1 auto; flex-direction:row; align-items:center; overflow-x:auto; overflow-y:hidden; border-right:0; border-bottom:1px solid var(--uiBorder); padding:8px 10px; }
     .palRailLabel{ display:none; }
     .palSrcTile{ width:56px; flex:0 0 56px; }
@@ -1330,6 +1338,8 @@
   // Options (set in the Palette Studio): n 2–12, pl layout, ps shape, sz size, lb labels, gap spacing
   VAR("palette", "pa-swatch", "Swatches", (h, d, o) => {
     const n = Math.max(2, Math.min(12, o.n || 5)), pl = o.pl || "cols", sz = o.sz || "m", lb = o.lb || "both";
+    // how much room each colour gets (1–4): a dominant colour takes a bigger share in columns and bands
+    const wt = range(n).map((i) => Math.max(1, Math.min(4, Number((o.wt || [])[i]) || 1))), wsum = wt.reduce((a, b) => a + b, 0);
     const g = o.gap == null ? 16 : Math.max(0, Math.min(80, Number(o.gap) || 0)), ge = n > 8 ? Math.min(g, 8) : g;
     const circ = o.ps === "circle", shp = circ ? { round:1 } : o.ps === "soft" ? { rr:3 } : {};
     const X0 = 138, W = 1644, Y0 = 315, BOT = 1010, out = [...DH(h, "Colour palette")];
@@ -1360,9 +1370,11 @@
       range(n).forEach((i) => { const x = x0 + i * (dm + g); out.push(h.sw(i, x, Y0, dm, SQ(dm), { round:1 }), ...labels(i, x - 20, Y0 + SQ(dm) + 20, dm + 40, "center")); });
       bodyY = Y0 + SQ(dm) + 20 + labH + 20;
     }else if(pl === "bands"){
-      const avail = { s:400, m:540, l:650 }[sz] || 540, bh = (avail - ge * (n - 1)) / n, lw = labH ? 380 : 0, bw = W - (lw ? lw + 30 : 0);
+      const avail = { s:400, m:540, l:650 }[sz] || 540, unit = (avail - ge * (n - 1)) / wsum, lw = labH ? 380 : 0, bw = W - (lw ? lw + 30 : 0);
+      let yAt = Y0;
       range(n).forEach((i) => {
-        const y = Y0 + i * (bh + ge), sw = swatch(i, X0, y, bw, bh, true); out.push(sw);
+        const bh = unit * wt[i], y = yAt; yAt += bh + ge;
+        const sw = swatch(i, X0, y, bw, bh, true); out.push(sw);
         if(!lw) return;
         const lx = circ ? X0 + sw.w / KX + 28 : X0 + W - lw;
         out.push(...(bh >= labH ? labels(i, lx, y + (bh - labH) / 2, lw) : rowLabels(i, lx, y, lw, bh)));
@@ -1383,8 +1395,9 @@
       });
       bodyY = Y0 + hh + 16 + labH + 16;
     }else{
-      const hh = { s:260, m:420, l:520 }[sz] || 420, w = (W - g * (n - 1)) / n, hgt = circ ? Math.min(hh, SQ(w)) : hh;
-      range(n).forEach((i) => { const x = X0 + i * (w + g); out.push(swatch(i, x, Y0, w, hgt), ...labels(i, x, Y0 + hgt + 17, w, center)); });
+      const hh = { s:260, m:420, l:520 }[sz] || 420, unit = (W - g * (n - 1)) / wsum, hgt = circ ? Math.min(hh, SQ(unit * Math.max(...wt))) : hh;
+      let xAt = X0;
+      range(n).forEach((i) => { const w = unit * wt[i], x = xAt; xAt += w + g; out.push(swatch(i, x, Y0, w, hgt), ...labels(i, x, Y0 + hgt + 17, w, center)); });
       bodyY = Y0 + hgt + 17 + labH + 20;
     }
     if(bodyY < BOT - 50) out.push(h.t("body", "body", X0, bodyY, 1100, Math.min(150, BOT - bodyY), "", "Notes on colour, grade and light…"));
@@ -3076,7 +3089,8 @@
     const th = themeOf(target || pg0);
     const sws = target ? target.els.filter((e) => e.t === "shape" && e.pal != null).sort((a, b) => a.pal - b.pal) : [];
     const names = (i) => { const t = target && target.els.find((e) => e.t === "text" && e.paln === i); return t ? (t.text || "") : ""; };
-    let cols = sws.length ? sws.map((e, i) => ({ hex:toHex(shapeFill(e, th, vOf(target))) || "#888888", name:names(i), lock:false }))
+    const wt0 = (target && target.opt && target.opt.wt) || [];
+    let cols = sws.length ? sws.map((e, i) => ({ hex:toHex(shapeFill(e, th, vOf(target))) || "#888888", name:names(i), lock:false, w:Math.max(1, Math.min(4, Number(wt0[i]) || 1)) }))
                           : th.pal.slice(0, 5).map((h) => ({ hex:toHex(h) || h, name:"", lock:false }));
     const o = Object.assign({ pl:"cols", ps:"sq", sz:"m", lb:"both", gap:16 }, (target && target.opt) || {});
 
@@ -3158,6 +3172,7 @@
         <div class="palRail" id="palRail" aria-label="Photo to pull colours from"></div>
         <div class="palStage" id="palStage">
           <div class="palPickArea" id="palPickArea"><canvas id="palCanvas" hidden></canvas><div class="palPickHint" id="palPickHint"></div><div class="palLoupe" id="palLoupe" hidden></div></div>
+          <div class="palSplit" id="palSplit" title="Drag to resize the photo and the preview" role="separator" aria-orientation="vertical"></div>
           <div class="palPrevWrap"><div class="palPrevHost" id="palPrevHost"></div></div>
         </div>
       </div>
@@ -3237,6 +3252,20 @@
       activeI = (activeI + 1) % cols.length; paint();
     });
     const onPickRz = () => drawPicker(); window.addEventListener("resize", onPickRz);
+    // drag the divider to give the photo or the preview more room (remembered on this device)
+    const SPLIT_KEY = "camp.palSplit", split = $p("#palSplit");
+    const setSplit = (pct) => { pct = Math.max(25, Math.min(80, pct)); pickArea.style.flex = "0 0 " + pct + "%"; return pct; };
+    try{ const v = Number(localStorage.getItem(SPLIT_KEY)); if(v) setSplit(v); }catch(_e){}
+    split.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); split.setPointerCapture(e.pointerId); split.classList.add("on");
+      const st = $p("#palStage").getBoundingClientRect(); let pct = 62;
+      const mv = (ev) => { pct = setSplit((ev.clientX - st.left) / st.width * 100); drawPicker(); updatePreview(); };
+      const up = () => { split.classList.remove("on"); split.removeEventListener("pointermove", mv); split.removeEventListener("pointerup", up); try{ localStorage.setItem(SPLIT_KEY, String(Math.round(pct))); }catch(_e){} };
+      split.addEventListener("pointermove", mv); split.addEventListener("pointerup", up);
+    });
+    // while the eyedropper is over the photo, everything but the swatch it fills steps back
+    cv.addEventListener("pointerenter", () => colsEl.classList.add("picking"));
+    cv.addEventListener("pointerleave", () => colsEl.classList.remove("picking"));
     railEl.addEventListener("click", (e) => { const b = e.target.closest(".palSrcTile"); if(b) pickSource(b.dataset.src); });
 
     // ---- live preview: just the swatches and their labels, cropped tight, on the page's own background
@@ -3249,7 +3278,7 @@
         if(!shade.isConnected || bw < 60 || bh < 60) return;
         try{
           const thk = (pg0 && pg0.bg && THEMES[pg0.bg.th]) ? pg0.bg.th : "deck";
-          const pv = makePage(null, "pa-swatch", DATA, { n:cols.length, pl:o.pl, ps:o.ps, sz:o.sz, lb:o.lb, gap:Number(o.gap) }, thk, 0);
+          const pv = makePage(null, "pa-swatch", DATA, { n:cols.length, pl:o.pl, ps:o.ps, sz:o.sz, lb:o.lb, gap:Number(o.gap), wt:cols.map((c) => c.w || 1) }, thk, 0);
           pv.els.filter((e) => e.t === "shape" && e.pal != null).sort((a, b) => a.pal - b.pal).forEach((e, i) => {
             if(!cols[i]) return; e.fill = cols[i].hex; syncPalLabel(e, pv);
             const nm = pv.els.find((x) => x.t === "text" && x.paln === i); if(nm) nm.text = cols[i].name || "";
@@ -3276,13 +3305,15 @@
       if(activeI >= cols.length) activeI = cols.length - 1; if(activeI < 0) activeI = 0;
       colsEl.innerHTML = cols.map((c, i) => {
         const fg = lumOf(c.hex) > 0.55 ? "#111" : "#fff";
-        return `<div class="palCol${c.lock ? " locked" : ""}${i === activeI ? " active" : ""}${c.k === landedK ? " landed" : ""}" draggable="true" data-i="${i}" data-k="${c.k}" style="background:${c.hex};color:${fg}"><span class="palGrip" aria-hidden="true">⋮⋮</span>
+        const w = c.w || 1;
+        return `<div class="palCol${c.lock ? " locked" : ""}${i === activeI ? " active" : ""}${c.k === landedK ? " landed" : ""}" draggable="true" data-i="${i}" data-k="${c.k}" style="background:${c.hex};color:${fg};flex-grow:${w}"><span class="palGrip" aria-hidden="true">⋮⋮</span>
           ${cols.length < MAXC ? `<button type="button" class="palAdd" data-a="add" title="Add a colour here" aria-label="Add a colour here">+</button>` : ""}
           <div class="palTools">
             <button type="button" data-a="lock" title="${c.lock ? "Unlock" : "Lock (keeps it when shuffling)"}" aria-pressed="${c.lock}">${c.lock ? "🔒" : "🔓"}</button>
             <button type="button" data-a="left" title="Move earlier"${i === 0 ? " disabled" : ""}>‹</button>
             <button type="button" data-a="right" title="Move later"${i === cols.length - 1 ? " disabled" : ""}>›</button>
             <button type="button" data-a="copy" title="Copy hex">⧉</button>
+            <span class="palWt" title="How much room this colour takes on the page (Columns and Bands layouts)"><button type="button" data-a="wdown"${w <= 1 ? " disabled" : ""} aria-label="Smaller share">−</button><b>${w}×</b><button type="button" data-a="wup"${w >= 4 ? " disabled" : ""} aria-label="Bigger share">+</button></span>
             ${cols.length > MINC ? `<button type="button" data-a="del" title="Remove">✕</button>` : ""}
           </div>
           <label class="palPick" title="Change colour"><input type="color" value="${c.hex}" data-a="pick"></label>
@@ -3307,6 +3338,7 @@
     }
     buildRail(); paint(); showPicker();
     // pick which swatch the eyedropper fills: click it (anywhere but its buttons)
+    colsEl.addEventListener("focusin", (e) => { const col = e.target.closest(".palCol"); if(!col) return; const i = Number(col.dataset.i); if(i !== activeI){ activeI = i; colsEl.querySelectorAll(".palCol").forEach((x) => x.classList.toggle("active", Number(x.dataset.i) === i)); } });
     colsEl.addEventListener("pointerdown", (e) => {
       const col = e.target.closest(".palCol"); if(!col || e.target.closest("button")) return;
       const i = Number(col.dataset.i); if(i === activeI) return;
@@ -3321,6 +3353,7 @@
       if(a === "add"){ addColour(i); return; }
       if(a !== "copy") snap();
       if(a === "lock"){ cols[i].lock = !cols[i].lock; paint(); }
+      else if(a === "wup" || a === "wdown"){ cols[i].w = Math.max(1, Math.min(4, (cols[i].w || 1) + (a === "wup" ? 1 : -1))); landedK = cols[i].k; paint(); }
       else if(a === "del"){ cols.splice(i, 1); paint(); }
       else if(a === "left" || a === "right"){ const j = a === "left" ? i - 1 : i + 1; if(j >= 0 && j < cols.length){ const [m] = cols.splice(i, 1); cols.splice(j, 0, m); landedK = m.k; } paint(); }
       else if(a === "copy"){ try{ await navigator.clipboard.writeText(cols[i].hex.toUpperCase()); notify("Copied " + cols[i].hex.toUpperCase()); }catch(_e){} }
@@ -3357,7 +3390,7 @@
     $p("#palPlus").onclick = () => addColour(); $p("#palMinus").onclick = removeColour;
     $p("#palCopy").onclick = async () => { try{ await navigator.clipboard.writeText(cols.map((c) => c.hex.toUpperCase()).join(" ")); notify("Hex codes copied"); }catch(_e){} };
     const close = () => { shade.remove(); window.removeEventListener("resize", onRz); window.removeEventListener("resize", onPickRz); document.removeEventListener("keydown", onKey, true); };
-    const tryClose = () => { if(dirty && !confirm("Close without applying? Your palette changes will be lost.")) return; close(); };
+    const tryClose = async () => { if(dirty && !(await window.CampUI.confirm("Close without applying?\n\nYour palette changes will be lost.", "Discard changes", true))) return; close(); };
     $p("#palX").onclick = tryClose;
     shade.addEventListener("pointerdown", (e) => { if(e.target === shade) tryClose(); });
     // paste hex codes (or a Coolors link) anywhere in the studio to import them as the palette
@@ -3384,7 +3417,7 @@
     }
     document.addEventListener("keydown", onKey, true);
     $p("#palOk").onclick = () => {
-      const opt = { n:cols.length, pl:o.pl, ps:o.ps, sz:o.sz, lb:o.lb, gap:Number(o.gap) };
+      const opt = { n:cols.length, pl:o.pl, ps:o.ps, sz:o.sz, lb:o.lb, gap:Number(o.gap), wt:cols.map((c) => c.w || 1) };
       commit(() => {
         let pg = target;
         if(!pg){ const thk = (pg0 && pg0.bg && THEMES[pg0.bg.th]) ? pg0.bg.th : "deck"; pg = makePage(null, "pa-swatch", DATA, opt, thk, 0); T.pages.splice(T.cur + 1, 0, pg); T.cur++; }

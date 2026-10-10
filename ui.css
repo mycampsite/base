@@ -19,3 +19,26 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 .campOffline.on{ opacity:1; transform:translate(-50%, 0); }
 .campOffline.back{ background:#16261b; border-color:#2c5a39; color:#c9f2d4; }
 .campOffline i{ width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
+
+/* Camp's pop-ups (ui.js: CampUI.confirm / alert / prompt) */
+.campDlgShade{ position:fixed; inset:0; z-index:2147483100; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:16px; animation:campDlgIn .14s ease-out; }
+.campDlg{ width:min(440px, 100%); background:#1a1b1f; color:#ececf0; border:1px solid rgba(255,255,255,.16); border-radius:14px; padding:20px; box-shadow:0 24px 60px rgba(0,0,0,.6); font:14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.campDlg h2{ margin:0 0 6px; font-size:16.5px; font-weight:700; white-space:pre-line; }
+.campDlg p{ margin:0 0 4px; color:rgba(255,255,255,.66); font-size:13px; white-space:pre-line; }
+.campDlgIn{ width:100%; height:38px; margin-top:12px; padding:0 12px; border-radius:9px; border:1px solid rgba(255,255,255,.2); background:rgba(0,0,0,.25); color:inherit; font:inherit; outline:none; box-sizing:border-box; }
+.campDlgIn:focus{ border-color:rgba(255,255,255,.45); }
+.campDlgBtns{ display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.campDlgBtns button{ height:34px; padding:0 14px; border-radius:9px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.06); color:inherit; font:600 13px Inter, system-ui, sans-serif; cursor:pointer; }
+.campDlgBtns button:hover{ background:rgba(255,255,255,.12); }
+.campDlgOk{ background:#ececf0 !important; color:#111 !important; border-color:#ececf0 !important; }
+.campDlgOk.danger{ background:#e5534b !important; border-color:#e5534b !important; color:#fff !important; }
+@keyframes campDlgIn{ from{ opacity:0; } to{ opacity:1; } }
+@media (max-width:560px){ .campDlgShade{ align-items:flex-end; } }
+
+/* Compass spinner (spinner.js fills every .spin). Pages size it; this makes the drawing fill its box. */
+.spin > svg{ display:block; width:100%; height:100%; overflow:visible; }
+/* The opening screen every tool shares: compass, a line of text, a creeping bar */
+.campLoad{ display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center; color:rgba(255,255,255,.6); font:13px/1.5 Inter, system-ui, sans-serif; padding:0 20px; }
+.campLoad .spin{ display:inline-block; width:40px; height:40px; color:#ececf0; border:0 !important; animation:none !important; }
+.campLoad .campBar{ width:180px; height:3px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; }
+.campLoad .campBar i{ display:block; height:100%; width:0; background:#ececf0; border-radius:3px; transition:width .2s linear; }

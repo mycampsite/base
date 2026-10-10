@@ -553,7 +553,7 @@
   .bdMsg{ min-height:20px; margin-top:14px; font-size:13px; color:rgba(255,255,255,.75); }
   .bdMsg.err{ color:#ff8b83; } .bdMsg.ok{ color:#8fe3b0; }
   .bdMsg a{ color:#fff; font-weight:600; }
-  .bdSpin{ display:inline-block; width:12px; height:12px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite; vertical-align:-2px; margin-right:8px; }
+  .bdSpin{ display:inline-block; width:14px; height:14px; margin-right:7px; vertical-align:-2px; color:#fff; }
   .wmActs button{ height:36px; padding:0 14px; }
   @media (max-width: 700px){ .wmBody{ grid-template-columns: 1fr; } .wmPreviewWrap{ position:static; width:60%; margin:0 auto; } }
 
@@ -1192,6 +1192,7 @@ top:38px; left:0;
   background: rgba(255,255,255,0.75);
   color: rgba(0,0,0,0.78);
 }
+:root[data-theme="light"] .sceneBtn .n{ background:rgba(0,0,0,.07); }
 :root[data-theme="light"] .sceneBtn{
   background: rgba(0,0,0,0.03);
 }
@@ -1291,8 +1292,11 @@ top:38px; left:0;
 }
 .sceneBtn:hover{background: rgba(255,255,255,0.06)}
 .sceneBtn.active{outline:2px solid rgba(255,255,255,0.85); outline-offset: -2px}
-.sceneBtn .n{font-size:11px; color:var(--uiMuted)}
-.sceneBtn .t{margin-top:4px; font-size:13px; font-weight:800; color:var(--uiText)}
+.sceneBtn{ display:grid; grid-template-columns:30px minmax(0,1fr); align-items:start; gap:2px 8px; padding:8px 26px 8px 8px; margin-bottom:6px; min-height:50px; }
+.sceneBtn .n{ font:700 11px/1 Inter,sans-serif; color:var(--uiMuted); background:rgba(255,255,255,.07); border-radius:6px; padding:5px 0; text-align:center; margin-top:1px; }
+.sceneBtn .t{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+.sceneBtn .t .loc{ font-size:12.5px; font-weight:700; color:var(--uiText); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sceneBtn .t .tm{ font-size:11px; font-weight:600; letter-spacing:.06em; color:var(--uiMuted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* Right panel (Set type only) */
 .panel{
@@ -2142,8 +2146,9 @@ html,body{ background: var(--uiBg) !important; }
 
 
 <div id="loading" style="position:fixed;inset:0;background:var(--ui-bg);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;">
-  <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,0.12);border-top-color:#5b8cff;border-radius:50%;animation:spin 0.7s linear infinite;"></div>
-  <div style="color:var(--ui-muted);font-size:13px;">Loading script…</div>
+  <div class="campLoad"><span class="spin"></span><div id="loadMsg">Opening your script…</div><div class="campBar"><i id="loadBar"></i></div></div>
+  <script>(function(){ var p = 6, b = document.getElementById("loadBar"), t = setInterval(function(){ if(!b.isConnected || document.getElementById("loading").style.display === "none"){ clearInterval(t); return; } p += Math.max(0.15, (90 - p) * 0.04); b.style.width = p + "%"; }, 120); })();</script>
+<script src="spinner.js"></script>
 </div>
 <style>@keyframes spin{to{transform:rotate(360deg);}}
 /* ---------- Performance: smooth scrolling on long scripts ----------
@@ -2937,10 +2942,10 @@ function _syncGrammarMenu(){
   const t = grammarBtn.querySelector(".tick"); if(t) t.textContent = on ? "✓" : "";
 }
 window.addEventListener("load", _syncGrammarMenu);
-grammarBtn?.addEventListener("click", (e) => {
+grammarBtn?.addEventListener("click", async (e) => {
   e.stopPropagation();
   const on = !(window.__scriptyGrammarEnabled && window.__scriptyGrammarEnabled());
-  if(on && !confirm("Online Grammar Check sends the lines you write to LanguageTool's servers to check them.\n\nTurn it on?")) return;
+  if(on && !(await window.CampUI.confirm("Online Grammar Check sends the lines you write to LanguageTool's servers to check them.\n\nTurn it on?", "Turn on"))) return;
   window.__scriptySetGrammar && window.__scriptySetGrammar(on);
   _syncGrammarMenu();
 });
@@ -3677,9 +3682,14 @@ function rebuildScenesPanel(){
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "sceneBtn";
-    btn.innerHTML = `<div class="n">Scene ${(window.__scriptySceneLabel ? window.__scriptySceneLabel(sceneEl, idx) : idx + 1)}</div><div class="t"></div><span class="sceneGrip" draggable="true" title="Drag to move this scene"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>`;
-    btn.querySelector(".t").textContent = text;
-    btn.querySelector(".t").style.paddingRight = "18px";
+    // Same shape for every scene: number, then the place on one line and the time underneath
+    //   12  EXT. HOUSE - KITCHEN
+    //       DAY
+    const parts = text.split(/\s+[-–—]\s+/), time = parts.length > 1 ? parts.pop() : "";
+    btn.title = text;
+    btn.innerHTML = `<span class="n">${(window.__scriptySceneLabel ? window.__scriptySceneLabel(sceneEl, idx) : idx + 1)}</span><span class="t"><b class="loc"></b><span class="tm"></span></span><span class="sceneGrip" draggable="true" title="Drag to move this scene"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>`;
+    btn.querySelector(".loc").textContent = parts.join(" - ");
+    btn.querySelector(".tm").textContent = time || "\u00a0";
 
     // Drag the grip to move the whole scene
     const grip = btn.querySelector(".sceneGrip");
@@ -10181,8 +10191,8 @@ for(const id of __TITLE_IDS){
     setStatus("Inserted wrap test sentence.");
   });
 
-$("#newBtn").addEventListener("click", () => {
-    if(!confirm("Start a new document?\n\nThis will replace the current one (you can Save first).")) return;
+$("#newBtn").addEventListener("click", async () => {
+    if(!(await window.CampUI.confirm("Start a new document?\n\nThis replaces the current one (you can Save first).", "Start new", true))) return;
     // In a multi-project setup, New should create a new identity.
     // We do this by reloading with a fresh pid (so local autosave and cloud saves don’t overwrite another project).
     try{
@@ -11079,10 +11089,10 @@ async function __handleConflict(source, d, name){
     showSaveToast("err", "Auto-save paused: a newer version of this script is in Drive. Press Save to choose what to do.", 7000);
     return false;
   }
-  const wantCopy = confirm(
-    "A newer version of this script is already saved in Drive (probably from another tab or device).\n\n" +
-    "OK = Save what you have here as a separate copy (nothing is lost).\n" +
-    "Cancel = Don't save. Then go back to the Library and reopen the script to get the Drive version."
+  const wantCopy = await window.CampUI.confirm(
+    "A newer version is already in Drive\n\n" +
+    "Probably from another tab or device. Save what you have here as a separate copy (nothing is lost), " +
+    "or cancel, then reopen the script from the Library to get the Drive version.", "Save as a copy"
   );
   if(!wantCopy){
     setStatus("Save cancelled (newer version in Drive).");
@@ -11442,8 +11452,8 @@ function markDirty(){
     if(f) importBackupFromFile(f);
   });
 
-  function clearSavedData(){
-    if(!confirm("Clear saved data from this browser?")) return;
+  async function clearSavedData(){
+    if(!(await window.CampUI.confirm("Clear saved data from this browser?", "Clear", true))) return;
     lsRemove(STORAGE_KEY_V2);
     lsRemove(STORAGE_KEY_V1);
     lsRemove(STORAGE_META_KEY);
@@ -12191,15 +12201,15 @@ async function __exportPdfExactInner(opts){
       if(!label){ msg("Give the draft a name.", "err"); return; }
       const go = q('[data-a="go"]'); busy = true; go.disabled = true;
       try{
-        msg('<span class="bdSpin"></span>Saving the script…');
+        msg('<span class="spin bdSpin"></span>Saving the script…');
         if(!__cloud.fileId || __autosaveDirty){
           await persistDocToCloud({ source: "manual" });
           if(!__cloud.fileId) throw new Error(__saveError || "Save the script to Drive first (File › Save).");
         }
-        msg('<span class="bdSpin"></span>Making the PDF…');
+        msg('<span class="spin bdSpin"></span>Making the PDF…');
         const out = await exportPdfExact({ noDownload: true });
         const dataUrl = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => no(new Error("Couldn't read the PDF.")); r.readAsDataURL(out.blob); });
-        msg('<span class="bdSpin"></span>Saving to Drive…');
+        msg('<span class="spin bdSpin"></span>Saving to Drive…');
         const body = { action: "savedraft", fileId: __cloud.fileId, label: label, pages: out.pages, dataUrl: dataUrl };
         let res = await post(body);
         for(let i = 0; i < 3 && res && res.auth === false; i++){ if(!(await __askCloudPassword(true))) break; res = await post(body); }
@@ -12606,11 +12616,11 @@ ${TP.join("\n")}
         const f = inp.files && inp.files[0];
         if(!f) return;
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = async () => {
           try{
             const doc = importScriptText(f.name, String(reader.result || ""));
             const n = doc.lines.filter(l => l.type === "scene").length;
-            if(!confirm(`Import "${f.name}" as a new script?\n\n${n} scene${n === 1 ? "" : "s"} found. Your current script stays as it is.`)) return;
+            if(!(await window.CampUI.confirm(`Import "${f.name}" as a new script?\n\n${n} scene${n === 1 ? "" : "s"} found. Your current script stays as it is.`, "Import"))) return;
             openImportedAsNewScript(doc);
           }catch(err){ alert("Import failed: " + err.message); }
         };
@@ -12670,7 +12680,7 @@ ${TP.join("\n")}
         const go = q('[data-a="go"]');
         busy = true; go.disabled = true;
         try{
-          msg('<span class="bdSpin"></span>Saving the script…');
+          msg('<span class="spin bdSpin"></span>Saving the script…');
           if(!__cloud || !__cloud.endpoint) throw new Error("Cloud isn't set up. Open the Library and set your Apps Script link first.");
           if(!__cloud.fileId || __autosaveDirty){
             await persistDocToCloud({ source: "manual" });
@@ -12680,7 +12690,7 @@ ${TP.join("\n")}
           try{ if(window.__scriptPages > 0){ doc.meta = doc.meta || {}; doc.meta.pages = window.__scriptPages; } }catch(_e){}
           let tz = "";
           try{ tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }catch(_e){}
-          msg('<span class="bdSpin"></span>Building the budget in Google Sheets… this can take up to a minute.');
+          msg('<span class="spin bdSpin"></span>Building the budget in Google Sheets… this can take up to a minute.');
           const body = { action: "budget", fileId: __cloud.fileId, name: __cloud.name || "", doc, tz };
           let res = await postBudget(body);
           for(let i = 0; i < 3 && res && res.auth === false; i++){
@@ -12753,7 +12763,7 @@ ${TP.join("\n")}
         const go = q('[data-a="go"]');
         busy = true; go.disabled = true;
         try{
-          msg('<span class="bdSpin"></span>Saving the script…');
+          msg('<span class="spin bdSpin"></span>Saving the script…');
           if(!__cloud || !__cloud.endpoint) throw new Error("Cloud isn't set up. Open the Library and set your Apps Script link first.");
           if(!__cloud.fileId || __autosaveDirty){
             await persistDocToCloud({ source: "manual" });
@@ -12763,7 +12773,7 @@ ${TP.join("\n")}
           try{ if(window.__scriptPages > 0){ doc.meta = doc.meta || {}; doc.meta.pages = window.__scriptPages; } }catch(_e){}
           let tz = "";
           try{ tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }catch(_e){}
-          msg('<span class="bdSpin"></span>Building the schedule in Google Sheets… this can take up to a minute.');
+          msg('<span class="spin bdSpin"></span>Building the schedule in Google Sheets… this can take up to a minute.');
           const body = { action: "schedule", fileId: __cloud.fileId, name: __cloud.name || "", doc, tz };
           let res = await postSchedule(body);
           for(let i = 0; i < 3 && res && res.auth === false; i++){
@@ -12836,7 +12846,7 @@ ${TP.join("\n")}
         const go = q('[data-a="go"]');
         busy = true; go.disabled = true;
         try{
-          msg('<span class="bdSpin"></span>Saving the script…');
+          msg('<span class="spin bdSpin"></span>Saving the script…');
           if(!__cloud || !__cloud.endpoint) throw new Error("Cloud isn't set up. Open the Library and set your Apps Script link first.");
           if(!__cloud.fileId || __autosaveDirty){
             await persistDocToCloud({ source: "manual" });
@@ -12846,7 +12856,7 @@ ${TP.join("\n")}
           try{ if(window.__scriptPages > 0){ doc.meta = doc.meta || {}; doc.meta.pages = window.__scriptPages; } }catch(_e){}
           let tz = "";
           try{ tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }catch(_e){}
-          msg('<span class="bdSpin"></span>Building the shot list in Google Sheets… this can take up to a minute.');
+          msg('<span class="spin bdSpin"></span>Building the shot list in Google Sheets… this can take up to a minute.');
           const body = { action: "shotlist", fileId: __cloud.fileId, name: __cloud.name || "", doc, tz };
           let res = await postShotlist(body);
           for(let i = 0; i < 3 && res && res.auth === false; i++){
@@ -12918,7 +12928,7 @@ ${TP.join("\n")}
         const go = q('[data-a="go"]');
         busy = true; go.disabled = true;
         try{
-          msg('<span class="bdSpin"></span>Saving the script…');
+          msg('<span class="spin bdSpin"></span>Saving the script…');
           if(!__cloud || !__cloud.endpoint) throw new Error("Cloud isn't set up. Open the Library and set your Apps Script link first.");
           if(!__cloud.fileId || __autosaveDirty){
             await persistDocToCloud({ source: "manual" });
@@ -12928,7 +12938,7 @@ ${TP.join("\n")}
           try{ if(window.__scriptPages > 0){ doc.meta = doc.meta || {}; doc.meta.pages = window.__scriptPages; } }catch(_e){}
           let tz = "";
           try{ tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }catch(_e){}
-          msg('<span class="bdSpin"></span>Building the production docs in Google Sheets… this can take up to a minute.');
+          msg('<span class="spin bdSpin"></span>Building the production docs in Google Sheets… this can take up to a minute.');
           const body = { action: "productiondocs", fileId: __cloud.fileId, name: __cloud.name || "", doc, tz };
           let res = await postProdDocs(body);
           for(let i = 0; i < 3 && res && res.auth === false; i++){
@@ -13130,7 +13140,7 @@ ${TP.join("\n")}
 
     async function restoreSelected(){
       if(!selected || !selectedDoc) return;
-      if(!confirm(`Restore the version from ${fmtDate(selected.savedAt)}?\n\nWhat you have now is kept as a version first, so you can switch back.`)) return;
+      if(!(await window.CampUI.confirm(`Restore the version from ${fmtDate(selected.savedAt)}?\n\nWhat you have now is kept as a version first, so you can switch back.`, "Restore"))) return;
       try{
         const cur = serializeDocFromDOM();
         const doc = JSON.parse(JSON.stringify(selectedDoc));
@@ -13792,7 +13802,7 @@ ${TP.join("\n")}
     list?.addEventListener("click", (e) => {
       if(e.target.closest('[data-a="clearopen"]')){
         const ids = orderedIds().filter(id => __COMMENTS[id] && !__COMMENTS[id].resolved);
-        if(ids.length && confirm("Delete all " + ids.length + " open comment" + (ids.length === 1 ? "" : "s") + "? Resolved ones are kept. You can undo this.")) removeComments(ids);
+        if(ids.length) window.CampUI.confirm("Delete all " + ids.length + " open comment" + (ids.length === 1 ? "" : "s") + "?\n\nResolved ones are kept. You can undo this.", "Delete", true).then((ok) => { if(ok) removeComments(ids); });
         return;
       }
       const it = e.target.closest(".cmtItem"); if(!it) return;
@@ -13811,7 +13821,7 @@ ${TP.join("\n")}
     rlist?.addEventListener("click", (e) => {
       if(e.target.closest('[data-a="clearres"]')){
         const ids = Object.keys(__COMMENTS).filter(id => __COMMENTS[id] && __COMMENTS[id].resolved);
-        if(ids.length && confirm("Delete all " + ids.length + " resolved comment" + (ids.length === 1 ? "" : "s") + " for good?")) removeComments(ids);
+        if(ids.length) window.CampUI.confirm("Delete all " + ids.length + " resolved comment" + (ids.length === 1 ? "" : "s") + " for good?", "Delete", true).then((ok) => { if(ok) removeComments(ids); });
         return;
       }
       const it = e.target.closest(".cmtItem"); if(!it) return;
@@ -14027,11 +14037,11 @@ ${TP.join("\n")}
   // ---------- Revisions dialog & Lock Scene Numbers ----------
   (function __revUI(){
     const lockBtn = document.getElementById("mLockSceneNumbers");
-    if(lockBtn) lockBtn.addEventListener("click", (e) => {
+    if(lockBtn) lockBtn.addEventListener("click", async (e) => {
       e.stopPropagation(); try{ closeMenus(); }catch(_e){}
       const L = window.__scriptySceneLock;
       if(L.get().on){
-        if(!confirm("Unlock scene numbers?\n\nScenes will be numbered 1, 2, 3… again, in order (letters like 12A go away).")) return;
+        if(!(await window.CampUI.confirm("Unlock scene numbers?\n\nScenes are numbered 1, 2, 3… again, in order (letters like 12A go away).", "Unlock"))) return;
         L.unlock(); try{ setStatus("Scene numbers unlocked and renumbered."); }catch(_e){}
       }else{
         L.lock(); try{ setStatus("Scene numbers locked. New scenes get letters, like 12A."); }catch(_e){}
@@ -14098,8 +14108,8 @@ ${TP.join("\n")}
       };
       if(act("next")) act("next").onclick = () => { R.start(pick); if(wantDraft()) setDraftFor(pick); try{ setStatus(`${__revColorNameUI(pick)} revision started.`); }catch(_e){} close(); };
       if(act("stop")) act("stop").onclick = () => { R.stop(); try{ setStatus("Revision tracking stopped. Existing marks are kept."); }catch(_e){} close(); };
-      if(act("clear")) act("clear").onclick = () => {
-        if(!confirm("Remove every revision mark?\n\nUse this when you lock a fresh White draft. Your text isn't changed.")) return;
+      if(act("clear")) act("clear").onclick = async () => {
+        if(!(await window.CampUI.confirm("Remove every revision mark?\n\nUse this when you lock a fresh White draft. Your text isn't changed.", "Remove marks", true))) return;
         R.clear(); render();
       };
       act("close").onclick = close;

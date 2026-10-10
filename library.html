@@ -322,7 +322,7 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
 .hitMore{ border:0; background:transparent; color: var(--muted); cursor:pointer; font-size: 12.5px; padding: 6px 0 0; }
 .hitMore:hover{ color: var(--text); text-decoration: underline; }
 .deepNote{ color: var(--muted); font-size: 13px; padding: 6px 2px 14px; }
-.spin{ display:inline-block; width:12px; height:12px; border:2px solid var(--faint); border-top-color: var(--text); border-radius:50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+.spin{ display:inline-block; width:14px; height:14px; color:var(--text); vertical-align:-2px; margin-right:6px; }
 @keyframes spin{ to{ transform: rotate(360deg); } }
 
 /* ---------- Recently deleted ---------- */
@@ -1018,12 +1018,12 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
     const m = $("acctMenu");
     const open = !m.hidden; closeMenus(); if(open) return;
     m.innerHTML = `<div class="mh">${isCollab() ? "Team member" : "Owner"}</div>` + (isCollab() ? `<button data-a="name">Change my name…</button>` : `<button data-a="team">Team password…</button>`) + `<button data-a="out" class="danger">Sign out on this device</button>`;
-    m.onclick = (ev) => {
+    m.onclick = async (ev) => {
       const x = ev.target.closest("button"); if(!x) return; closeMenus();
       if(x.dataset.a === "team") openTeam();
       if(x.dataset.a === "name") askMyName();
       if(x.dataset.a === "out"){
-        if(!confirm("Sign out on this device?\n\nYou'll need the password to get back in.")) return;
+        if(!(await window.CampUI.confirm("Sign out on this device?\n\nYou'll need the password to get back in.", "Sign out"))) return;
         setKey(""); lsDel(LIST_KEY); lsDel("SCRIPTY_ME_V1"); files = []; setRole(null); render(); refresh();
       }
     };
@@ -1113,11 +1113,11 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
     const pw = $("teamPw").value.trim();
     if(!pw){ if(!lib.teamOn){ $("teamMsg").textContent = "Type a team password (or press Make one)."; $("teamMsg").className = "msg err"; $("teamPw").focus(); } else $("teamShade").hidden = true; return; }
     if(pw.replace(/\s+/g, "").length < 6){ $("teamMsg").textContent = "Use at least 6 characters."; $("teamMsg").className = "msg err"; return; }
-    if(lib.teamOn && !confirm("Change the team password?\n\nEveryone else gets signed out until you give them the new one.")) return;
+    if(lib.teamOn && !(await window.CampUI.confirm("Change the team password?\n\nEveryone else gets signed out until you give them the new one.", "Change it"))) return;
     await sendTeam(pw);
   };
   $("teamOff").onclick = async () => {
-    if(!confirm("Turn off the team password?\n\nEveryone except you gets signed out.")) return;
+    if(!(await window.CampUI.confirm("Turn off the team password?\n\nEveryone except you gets signed out.", "Turn off", true))) return;
     await sendTeam("");
   };
   $("teamCancel").onclick = () => { $("teamShade").hidden = true; };
@@ -2043,5 +2043,6 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
   })();
 })();
 </script>
+<script src="spinner.js"></script>
 </body>
 </html>

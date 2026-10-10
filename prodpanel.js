@@ -36,6 +36,9 @@ const css = `
 .ctlChip.btnChip{ cursor:pointer; background:none; font:inherit; font-size:11.5px; }
 .ctlChip.btnChip:hover{ border-color:rgba(241,199,107,.8); }
 .ctlMore{ position:relative; }
+.ctlUR{ display:inline-flex; gap:2px; }
+.ctlUR .btn{ min-width:32px; padding:0 8px; font-size:15px; }
+.ctlUR .btn:disabled{ opacity:.35; }
 .ctlMenu{ position:absolute; right:0; top:calc(100% + 6px); z-index:20; min-width:230px; padding:4px; border-radius:10px; background:#1d1e22; border:1px solid rgba(255,255,255,.17); box-shadow:0 14px 40px rgba(0,0,0,.5); display:flex; flex-direction:column; }
 .ctlMenu button{ text-align:left; border:0; background:none; padding:8px 10px; border-radius:7px; cursor:pointer; font-size:13px; }
 .ctlMenu button small{ display:block; color:var(--uiMuted); font-size:11.5px; margin-top:2px; }
@@ -110,24 +113,15 @@ const css = `
 .strip .t span{ color:var(--uiMuted); font-weight:600; white-space:nowrap; }
 .strip .l{ color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .strip .c{ color:var(--uiMuted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.dtPick{ position:relative; display:inline-flex; margin-left:6px; font-size:11.5px; color:var(--uiMuted); cursor:pointer; border-radius:6px; padding:1px 5px; }
-.dtPick:hover{ background:rgba(255,255,255,.08); color:var(--uiText); }
+.dtPick{ position:relative; display:inline-flex; align-items:center; gap:5px; margin-left:6px; font-size:11.5px; color:var(--uiText); cursor:pointer; border-radius:7px; padding:2px 7px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); }
+.dtPick:hover{ border-color:rgba(255,255,255,.4); }
+.offRow{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--uiMuted); }
+.offRow b{ color:var(--uiText); margin-right:4px; }
+.offChip{ border:1px solid rgba(255,139,131,.4); background:rgba(255,139,131,.08); color:#ffb4ae; border-radius:7px; padding:2px 8px; font-size:11.5px; cursor:pointer; }
 .dtPick.pinned{ color:#a9c1ff; }
 .dtPick input{ position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; }
 .colHead .unpin{ border:0; background:none; color:var(--uiMuted); cursor:pointer; font-size:11px; padding:0 3px; }
 .colHead .unpin:hover{ color:#fff; }
-.cal{ margin-top:12px; }
-.calHead{ display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; font-size:12px; color:var(--uiMuted); margin-bottom:6px; }
-.calHead b{ color:var(--uiText); font-size:13px; }
-.calGrid{ display:grid; grid-template-columns:repeat(7, minmax(0, 64px)); gap:4px; }
-.calGrid > i{ font-style:normal; font-size:10.5px; color:var(--uiMuted); text-transform:uppercase; letter-spacing:.06em; padding-left:4px; }
-.cd{ height:38px; border-radius:8px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.02); color:var(--uiMuted); font-size:11px; display:flex; flex-direction:column; align-items:flex-start; justify-content:space-between; padding:3px 6px; cursor:default; }
-.cd b{ font-size:11px; }
-.cd.rest{ opacity:.35; }
-.cd.shoot{ background:rgba(143,227,166,.13); border-color:rgba(143,227,166,.4); color:#bff0cc; cursor:pointer; }
-.cd.shoot.pin{ background:rgba(91,140,255,.15); border-color:rgba(91,140,255,.5); color:#cbd8ff; cursor:default; }
-.cd.off{ background:repeating-linear-gradient(135deg, rgba(255,139,131,.12) 0 6px, transparent 6px 12px); border-color:rgba(255,139,131,.45); color:#ffb4ae; cursor:pointer; }
-.cd:not(:disabled):hover{ border-color:#fff; }
 .colEmpty{ color:var(--uiMuted); font-size:12px; padding:8px 4px; text-align:center; }
 .moveBar{ position:sticky; left:0; display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; padding:8px 10px; border-radius:10px; background:#202634; border:1px solid rgba(91,140,255,.35); font-size:12.5px; }
 .moveBar select{ height:30px; border-radius:8px; border:1px solid var(--uiBorder); background:#111; padding:0 8px; }
@@ -200,7 +194,27 @@ async function loadScript(id, force){
 
 /* ---------- saving (whole plan; the team sees it live) ---------- */
 let saveT = 0, pending = null;
-function save(pid, plan){
+// Undo / redo for the plan (this device's own changes). Quick runs of edits (typing a time) count as one.
+const HIST = {};   // pid -> { undo:[json], redo:[json], at }
+const strip_ = (pl) => { const c = Object.assign({}, pl); delete c.callsheets; delete c.updatedAt; delete c.by; return JSON.stringify(c); };
+function remember(pid){
+  const h = HIST[pid] = HIST[pid] || { undo: [], redo: [], at: 0 };
+  const now = Date.now(), cur = strip_(planOf(pid));
+  if(now - h.at > 700 && h.undo[h.undo.length - 1] !== cur){ h.undo.push(cur); if(h.undo.length > 80) h.undo.shift(); }
+  h.at = now; h.redo.length = 0;
+}
+function stepHist(pid, back){
+  const h = HIST[pid]; if(!h) return;
+  const from = back ? h.undo : h.redo, to = back ? h.redo : h.undo;
+  if(!from.length){ H().toast(back ? "Nothing to undo." : "Nothing to redo.", "ok", 1400); return; }
+  const cur = planOf(pid); to.push(strip_(cur));
+  const next = JSON.parse(from.pop());
+  if(cur.callsheets) next.callsheets = cur.callsheets;   // links to made docs aren't part of undo
+  h.at = 0; save(pid, next, true); rerender();
+  H().toast(back ? "Undone." : "Redone.", "ok", 1200);
+}
+function save(pid, plan, noHist){
+  if(!noHist) remember(pid);
   pending = { pid, plan };
   clearTimeout(saveT);
   saveT = setTimeout(flush, 250);
@@ -222,7 +236,16 @@ function planOf(pid){
 let rafId = 0;
 function rerender(){ cancelAnimationFrame(rafId); rafId = requestAnimationFrame(() => { if(S.pid) render(S.pid); }); }
 
+// Re-drawing replaces the panel's HTML: keep where you were scrolled (page and board), so a click doesn't jump
 function render(pid){
+  const box = document.getElementById("ctl"), body = box && box.querySelector(".ctlBody"), board = box && box.querySelector(".board");
+  const top = body ? body.scrollTop : 0, left = board ? board.scrollLeft : 0;
+  draw(pid);
+  const b2 = box && box.querySelector(".ctlBody"), bd2 = box && box.querySelector(".board");
+  if(b2 && top) b2.scrollTop = top;
+  if(bd2 && left) bd2.scrollLeft = left;
+}
+function draw(pid){
   S.pid = pid;
   const hub = H(), box = document.getElementById("ctl"); if(!box || !hub) return;
   const p = hub.project(pid); if(!p){ box.innerHTML = ""; return; }
@@ -260,7 +283,7 @@ function render(pid){
   // No plan yet: one click starts it from the script
   if(!raw){
     box.innerHTML = head(`<span class="ctlChip">${bd.scenes.length} scenes</span><span class="ctlChip">${P.fmtEighths(bd.totals.eighths)} pages</span><span class="ctlChip">${bd.cast.length} cast</span>`) + (S.open ? `<div class="ctlEmpty">
-        ${canEdit ? `Plan the shoot: set the number of shoot days and a start date, and Camp lays out a first schedule from the script that you can then rearrange. Budget, schedule and call sheets follow it.
+        ${canEdit ? `Camp lays out a first schedule from the script. Rearrange it, and the budget, schedule and call sheets follow.
         <button class="btn primary sm" type="button" data-a="start">Start the production plan</button>` : `The owner hasn't started the production plan yet.`}</div>` : "");
     wire(box, pid, { bd, scriptId }); return;
   }
@@ -273,7 +296,7 @@ function render(pid){
     if(rec.removed.length || added.length) S.notice[pid] = { added, removed: rec.removed };
     rec.plan.scriptId = scriptId;
     rec.plan.known = bd.scenes.filter((s) => s.id).map((s) => s.id);
-    save(pid, rec.plan);
+    save(pid, rec.plan, true);
   }
   const pl = rec.plan, st = pl.settings, dates = P.planDates(pl);
   const badOrder = dates.some((d, i) => i && d && dates[i - 1] && d <= dates[i - 1]);
@@ -289,7 +312,9 @@ function render(pid){
     ${badOrder ? `<span class="ctlChip warn" title="A pinned date is on or before the day ahead of it">⚠ Days out of date order</span>` : ""}
     ${sc.state === "loading" ? `<span class="ctlChip">Updating from script…</span>` : ""}
     ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}`;
+  const hh = HIST[pid] || { undo: [], redo: [] };
   const acts = `<div class="ctlActs">
+      ${canEdit ? `<span class="ctlUR"><button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
       ${hub.isOwner(p) ? `<button class="btn sm primary" type="button" data-a="sync" title="Rebuild the Schedule (with Day Out of Days), the Budget and the call sheets from this plan">Sync to Sheets</button>` : ""}
       <span class="ctlMore"><button class="btn sm" type="button" data-a="menu" aria-haspopup="menu" aria-expanded="${S.menu}" title="More">⋯</button>${S.menu ? `<div class="ctlMenu" role="menu">
         <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room</small></button>
@@ -338,7 +363,7 @@ function render(pid){
     .concat(pl.days.map((d, i) => {
       const x = stats[i], pct = Math.min(100, Math.round(x.eighths / st.maxEighths * 100));
       return `<div class="col${x.over ? " over" : ""}${S.landed && S.landed.day === i ? " bump" : ""}" data-day="${i}">
-        <div class="colHead"><b>Day ${i + 1}</b><label class="dtPick${d.date ? " pinned" : ""}" title="${d.date ? "Pinned to this date. Click to change" : "Click to pin this day to a date"}"><span>${esc(fmtDate(dates[i]) || "Set date")}${d.date ? " 📌" : ""}</span><input type="date" value="${esc(dates[i] || "")}" data-date="${i}"${dis}></label>${d.date && canEdit ? `<button type="button" class="unpin" data-a="unpin" data-day="${i}" title="Unpin: follow on from the day before">✕</button>` : ""}
+        <div class="colHead"><b>Day ${i + 1}</b><label class="dtPick${d.date ? " pinned" : ""}" title="${d.date ? "Set to this date. Click to change it" : "Click to choose this day's date. The days after it follow on"}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(fmtDate(dates[i]) || "Set date")}</span><input type="date" value="${esc(dates[i] || "")}" data-date="${i}"${dis}></label>${d.date && canEdit ? `<button type="button" class="unpin" data-a="unpin" data-day="${i}" title="Unpin: follow on from the day before">✕</button>` : ""}
           <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc · ${x.cast.length} cast</span></div>
           <div class="cap"><i style="width:${pct}%"></i></div>
           <div class="colCall">Call <input type="time" value="${esc(d.call || st.call)}" data-call="${i}"${dis}>${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
@@ -359,10 +384,12 @@ function render(pid){
       ${rows.map((r) => `<tr><td>${esc(r.name)}${kidOf[r.name] ? ` <span class="kid" title="Under 18${kidOf[r.name].age != null ? " (age " + kidOf[r.name].age + ")" : ": confirm age"}. Limited work hours, permit and chaperone.">⚠ under 18</span>` : ""}</td>${r.marks.map((m) => `<td class="${m}">${m}</td>`).join("")}<td>${r.workDays}</td><td>${r.holdDays}</td><td><b>${r.total}</b></td></tr>`).join("")}
     </table></div></details>`;
 
-  const cal = calendar(pl, dates, canEdit);
+  // days off set earlier (the old calendar): listed so they can be cleared
+  const offs = (st.off || []);
+  const cal = offs.length ? `<div class="offRow"><b>Days off</b>${offs.map((iso) => `<button type="button" class="offChip" data-a="cal" data-iso="${esc(iso)}" title="Shoot on this date again"${canEdit ? "" : " disabled"}>${esc(fmtDate(iso))} ✕</button>`).join("")}</div>` : "";
   const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit);
   box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${warnBox}${moveBar}<div class="board">${cols}</div>${dood}${flagSec}${locSec}
-    <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it to another day" : "Drag scenes between days (or click a scene to move it)"}. Changes save for the whole team straight away.</div></div>`;
+    <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it" : "Drag scenes between days, or click one to move it"}. Saves for everyone as you go.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
 }
 
@@ -375,7 +402,7 @@ function flagsView(pl, bd, canEdit){
   const sid = (n) => { const s = bd.scenes[n - 1]; return s ? (s.id || "n" + n) : ""; };
   const nIgn = list.filter((f) => glob[f.id] === "ignore").length, nWatch = list.filter((f) => glob[f.id] === "watch").length;
   return `<details class="dood fx" data-sec="flags"${lsGet(FLAGS_KEY) === "1" ? " open" : ""}><summary>Script flags · ${list.length}${nWatch ? " · " + nWatch + " watching" : ""}${nIgn ? " · " + nIgn + " ignored" : ""}</summary>
-    <div class="fxNote">Wrong flag? Ignore it and it drops out of the warnings, budget and call sheets on the next Sync. Click a scene to ignore it just there. Watch keeps it, marked to check.</div>
+    <div class="fxNote">Wrong flag? Ignore it (or click a scene to ignore it there). Watch keeps it, marked to check. Docs update on the next Sync.</div>
     ${list.map((f) => {
       const g = glob[f.id] || "keep", all = f.scenes.concat(f.ignored || []).sort((a, b) => a - b);
       return `<div class="fxRow${g === "ignore" ? " ign" : g === "watch" ? " wat" : ""}">
@@ -394,34 +421,11 @@ function locsView(pl, bd, canEdit){
   const groups = Array.from(new Set(names.map((n) => to[n] || n)));
   const rooms = names.filter((n) => ROOM_RE.test(n) && !to[n]);
   return `<details class="dood fx" data-sec="locs"${lsGet(LOCS_KEY) === "1" ? " open" : ""}><summary>Locations · ${groups.length} place${groups.length === 1 ? "" : "s"}${names.length !== groups.length ? " (" + names.length + " in the script)" : ""}</summary>
-    <div class="fxNote">Rooms written as their own location (INT. KITCHEN, INT. LOUNGE) count as separate places, with company moves between them. If they're all one house, put them in one place: the schedule, budget and call sheets then treat them as sets of it.
+    <div class="fxNote">Rooms written as their own location (INT. KITCHEN) count as separate places. If they're in one house, group them.
       ${rooms.length > 1 && canEdit ? `<button type="button" class="btn sm" data-a="rooms" data-rooms="${esc(rooms.join("|"))}">Put ${rooms.length} rooms in one place…</button>` : ""}</div>
     ${names.sort((a, b) => orig[b].e - orig[a].e).map((n) => `<div class="fxRow"><div class="fxName"><b>${esc(n)}</b><span>${orig[n].n} scene${orig[n].n === 1 ? "" : "s"} · ${P.fmtEighths(orig[n].e)} pg</span></div>
       <label class="fxIn">Part of <select data-loc="${esc(n)}"${canEdit ? "" : " disabled"}><option value="">Its own location</option>${groups.filter((g) => g !== n).map((g) => `<option value="${esc(g)}"${to[n] === g ? " selected" : ""}>${esc(g)}</option>`).join("")}<option value="__new">New place…</option></select></label></div>`).join("")}
   </details>`;
-}
-
-/* ---------- calendar: the shoot at a glance; click a date to make it a day off (or a shoot day again) ---------- */
-function calendar(pl, dates, canEdit){
-  const st = pl.settings, set = dates.filter(Boolean);
-  if(!set.length) return "";
-  const dayOf = {}; dates.forEach((d, i) => { if(d) dayOf[d] = i; });
-  const off = new Set(st.off || []);
-  const first = P.parseISO(set.reduce((a, b) => a < b ? a : b)), last = P.parseISO(set.reduce((a, b) => a > b ? a : b));
-  const d = new Date(first.getTime()); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));          // back to Monday
-  const end = new Date(last.getTime()); end.setUTCDate(end.getUTCDate() + (6 - (end.getUTCDay() + 6) % 7)); // on to Sunday
-  const work = (dow) => st.perWeek === 7 ? true : st.perWeek === 6 ? dow !== 0 : (dow !== 0 && dow !== 6);
-  const cells = []; let n = 0;
-  while(d <= end && n++ < 7 * 16){
-    const iso = d.toISOString().slice(0, 10), i = dayOf[iso], dow = d.getUTCDay();
-    const cls = i != null ? "shoot" + (pl.days[i].date ? " pin" : "") : off.has(iso) ? "off" : work(dow) ? "free" : "rest";
-    const label = d.getUTCDate() === 1 || !cells.length ? d.toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" }) : String(d.getUTCDate());
-    const tip = i != null ? "Day " + (i + 1) + (pl.days[i].date ? " (pinned)" : "") + (canEdit && !pl.days[i].date ? ": click to make this a day off" : "") : off.has(iso) ? "Day off: click to shoot again" : work(dow) ? "Not needed" : "Weekend (Shooting week setting)";
-    cells.push(`<button type="button" class="cd ${cls}" data-a="cal" data-iso="${iso}" title="${esc(tip)}"${canEdit && (cls === "off" || (cls.indexOf("shoot") === 0 && !pl.days[i].date)) ? "" : " disabled"}><span>${esc(label)}</span>${i != null ? `<b>D${i + 1}</b>` : off.has(iso) ? "<b>off</b>" : ""}</button>`);
-    d.setUTCDate(d.getUTCDate() + 1);
-  }
-  return `<div class="cal"><div class="calHead"><b>Calendar</b><span>Click a shoot day to make it a day off; the days after it move along. Pin a day to a date in its column.${(st.off || []).length ? " " + st.off.length + " day" + (st.off.length === 1 ? "" : "s") + " off." : ""}</span></div>
-    <div class="calGrid">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((w) => `<i>${w}</i>`).join("")}${cells.join("")}</div></div>`;
 }
 
 /* ---------- call sheets ---------- */
@@ -437,7 +441,7 @@ function csView(pid, p, raw, pl, dates, scriptId){
   if(!raw) return `<div class="csWrap"><h3>No shoot plan yet</h3><p>Call sheets follow the plan. Start it on the Plan tab first.</p></div>`;
   const list = days.length ? `<div class="csList">${days.map((d) => { const i = Number(d.day) - 1; return `<a class="csDay${stale ? " stale" : ""}" href="${esc(d.url)}" target="_blank" rel="noopener"><b>Day ${esc(d.day)} ↗</b><span>${esc(fmtDate(dates[i]) || "")}${pl.days[i] ? " · " + pl.days[i].scenes.length + " scene" + (pl.days[i].scenes.length === 1 ? "" : "s") : ""}</span></a>`; }).join("")}</div>` : "";
   return `<div class="csWrap">
-    <p>One Google Doc per shoot day: call times, scenes, cast, crew, weather, sunrise and safety checks from your master sheet. ${days.length ? `Last made ${esc(when)}.` : ""}${stale ? " <b style=\"color:#f1c76b\">The plan changed since then.</b>" : ""}</p>
+    <p>One Google Doc per shoot day. ${days.length ? `Last made ${esc(when)}.` : ""}${stale ? " <b style=\"color:#f1c76b\">The plan changed since then.</b>" : ""}</p>
     ${errBox}
     ${list || (err ? "" : `<p>None made yet.</p>`)}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -457,6 +461,7 @@ function wire(box, pid, ctx){
       const k = a.dataset.a;
       if(k !== "menu") S.menu = false;
       if(k === "menu"){ S.menu = !S.menu; render(pid); return; }
+      if(k === "undo" || k === "redo"){ stepHist(pid, k === "undo"); return; }
       if(k === "warns"){ S.warnOpen = !S.warnOpen; render(pid); return; }
       if(k === "create"){ hub.createDocs(a); return; }
       if(k === "fx" && canEdit){
@@ -477,16 +482,18 @@ function wire(box, pid, ctx){
       }
       if(k === "rooms" && canEdit){
         const rooms = (a.dataset.rooms || "").split("|").filter(Boolean);
-        const name = (prompt("What's the location called? (e.g. HOUSE)\n\nThese rooms become sets of it: " + rooms.join(", "), "HOUSE") || "").trim().toUpperCase();
-        if(!name) return;
-        update((plan) => { plan.locMerge = (plan.locMerge || []).filter((m) => rooms.indexOf(m.from) < 0).concat(rooms.filter((r) => r !== name).map((r) => ({ from: r, to: name }))); });
-        H().toast(rooms.length + " rooms are now sets of " + name + ".", "ok", 2200); return;
+        H().prompt("One location for " + rooms.length + " rooms", "Location name (" + rooms.join(", ") + " become its sets)", "HOUSE").then((v) => {
+          const name = String(v || "").trim().toUpperCase(); if(!name) return;
+          update((plan) => { plan.locMerge = (plan.locMerge || []).filter((m) => rooms.indexOf(m.from) < 0).concat(rooms.filter((r) => r !== name).map((r) => ({ from: r, to: name }))); });
+          H().toast(rooms.length + " rooms are now sets of " + name + ".", "ok", 2200);
+        });
+        return;
       }
       if(k === "unpin" && canEdit){ update((plan) => { const d = plan.days[Number(a.dataset.day)]; if(d) d.date = ""; }); return; }
       if(k === "cal" && canEdit){
         const iso = a.dataset.iso;
         update((plan) => { const off = new Set(plan.settings.off || []); off.has(iso) ? off.delete(iso) : off.add(iso); plan.settings.off = Array.from(off).sort(); });
-        H().toast(new Set(planOf(pid).settings.off).has(iso) ? "Day off. The shoot days after it move along." : "Shoot day again.", "ok", 1800);
+        H().toast("Day off removed.", "ok", 1500);
         return;
       }
       if(k === "cs"){ flush(); hub.makeCallsheets(pid, ctx.scriptId, a); return; }
@@ -505,13 +512,8 @@ function wire(box, pid, ctx){
         save(pid, r.plan); flush(); rerender(); return;
       }
       if(k === "days-" || k === "days+"){ const plan = planOf(pid), r = P.resizeDays(plan, plan.settings.days + (k === "days+" ? 1 : -1)); confirmShrink(pid, r); return; }
-      if(k === "auto" || k === "reauto"){
-        if(k === "reauto" && !confirm("Lay out every scene again from scratch? Scenes you've arranged by hand will move.")) return;
-        const r = P.autoSchedule(planOf(pid), ctx.bd, { all: k === "reauto" });
-        save(pid, r.plan); rerender();
-        if(r.unplaced.length) hub.toast(r.unplaced.length + " scene" + (r.unplaced.length === 1 ? " doesn't" : "s don't") + " fit in " + r.plan.settings.days + " days at this page limit. Add days or raise the limit.");
-        return;
-      }
+      if(k === "reauto"){ H().confirm("Re-plan every scene?", "Every scene is laid out again from scratch. Scenes you've placed by hand will move. Undo puts them back.", "Re-plan all", false).then((ok) => { if(ok) autoPlan(pid, ctx, true); }); return; }
+      if(k === "auto"){ autoPlan(pid, ctx, false); return; }
       if(k === "placeNew"){
         const n = S.notice[pid]; if(!n) return;
         update((plan) => { n.added.forEach((id) => { const i = P.suggestDay(id, plan, ctx.bd); if(i >= 0 && !plan.days.some((d) => d.scenes.indexOf(id) >= 0)) plan.days[i].scenes.push(id); }); });
@@ -527,8 +529,9 @@ function wire(box, pid, ctx){
     if(t.dataset.move){ moveScene(pid, t.dataset.move, Number(t.value), -1); S.pick = null; return; }
     if(t.dataset.loc != null){
       const from = t.dataset.loc; let to = t.value;
-      if(to === "__new"){ to = (prompt("Name of the place " + from + " is part of (e.g. HOUSE):", "") || "").trim().toUpperCase(); if(!to){ rerender(); return; } }
-      update((plan) => { plan.locMerge = (plan.locMerge || []).filter((m) => m.from !== from); if(to && to !== from) plan.locMerge.push({ from, to }); });
+      const apply = (to2) => update((plan) => { plan.locMerge = (plan.locMerge || []).filter((m) => m.from !== from); if(to2 && to2 !== from) plan.locMerge.push({ from, to: to2 }); });
+      if(to === "__new"){ H().prompt("New place", "What is " + from + " part of? (e.g. HOUSE)", "").then((v) => { const n = String(v || "").trim().toUpperCase(); if(n) apply(n); else rerender(); }); return; }
+      apply(to);
       return;
     }
     if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }
@@ -579,14 +582,27 @@ function moveScene(pid, id, toDay, at){
   else H().toast(name + " → Day " + (toDay + 1), "ok", 1800);
   rerender();
 }
-function confirmShrink(pid, r){
-  if(r.moved.length && !confirm("Removing days puts " + r.moved.length + " scene" + (r.moved.length === 1 ? "" : "s") + " back in Unscheduled. Continue?")){ rerender(); return; }
-  if(r.moved.length) S.notice[pid] = Object.assign({ added: [], removed: [] }, S.notice[pid] || {}, { moved: r.moved });
+function autoPlan(pid, ctx, all){
+  const r = P.autoSchedule(planOf(pid), ctx.bd, { all });
   save(pid, r.plan); rerender();
+  if(r.unplaced.length) H().toast(r.unplaced.length + " scene" + (r.unplaced.length === 1 ? " doesn't" : "s don't") + " fit in " + r.plan.settings.days + " days at this page limit. Add days or raise the limit.");
+}
+function confirmShrink(pid, r){
+  const go = () => { if(r.moved.length) S.notice[pid] = Object.assign({ added: [], removed: [] }, S.notice[pid] || {}, { moved: r.moved }); save(pid, r.plan); rerender(); };
+  if(!r.moved.length){ go(); return; }
+  H().confirm("Remove shoot days?", r.moved.length + " scene" + (r.moved.length === 1 ? " goes" : "s go") + " back to Unscheduled.", "Remove days", true).then((ok) => { if(ok) go(); else rerender(); });
 }
 
 function setMode(m){ if(S.popout) m = "plan"; if(m === S.mode) return; S.mode = m; S.menu = false; rerender(); }
 function csError(pid, msg){ if(msg) S.csErr[pid] = msg; else delete S.csErr[pid]; rerender(); }
-document.addEventListener("keydown", (e) => { if(e.key === "Escape" && S.menu){ S.menu = false; rerender(); } });
+document.addEventListener("keydown", (e) => {
+  if(e.key === "Escape" && S.menu){ S.menu = false; rerender(); return; }
+  // Ctrl/Cmd+Z, Ctrl+Shift+Z / Ctrl+Y while the plan is showing (not while typing in a field)
+  if(S.mode !== "plan" || !S.pid || !(e.ctrlKey || e.metaKey)) return;
+  if(e.target.closest && e.target.closest("input, select, textarea, [contenteditable=true]")) return;
+  if(document.querySelector(".shade")) return;
+  const k = e.key.toLowerCase();
+  if(k === "z" || k === "y"){ e.preventDefault(); stepHist(S.pid, k === "z" && !e.shiftKey); }
+});
 window.CampProdPanel = { render, setMode, csError, reloadScript: (id) => loadScript(id, true) };
 })();
