@@ -22,6 +22,7 @@ const S = {
   scripts: {},           // scriptId -> { state:"loading"|"ok"|"error", bd, err, modified }
   notice: {},            // pid -> { added:[], removed:[], moved:[] } shown until dismissed
   pick: null,            // scene id chosen for "move to…" (click / touch)
+  landed: null,          // { id, day } just moved: flashes once
   drag: null,            // scene id being dragged
   pid: null
 };
@@ -99,6 +100,12 @@ const css = `
 .strip:hover{ border-color:rgba(255,255,255,.22); border-left-color:var(--sc, #ddd); }
 .strip.pick{ outline:2px solid var(--focus); }
 .strip.new{ box-shadow:0 0 0 1px #8fe3a6 inset; }
+.strip.dragging{ opacity:.35; transform:scale(.97); }
+@keyframes stripLand{ 0%{ transform:scale(1.06); box-shadow:0 0 0 2px #fff, 0 0 22px rgba(255,255,255,.5); } 100%{ transform:scale(1); box-shadow:0 0 0 0 transparent; } }
+.strip.landed{ animation:stripLand .7s cubic-bezier(.2,.9,.3,1); position:relative; z-index:1; }
+@keyframes colBump{ 0%{ background:rgba(91,140,255,.28); } 100%{ background:transparent; } }
+.col.bump .colHead{ animation:colBump .9s ease-out; }
+.dropLine{ height:4px; border-radius:3px; background:#fff; box-shadow:0 0 0 2px rgba(91,140,255,.6), 0 0 14px rgba(255,255,255,.6); margin:-1px 2px; flex:0 0 auto; }
 .strip .t{ display:flex; justify-content:space-between; gap:6px; font-weight:700; }
 .strip .t span{ color:var(--uiMuted); font-weight:600; white-space:nowrap; }
 .strip .l{ color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -210,7 +217,7 @@ function render(pid){
   const modNow = hub.scriptModified(scriptId);
   if(sc.state === "ok" && modNow && sc.modified && sc.modified !== modNow) loadScript(scriptId);
   else if(sc.state === "ok" && modNow && !sc.modified) sc.modified = modNow;   // library details arrived after we read the script
-  const bd = sc.bd, byId = P.sceneMap(bd);
+  const bd = sc.bd, byId = P.sceneMap(bd); S.lastBd = bd;
 
   // No plan yet: one click starts it from the script
   if(!raw){
@@ -279,7 +286,7 @@ function render(pid){
   const strip = (id) => {
     const s = byId[id]; if(!s) return "";
     const isNew = n && n.added.indexOf(id) >= 0;
-    return `<button class="strip${S.pick === id ? " pick" : ""}${isNew ? " new" : ""}" type="button" data-sid="${esc(id)}" draggable="${canEdit}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}">
+    return `<button class="strip${S.pick === id ? " pick" : ""}${isNew ? " new" : ""}${S.landed && S.landed.id === id ? " landed" : ""}" type="button" data-sid="${esc(id)}" draggable="${canEdit}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}">
       <div class="t">Sc ${s.n} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}<span>${P.fmtEighths(s.eighths)} pg</span></div>
       <div class="l">${esc(s.set || s.loc || "")}</div>
       <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div></button>`;
@@ -290,7 +297,7 @@ function render(pid){
       <div class="strips">${unsched.length ? unsched.map(strip).join("") : `<div class="colEmpty">Every scene has a day ✓</div>`}</div></div>`]
     .concat(pl.days.map((d, i) => {
       const x = stats[i], pct = Math.min(100, Math.round(x.eighths / st.maxEighths * 100));
-      return `<div class="col${x.over ? " over" : ""}" data-day="${i}">
+      return `<div class="col${x.over ? " over" : ""}${S.landed && S.landed.day === i ? " bump" : ""}" data-day="${i}">
         <div class="colHead"><b>Day ${i + 1}</b><span class="dt">${esc(fmtDate(dates[i]))}</span>
           <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc · ${x.cast.length} cast</span></div>
           <div class="cap"><i style="width:${pct}%"></i></div>
@@ -397,22 +404,42 @@ function wire(box, pid, ctx){
   const det = box.querySelector("details.dood"); if(det) det.ontoggle = () => { S.doodOpen = det.open; lsSet(DOOD_KEY, det.open ? "1" : "0"); };
   if(!canEdit) return;
   // drag and drop between columns
-  box.ondragstart = (e) => { const s = e.target.closest(".strip"); if(!s) return; S.drag = s.dataset.sid; try{ e.dataTransfer.setData("text/plain", S.drag); e.dataTransfer.effectAllowed = "move"; }catch(_e){} };
-  box.ondragend = () => { S.drag = null; box.querySelectorAll(".col.drop").forEach((c) => c.classList.remove("drop")); rerender(); };
-  box.ondragover = (e) => { const c = e.target.closest(".col"); if(!c || !S.drag) return; e.preventDefault(); box.querySelectorAll(".col.drop").forEach((x) => x !== c && x.classList.remove("drop")); c.classList.add("drop"); };
+  const line = document.createElement("div"); line.className = "dropLine";
+  box.ondragstart = (e) => { const s = e.target.closest(".strip"); if(!s) return; S.drag = s.dataset.sid; setTimeout(() => s.classList.add("dragging"), 0); try{ e.dataTransfer.setData("text/plain", S.drag); e.dataTransfer.effectAllowed = "move"; }catch(_e){} };
+  box.ondragend = () => { S.drag = null; line.remove(); box.querySelectorAll(".col.drop").forEach((c) => c.classList.remove("drop")); rerender(); };
+  box.ondragover = (e) => {
+    const c = e.target.closest(".col"); if(!c || !S.drag) return; e.preventDefault();
+    box.querySelectorAll(".col.drop").forEach((x) => x !== c && x.classList.remove("drop")); c.classList.add("drop");
+    // a bright line where the scene will land
+    const list = c.querySelector(".strips"); if(!list || c.dataset.day === "-1"){ line.remove(); return; }
+    const strips = Array.from(list.querySelectorAll(".strip:not(.dragging)"));
+    const before = strips.find((x) => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+    if(before){ if(line.nextSibling !== before) list.insertBefore(line, before); } else if(list.lastElementChild !== line) list.appendChild(line);
+  };
   box.ondrop = (e) => {
     const c = e.target.closest(".col"); if(!c || !S.drag) return; e.preventDefault();
-    const id = S.drag, over = e.target.closest(".strip"); S.drag = null;
+    const id = S.drag; S.drag = null;
+    // land where the line is
     let at = -1;
-    if(over && over.dataset.sid !== id){ const list = Array.from(c.querySelectorAll(".strip")).map((x) => x.dataset.sid).filter((x) => x !== id); at = list.indexOf(over.dataset.sid); const r = over.getBoundingClientRect(); if(e.clientY > r.top + r.height / 2) at++; }
+    if(line.parentNode){ const kids = Array.from(line.parentNode.children).filter((x) => x === line || (x.classList.contains("strip") && x.dataset.sid !== id)); at = kids.indexOf(line); }
+    line.remove();
     moveScene(pid, id, Number(c.dataset.day), at);
   };
 }
 function moveScene(pid, id, toDay, at){
   const plan = planOf(pid);
+  const from = plan.days.findIndex((d) => d.scenes.indexOf(id) >= 0);
   plan.days.forEach((d) => { d.scenes = d.scenes.filter((x) => x !== id); });
   if(toDay >= 0 && plan.days[toDay]){ const list = plan.days[toDay].scenes; if(at < 0 || at > list.length) list.push(id); else list.splice(at, 0, id); }
-  save(pid, plan); rerender();
+  save(pid, plan);
+  // feedback: the strip flashes where it landed, the day lights up, and a line says what happened
+  S.landed = { id, day: toDay }; clearTimeout(moveScene.t); moveScene.t = setTimeout(() => { S.landed = null; }, 900);
+  const sc = S.lastBd ? P.sceneMap(S.lastBd)[id] : null, name = sc ? "Sc " + sc.n : "Scene";
+  if(toDay < 0) H().toast(name + " moved to Unscheduled", "ok", 1800);
+  else if(from === toDay) H().toast(name + " reordered on Day " + (toDay + 1), "ok", 1800);
+  else if(S.lastBd){ const st = P.dayStats(plan.days[toDay], P.sceneMap(S.lastBd), plan.settings.maxEighths); H().toast(name + " → Day " + (toDay + 1) + " · " + P.fmtEighths(st.eighths) + " / " + P.fmtEighths(plan.settings.maxEighths) + " pg" + (st.over ? " (over the limit)" : ""), "ok", 1800); }
+  else H().toast(name + " → Day " + (toDay + 1), "ok", 1800);
+  rerender();
 }
 function confirmShrink(pid, r){
   if(r.moved.length && !confirm("Removing days puts " + r.moved.length + " scene" + (r.moved.length === 1 ? "" : "s") + " back in Unscheduled. Continue?")){ rerender(); return; }

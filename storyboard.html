@@ -305,6 +305,9 @@
   #statusMsg.err{ color:#ff8f8f; }
   #loading .loadBox{ display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center; max-width:420px; padding:0 20px; line-height:1.5; }
   #loading .loadBox .row{ display:flex; gap:8px; }
+  #loading .spin.big{ width:36px; height:36px; border-width:3px; }
+  .loadBar{ width:180px; height:3px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; }
+  .loadBar i{ display:block; height:100%; width:0; background:#f2f0ec; border-radius:3px; transition:width .2s linear; }
   .spin{ width:22px; height:22px; border:2.5px solid rgba(255,255,255,.14); border-top-color:#f2f0ec; border-radius:50%; animation:sbspin .7s linear infinite; }
   @keyframes sbspin{ to{ transform:rotate(360deg); } }
   #topbar .scriptLink{ font-size:12.5px; color:var(--muted); border:1px solid var(--border); border-radius:8px; padding:6px 10px; white-space:nowrap; }
@@ -395,7 +398,16 @@
 </style>
 </head>
 <body>
-<div id="loading"><div class="loadBox"><div class="spin"></div><div>Loading storyboard…</div></div></div>
+<div id="loading"><div class="loadBox"><div class="spin big"></div><div id="loadMsg">Opening your storyboard…</div><div class="loadBar"><i id="loadBar"></i></div></div></div>
+<script>
+// Same opening screen as the treatment: a message and a bar that creeps towards the next step
+(function(){ let p = 0, cap = 50, t = 0;
+  window.sbLoadStep = function(msg, pct, c){ const m = document.getElementById("loadMsg"), b = document.getElementById("loadBar");
+    if(m && msg) m.textContent = msg; if(pct != null) p = Math.max(p, pct); cap = c != null ? c : Math.max(p, cap); if(b) b.style.width = p + "%";
+    clearInterval(t); if(p < 100) t = setInterval(() => { p += Math.max(0.15, (cap - p) * 0.06); if(p > cap) p = cap; if(b) b.style.width = p + "%"; }, 120); };
+  sbLoadStep(null, 6, 50);
+})();
+</script>
 <div id="app" style="display:none;">
   <div id="topbar">
     <a class="back" id="backLink" href="index.html">&larr; Library</a>
@@ -1248,6 +1260,7 @@ window.SB3D={
     // Instant open: the board this device showed last time (title, live room, shot list) goes up straight
     // away; the drawings come live from the shared board as usual. Drive is checked in the background.
     const cached = sbCacheGet(S.fileId);
+    sbLoadStep("Loading the panels…", 40, 90);
     if(cached){
       S.title = cached.title || "Untitled Script"; S.roomKey = cached.room || ""; S.prevRooms = cached.prev || [];
     }else{
@@ -1309,7 +1322,7 @@ window.SB3D={
     }
     document.getElementById("ratioSel").value = String(S.ratio);
 
-    document.getElementById("loading").style.display = "none";
+    sbLoadStep(null, 100); document.getElementById("loading").style.display = "none";
     document.getElementById("app").style.display = "flex";
     wireTopbar();
     window.addEventListener("popstate", onPopState);
@@ -1415,7 +1428,7 @@ window.SB3D={
 
   function showEmptyBoard(reason){
     document.body.classList.add("overviewView"); document.body.classList.remove("focusView");
-    document.getElementById("loading").style.display = "none";
+    sbLoadStep(null, 100); document.getElementById("loading").style.display = "none";
     document.getElementById("app").style.display = "flex";
     document.getElementById("pageTitle").textContent = S.title + " — Storyboard";
     document.getElementById("leftRail").innerHTML = "";

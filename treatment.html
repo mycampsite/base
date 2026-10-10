@@ -223,10 +223,18 @@
   .palSrcTile img{ width:100%; height:100%; object-fit:cover; display:block; }
   .palSrcTile:hover{ border-color:rgba(255,255,255,.28); }
   .palSrcTile.on{ border-color:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.16); transform:scale(1.02); }
-  .palStage{ flex:1; min-width:0; display:flex; align-items:center; justify-content:center; padding:18px; background:#0e0f11; }
+  .palStage{ flex:1; min-width:0; display:flex; background:#0e0f11; }
+  .palPickArea{ flex:1 1 62%; min-width:0; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:14px; border-right:1px solid var(--uiBorder); }
+  .palPickArea canvas{ border-radius:8px; cursor:crosshair; box-shadow:0 10px 36px rgba(0,0,0,.5); touch-action:none; }
+  .palPickHint{ font-size:12px; color:var(--uiMuted); text-align:center; }
+  .palPickHint b{ color:var(--uiText); }
+  .palLoupe{ position:absolute; z-index:3; pointer-events:none; padding:8px 12px; border-radius:10px; border:2px solid #fff; box-shadow:0 6px 20px rgba(0,0,0,.5); font:700 12px "JetBrains Mono", ui-monospace, monospace; }
+  .palPrevWrap{ flex:1 1 38%; min-width:0; display:flex; align-items:center; justify-content:center; padding:18px; }
+  .palCol.active{ box-shadow:inset 0 0 0 3px currentColor; }
+  .palCol.active::after{ content:"PICKING"; position:absolute; bottom:4px; left:50%; transform:translateX(-50%); font:700 9px Inter,sans-serif; letter-spacing:.1em; opacity:.7; }
   .palPrevHost{ position:relative; overflow:hidden; border-radius:10px; box-shadow:0 12px 44px rgba(0,0,0,.55); }
   .palPrevHost > .tpage{ position:absolute; top:0; left:0; transform-origin:0 0; }
-  .palCols{ flex:0 0 31%; display:flex; min-height:0; border-top:1px solid var(--uiBorder); }
+  .palCols{ flex:0 0 27%; display:flex; min-height:0; border-top:1px solid var(--uiBorder); }
   .palCol{ flex:1; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:0 8px 22px; min-width:0; cursor:grab; transition:flex .18s ease; }
   .palCol.dragging{ opacity:.5; transform:scale(.97); }
   .palCol.locked{ box-shadow:inset 0 -4px 0 rgba(255,255,255,.4); }
@@ -270,7 +278,9 @@
     .palShade{ padding:0; }
     .palBox{ height:100%; border-radius:0; }
     .palMain{ flex:0 0 auto; }
-    .palStage{ display:none; }
+    .palStage{ height:240px; }
+    .palPrevWrap{ display:none; }
+    .palPickArea{ border-right:0; }
     .palRail{ flex:1 1 auto; flex-direction:row; align-items:center; overflow-x:auto; overflow-y:hidden; border-right:0; border-bottom:1px solid var(--uiBorder); padding:8px 10px; }
     .palRailLabel{ display:none; }
     .palSrcTile{ width:56px; flex:0 0 56px; }
@@ -3137,7 +3147,7 @@
     const OPT_LABEL = { pl:"Layout", ps:"Shape", sz:"Size", lb:"Labels", gap:"Spacing" };
     shade.innerHTML = `<div class="palBox" role="dialog" aria-label="Palette Studio">
       <div class="palHead">
-        <div class="palTitle"><b>Palette Studio</b><span class="palHint">Pick a photo to pull its colours · Space for a new mix · drag swatches to reorder · paste hex codes to import</span></div>
+        <div class="palTitle"><b>Palette Studio</b><span class="palHint">Click the photo to pick a colour · Space for a new mix · drag swatches to reorder · paste hex codes to import</span></div>
         <div class="palHeadActs">
           <div class="palGroup"><button type="button" id="palUndo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button><button type="button" id="palRedo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button></div>
           <button type="button" class="btn sm" id="palGen" title="New mix from the current photos">Shuffle <kbd>Space</kbd></button>
@@ -3146,7 +3156,10 @@
       </div>
       <div class="palMain">
         <div class="palRail" id="palRail" aria-label="Photo to pull colours from"></div>
-        <div class="palStage" id="palStage"><div class="palPrevHost" id="palPrevHost"></div></div>
+        <div class="palStage" id="palStage">
+          <div class="palPickArea" id="palPickArea"><canvas id="palCanvas" hidden></canvas><div class="palPickHint" id="palPickHint"></div><div class="palLoupe" id="palLoupe" hidden></div></div>
+          <div class="palPrevWrap"><div class="palPrevHost" id="palPrevHost"></div></div>
+        </div>
       </div>
       <div class="palCols" id="palCols"></div>
       <div class="palFoot">
@@ -3160,7 +3173,7 @@
     </div>`;
     document.body.appendChild(shade);
     const $p = (s) => shade.querySelector(s), colsEl = $p("#palCols"), railEl = $p("#palRail"), prevEl = $p("#palPrevHost");
-    let dragFrom = -1, dropAt = -1, landedK = 0, kseq = 0;
+    let dragFrom = -1, dropAt = -1, landedK = 0, kseq = 0, activeI = 0;
     const clearDrop = () => colsEl.querySelectorAll(".dropBefore, .dropAfter").forEach((x) => x.classList.remove("dropBefore", "dropAfter"));
 
     // ---- photo rail
@@ -3177,7 +3190,53 @@
     function markRail(){
       railEl.querySelectorAll(".palSrcTile").forEach((b) => { const on = b.dataset.src === srcMode; b.classList.toggle("on", on); if(on) b.scrollIntoView({ block:"nearest" }); });
     }
-    function pickSource(mode){ srcMode = mode; markRail(); generate("pull"); }
+    function pickSource(mode){ srcMode = mode; markRail(); generate("pull"); showPicker(); }
+
+    // ---- eyedropper: the chosen photo, big; click to set the highlighted swatch, Shift+click to add one
+    const pickArea = $p("#palPickArea"), cv = $p("#palCanvas"), cx = cv.getContext("2d", { willReadFrequently:true }), loupe = $p("#palLoupe"), pickHint = $p("#palPickHint");
+    let pickId = null, pickImg = null;
+    async function showPicker(){
+      const ids = srcMode === "all" ? T.images.map((x) => x.id) : srcMode === "page" ? pageImgIds : [srcMode];
+      const id = ids[0];
+      if(!id){ cv.hidden = true; pickImg = null; pickHint.textContent = "Add photos in the Photos panel to pick colours from them."; return; }
+      pickId = id;
+      const c = await ensureImg(id); if(!c || !c.src || pickId !== id) return;
+      const img = new Image(); img.src = c.src;
+      try{ await img.decode(); }catch(_e){ return; }
+      if(pickId !== id) return;
+      pickImg = img; drawPicker();
+      pickHint.innerHTML = (ids.length > 1 ? "Showing the first of " + ids.length + " photos. Pick one on the left to sample it.<br>" : "") + "<b>Click</b> to set the highlighted swatch · <b>Shift+click</b> to add a new one";
+    }
+    function drawPicker(){
+      if(!pickImg) return;
+      const W = pickArea.clientWidth - 28, H = pickArea.clientHeight - 64; if(W < 40 || H < 40) return;
+      const r = Math.min(W / pickImg.naturalWidth, H / pickImg.naturalHeight), dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, Math.round(pickImg.naturalWidth * r)), h = Math.max(1, Math.round(pickImg.naturalHeight * r));
+      cv.style.width = w + "px"; cv.style.height = h + "px"; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      cx.drawImage(pickImg, 0, 0, cv.width, cv.height); cv.hidden = false;
+    }
+    function sampleAt(e){
+      const r = cv.getBoundingClientRect();
+      const x = Math.round((e.clientX - r.left) / r.width * cv.width), y = Math.round((e.clientY - r.top) / r.height * cv.height);
+      const k = 2, x0 = Math.max(0, Math.min(cv.width - 1, x - k)), y0 = Math.max(0, Math.min(cv.height - 1, y - k));
+      const d = cx.getImageData(x0, y0, Math.max(1, Math.min(cv.width - x0, k * 2 + 1)), Math.max(1, Math.min(cv.height - y0, k * 2 + 1))).data;
+      let R = 0, G = 0, B = 0, n = 0; for(let i = 0; i < d.length; i += 4){ R += d[i]; G += d[i + 1]; B += d[i + 2]; n++; }
+      const h2 = (v) => Math.round(v / n).toString(16).padStart(2, "0"); return "#" + h2(R) + h2(G) + h2(B);
+    }
+    cv.addEventListener("pointermove", (e) => {
+      const hex = sampleAt(e), ar = pickArea.getBoundingClientRect();
+      loupe.hidden = false; loupe.style.background = hex; loupe.style.color = lumOf(hex) > 0.55 ? "#111" : "#fff"; loupe.textContent = hex.toUpperCase();
+      loupe.style.left = Math.min(ar.width - 110, e.clientX - ar.left + 16) + "px"; loupe.style.top = Math.max(4, e.clientY - ar.top - 46) + "px";
+    });
+    cv.addEventListener("pointerleave", () => { loupe.hidden = true; });
+    cv.addEventListener("click", (e) => {
+      const hex = sampleAt(e);
+      if(e.shiftKey && cols.length < MAXC){ snap(); const nc = { hex, name:"", lock:true, k:++kseq }; cols.splice(Math.min(activeI + 1, cols.length), 0, nc); activeI = cols.indexOf(nc); landedK = nc.k; dirty = true; paint(); return; }
+      const c = cols[activeI]; if(!c) return;
+      snap(); c.hex = hex; c.lock = true; landedK = c.k; dirty = true;   // picked colours lock, so Shuffle keeps them
+      activeI = (activeI + 1) % cols.length; paint();
+    });
+    const onPickRz = () => drawPicker(); window.addEventListener("resize", onPickRz);
     railEl.addEventListener("click", (e) => { const b = e.target.closest(".palSrcTile"); if(b) pickSource(b.dataset.src); });
 
     // ---- live preview: just the swatches and their labels, cropped tight, on the page's own background
@@ -3214,9 +3273,10 @@
       cols.forEach((c) => { if(!c.k) c.k = ++kseq; });
       // FLIP: remember where each column was so a re-order glides instead of jumping
       const firstPos = {}; colsEl.querySelectorAll(".palCol").forEach((el) => { firstPos[el.dataset.k] = el.getBoundingClientRect(); });
+      if(activeI >= cols.length) activeI = cols.length - 1; if(activeI < 0) activeI = 0;
       colsEl.innerHTML = cols.map((c, i) => {
         const fg = lumOf(c.hex) > 0.55 ? "#111" : "#fff";
-        return `<div class="palCol${c.lock ? " locked" : ""}${c.k === landedK ? " landed" : ""}" draggable="true" data-i="${i}" data-k="${c.k}" style="background:${c.hex};color:${fg}"><span class="palGrip" aria-hidden="true">⋮⋮</span>
+        return `<div class="palCol${c.lock ? " locked" : ""}${i === activeI ? " active" : ""}${c.k === landedK ? " landed" : ""}" draggable="true" data-i="${i}" data-k="${c.k}" style="background:${c.hex};color:${fg}"><span class="palGrip" aria-hidden="true">⋮⋮</span>
           ${cols.length < MAXC ? `<button type="button" class="palAdd" data-a="add" title="Add a colour here" aria-label="Add a colour here">+</button>` : ""}
           <div class="palTools">
             <button type="button" data-a="lock" title="${c.lock ? "Unlock" : "Lock (keeps it when shuffling)"}" aria-pressed="${c.lock}">${c.lock ? "🔒" : "🔓"}</button>
@@ -3245,7 +3305,13 @@
       const shapeOpt = $p('.palOpt[data-opt="ps"]'); if(shapeOpt) shapeOpt.classList.toggle("off", o.pl === "circles");   // the circles layout is always round
       updatePreview();
     }
-    buildRail(); paint();
+    buildRail(); paint(); showPicker();
+    // pick which swatch the eyedropper fills: click it (anywhere but its buttons)
+    colsEl.addEventListener("pointerdown", (e) => {
+      const col = e.target.closest(".palCol"); if(!col || e.target.closest("button")) return;
+      const i = Number(col.dataset.i); if(i === activeI) return;
+      activeI = i; colsEl.querySelectorAll(".palCol").forEach((x) => x.classList.toggle("active", Number(x.dataset.i) === i));
+    });
 
     const idxOf = (el) => Number(el.closest(".palCol").dataset.i);
     colsEl.addEventListener("click", async (e) => {
@@ -3290,7 +3356,7 @@
     $p("#palUndo").onclick = doUndo; $p("#palRedo").onclick = doRedo;
     $p("#palPlus").onclick = () => addColour(); $p("#palMinus").onclick = removeColour;
     $p("#palCopy").onclick = async () => { try{ await navigator.clipboard.writeText(cols.map((c) => c.hex.toUpperCase()).join(" ")); notify("Hex codes copied"); }catch(_e){} };
-    const close = () => { shade.remove(); window.removeEventListener("resize", onRz); document.removeEventListener("keydown", onKey, true); };
+    const close = () => { shade.remove(); window.removeEventListener("resize", onRz); window.removeEventListener("resize", onPickRz); document.removeEventListener("keydown", onKey, true); };
     const tryClose = () => { if(dirty && !confirm("Close without applying? Your palette changes will be lost.")) return; close(); };
     $p("#palX").onclick = tryClose;
     shade.addEventListener("pointerdown", (e) => { if(e.target === shade) tryClose(); });
@@ -4553,14 +4619,14 @@
     const r = route(), qs = new URLSearchParams(location.search);
     T.fileId = r.fileId;
     if(!T.fileId && !r.pid){ showFatal("Open the Treatment from a script (File › Treatment in the editor)."); return; }
-    loadStep("Opening the script…", 6, 50);
+    loadStep("Opening your treatment…", 6, 50);
     // Everything that doesn't depend on something else starts at once: script, treatment and the live SDK
     const loadP = apiGet("load", T.fileId ? { fileId:T.fileId } : { pid:r.pid });
     const trP = T.fileId ? apiGet("treatmentload", { fileId:T.fileId }) : null;
     loadSdk().catch(() => {});
     const loadRes = await loadP;
     if(!loadRes || loadRes.ok === false){ showFatal((loadRes && loadRes.error) || "Couldn't open that script."); return; }
-    loadStep("Loading the treatment…", 52, 82);
+    loadStep("Loading pages and photos…", 52, 82);
     const sameFile = !!trP && (!loadRes.fileId || loadRes.fileId === T.fileId);
     T.fileId = loadRes.fileId || T.fileId;
     T.script = loadRes.doc || {};

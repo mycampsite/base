@@ -1744,7 +1744,7 @@ window.__CampHub = {
   ripGet: params => ripGet(params, 30000),
   // The plan lives with the project, so every member sees changes live. ⚠ needs the production rule.
   writeProduction: (pid, plan) => set(ref(db, "projects/" + pid + "/production"), Object.assign({}, plan, { updatedAt: Date.now(), by: (me && me.email) || "" })),
-  toast: m => toast(m),
+  toast: (m, kind, ms) => toast(m, kind, ms),
   layoutChanged: () => {},
   isOwner: p => isOwner(p),
   // Rebuild the schedule (with Day Out of Days) and the budget from the plan, then show them
