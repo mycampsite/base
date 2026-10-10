@@ -147,13 +147,21 @@ span.bdStar{ cursor:default; }
 .bdThumb.main{ border-color:var(--gold); }
 .bdThumb img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .bdThumb button{ position:absolute; z-index:2; width:22px; height:22px; border:0; border-radius:50%; background:rgba(0,0,0,.7); color:#fff; font-size:12px; line-height:22px; padding:0; cursor:pointer; }
-.bdThumb .rm{ top:3px; right:3px; } .bdThumb .mk{ bottom:3px; left:3px; }
+.bdThumb .rm{ top:3px; right:3px; }
 .bdThumb .mk:hover{ color:var(--gold); }
 .bdThumb.up .spin{ width:18px; height:18px; }
 .bdDrop{ border:1.5px dashed rgba(255,255,255,.25); border-radius:10px; padding:12px; text-align:center; font-size:12.5px; color:var(--uiMuted); }
 .bdDrop.over{ border-color:var(--gold); background:rgba(242,201,76,.07); color:var(--uiText); }
 .bdDrop button, .bdLinkAdd button{ background:none; border:0; color:var(--uiText); text-decoration:underline; text-underline-offset:3px; cursor:pointer; font:inherit; padding:0; }
 .bdLinkAdd{ display:flex; gap:8px; align-items:center; } .bdLinkAdd input{ flex:1; }
+.bdMulti{ display:grid; gap:6px; }
+.bdLinkAdd button[data-be=mlrm]{ width:34px; padding:0; }
+.bdMore{ justify-self:start; background:none; border:0; color:var(--uiMuted); font-size:12.5px; cursor:pointer; padding:2px 0; }
+.bdMore:hover{ color:var(--uiText); }
+.bdThumb .cv{ position:absolute; left:0; right:0; bottom:0; z-index:2; background:rgba(242,201,76,.92); color:#111; font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:2px 0; text-align:center; }
+.bdThumb .mk{ left:0; right:0; bottom:0; width:auto; height:auto; border-radius:0; font-size:10px; font-weight:700; line-height:1.6; padding:1px 0; background:rgba(0,0,0,.72); opacity:0; transition:opacity .12s; }
+.bdThumb:hover .mk, .bdThumb .mk:focus{ opacity:1; }
+@media (hover:none){ .bdThumb .mk{ opacity:1; } }
 .bdLinkAdd button{ height:34px; padding:0 12px; border:1px solid var(--uiBorder); border-radius:9px; text-decoration:none; }
 .bdView{ z-index:101; background:rgba(0,0,0,.9); flex-direction:column; gap:10px; }
 .bdView figure{ margin:0; flex:1; min-height:0; width:100%; display:grid; place-items:center; }
@@ -499,7 +507,7 @@ function drawViewer(){
   const fig = src ? `<img referrerpolicy="no-referrer" src="${esc(src)}" alt="${esc(c.title)}">` : `<div class="bdHint">This link can't be shown here. <a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open it</a></div>`;
   document.body.insertAdjacentHTML("beforeend", `<div class="bdShade bdView" id="bdView" role="dialog" aria-modal="true" aria-label="Photos of ${esc(c.title)}">
     <button class="iconBtn x" type="button" data-vw="close" aria-label="Close photos" title="Close (Esc)">${ICON.close}</button>${nav}<figure>${fig}</figure>
-    <div class="bdVBar"><span>${esc(c.title)} · ${v.i + 1} / ${n}</span>${v.i === 0 ? `<span>★ Display photo</span>` : (can ? `<button class="btn sm" type="button" data-vw="main">Make display photo</button>` : "")}<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open original</a></div></div>`);
+    <div class="bdVBar"><span>${esc(c.title)} · ${v.i + 1} / ${n}</span>${v.i === 0 ? `<span>Cover photo</span>` : (can ? `<button class="btn sm" type="button" data-vw="main">Set as cover</button>` : "")}<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open original</a></div></div>`);
   const el = document.getElementById("bdView"); let x0 = null;
   el.addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-vw]");
@@ -539,7 +547,8 @@ function openEditor(c, groupName){
   const base = c ? Object.assign({}, c.raw) : {};
   L.fieldsOf(kind).forEach((f) => { if(!(f in base)) base[f] = ""; });
   S.edit = { kind, id: c ? c.id : "", key: c ? c.key : "", group: c ? c.group : groupName, base, vals: Object.assign({}, base), busy: false, err: "", conflict: null,
-    photos: c ? c.photos.slice() : [], basePhotos: c ? c.photos.slice() : [], uploading: 0, linkDraft: "" };
+    photos: c ? c.photos.slice() : [], basePhotos: c ? c.photos.slice() : [], uploading: 0, linkDraft: "",
+    lists: { showreel: L.linesOf(base.showreel).concat([""]).slice(0, Math.max(1, L.linesOf(base.showreel).length)), audition: L.linesOf(base.audition).concat([""]).slice(0, Math.max(1, L.linesOf(base.audition).length)) } };
   if(!document.getElementById("bdShade")) lastFocus = document.activeElement;
   showEditor();
 }
@@ -562,7 +571,7 @@ function showEditor(){
       ${inp(f1, kind === "cast" ? "Actor name" : "Address", `placeholder="${kind === "cast" ? "Who is it?" : "Street, suburb"}"`)}
       <label>Status<select data-f="status"><option value="">No status</option>${statusOptions(statuses, e.base.status)}</select></label>
       <div class="two">${inp("phone", "Phone", `inputmode="tel"`)}${inp("email", "Email", `inputmode="email"`)}</div>
-      ${kind === "cast" ? `<div class="two">${inp("showreel", "Showreel link", `inputmode="url" placeholder="YouTube, Vimeo…"`)}${inp("audition", "Audition tape link", `inputmode="url" placeholder="Self-tape or audition"`)}</div>` : ""}
+      ${kind === "cast" ? multiBlock(e, "showreel", "Showreels", "YouTube, Vimeo…") + multiBlock(e, "audition", "Audition tapes", "Self-tape or audition link") : ""}
       ${photosBlock(e)}
       <label>Notes<textarea data-f="notes" placeholder="Links to a reel, IMDb or listing become buttons">${esc(v.notes || "")}</textarea></label>
       ${conf}${e.err ? `<div class="bdErr" role="alert">${esc(e.err)}</div>` : ""}
@@ -573,8 +582,14 @@ function showEditor(){
   document.body.insertAdjacentHTML("beforeend", html);
   const shade = document.getElementById("bdShade"), form = shade.querySelector("#bdForm");
   form.querySelector("[data-f=status]").value = v.status || "";
-  form.addEventListener("input", (ev) => { const n = ev.target.dataset && ev.target.dataset.f; if(n) e.vals[n] = ev.target.value; if(ev.target.dataset && "pl" in ev.target.dataset) e.linkDraft = ev.target.value; });
-  form.addEventListener("keydown", (ev) => { if(ev.key === "Enter" && ev.target.dataset && "pl" in ev.target.dataset){ ev.preventDefault(); ev.stopPropagation(); addLinkFromInput(); } });
+  form.addEventListener("input", (ev) => { const n = ev.target.dataset && ev.target.dataset.f; if(n) e.vals[n] = ev.target.value; if(ev.target.dataset && "pl" in ev.target.dataset) e.linkDraft = ev.target.value;
+    const ml = ev.target.dataset && ev.target.dataset.ml;
+    if(ml){ const i = +ev.target.dataset.i, had = !!e.lists[ml][i]; e.lists[ml][i] = ev.target.value; syncList(e, ml); if(had !== !!ev.target.value && i === e.lists[ml].length - 1) refreshMulti(ev.target); } });
+  form.addEventListener("keydown", (ev) => {
+    if(ev.key !== "Enter" || ev.ctrlKey || ev.metaKey || !ev.target.dataset) return;
+    if("pl" in ev.target.dataset){ ev.preventDefault(); ev.stopPropagation(); addLinkFromInput(); }
+    else if(ev.target.dataset.ml){ ev.preventDefault(); ev.stopPropagation(); addListRow(ev.target.dataset.ml); }
+  });
   const drop = shade.querySelector("#bdDrop"), file = shade.querySelector("#bdFile");
   const hasFiles = (ev) => ev.dataTransfer && Array.from(ev.dataTransfer.types || []).indexOf("Files") >= 0;
   shade.addEventListener("dragover", (ev) => { if(hasFiles(ev)){ ev.preventDefault(); if(drop) drop.classList.toggle("over", !!ev.target.closest("#bdDrop")); } });
@@ -594,20 +609,44 @@ function showEditor(){
     else if(k === "pick"){ const f = shade.querySelector("#bdFile"); if(f) f.click(); }
     else if(k === "addlink") addLinkFromInput();
     else if(k === "rmphoto"){ e.photos = L.removePhoto(e.photos, b.dataset.u); syncPhotoVal(e); showEditor(); }
+    else if(k === "mladd") addListRow(b.dataset.f);
+    else if(k === "mlrm"){ const f = b.dataset.f; e.lists[f].splice(+b.dataset.i, 1); if(!e.lists[f].length) e.lists[f] = [""]; syncList(e, f); showEditor(); }
     else if(k === "mkmain"){ e.photos = L.makeDisplay(e.photos, b.dataset.u); syncPhotoVal(e); showEditor(); }
   });
   document.removeEventListener("keydown", detailKeys, true);
   document.addEventListener("keydown", detailKeys, true);
   const first = form.querySelector(e.err ? "[data-f]" : "[data-f=" + f1 + "]"); if(first && !e.conflict) first.focus();
 }
+/* ---------- several links in one field (showreels, audition tapes) ---------- */
+function multiBlock(e, f, label, ph){
+  const rows = e.lists[f];
+  return `<div class="bdMulti"><div class="bdPhLabel">${label}</div>${rows.map((v, i) => `<div class="bdLinkAdd"><input data-ml="${f}" data-i="${i}" value="${esc(v)}" inputmode="url" autocomplete="off" placeholder="${esc(ph)}" aria-label="${esc(label)} ${i + 1}">${rows.length > 1 || v ? `<button type="button" data-be="mlrm" data-f="${f}" data-i="${i}" aria-label="Remove this link" title="Remove">✕</button>` : ""}</div>`).join("")}${rows.length < 10 && rows[rows.length - 1] ? `<button class="bdMore" type="button" data-be="mladd" data-f="${f}">+ Add another</button>` : ""}</div>`;
+}
+function addListRow(f){
+  const e = S.edit; if(!e) return;
+  const l = e.lists[f]; if(l.length >= 10) return;
+  if(l[l.length - 1].trim()) l.push("");
+  showEditor();
+  const inp = document.querySelector(`#bdForm [data-ml="${f}"][data-i="${l.length - 1}"]`); if(inp) inp.focus();
+}
+// show / hide the "+ Add another" and ✕ buttons as the last box is filled or emptied, without redrawing (the cursor stays put)
+function refreshMulti(input){
+  const e = S.edit; if(!e) return;
+  const f = input.dataset.ml, pos = input.selectionStart;
+  showEditor();
+  const again = document.querySelector(`#bdForm [data-ml="${f}"][data-i="${input.dataset.i}"]`);
+  if(again){ again.focus(); try{ again.setSelectionRange(pos, pos); }catch(_e){} }
+}
+function syncList(e, f){ e.vals[f] = e.lists[f].map((x) => x.trim()).filter(Boolean).join("\n"); }
+
 /* ---------- photos in the editor: upload, drag in, paste a link, choose the display photo ---------- */
 function photosBlock(e){
   const tiles = e.photos.map((u, i) => {
     const src = L.viewSrc(u, false);
-    return `<div class="bdThumb${i === 0 ? " main" : ""}" title="${i === 0 ? "Display photo" : ""}">${src ? `<img referrerpolicy="no-referrer" src="${esc(src)}" alt="">` : esc(L.hostOf(u) || "link")}${i > 0 ? `<button class="mk" type="button" data-be="mkmain" data-u="${esc(u)}" title="Make this the display photo" aria-label="Make this the display photo">★</button>` : ""}<button class="rm" type="button" data-be="rmphoto" data-u="${esc(u)}" title="Remove this photo" aria-label="Remove this photo">✕</button></div>`;
+    return `<div class="bdThumb${i === 0 ? " main" : ""}" title="${i === 0 ? "Cover photo (shown on the card)" : ""}">${src ? `<img referrerpolicy="no-referrer" src="${esc(src)}" alt="">` : esc(L.hostOf(u) || "link")}${i === 0 ? `<span class="cv">Cover</span>` : `<button class="mk" type="button" data-be="mkmain" data-u="${esc(u)}" title="Use this as the cover photo" aria-label="Use this as the cover photo">Set cover</button>`}<button class="rm" type="button" data-be="rmphoto" data-u="${esc(u)}" title="Remove this photo" aria-label="Remove this photo">✕</button></div>`;
   }).join("") + Array.from({ length: e.uploading || 0 }, () => `<div class="bdThumb up"><span class="spin"></span></div>`).join("");
   const full = e.photos.length + (e.uploading || 0) >= L.MAX_PHOTOS;
-  return `<div class="bdPhotos"><div class="bdPhLabel">Photos <span>· the starred one is the display photo</span></div>
+  return `<div class="bdPhotos"><div class="bdPhLabel">Photos <span>· the cover is the one shown on the card</span></div>
     ${tiles ? `<div class="bdThumbs">${tiles}</div>` : ""}
     ${full ? "" : `<div class="bdDrop" id="bdDrop">Drop photos here or <button type="button" data-be="pick">choose from your device</button><input type="file" id="bdFile" accept="image/*" multiple hidden></div>
     <div class="bdLinkAdd"><input data-pl value="${esc(e.linkDraft || "")}" inputmode="url" placeholder="…or paste a photo link" autocomplete="off" aria-label="Photo link"><button type="button" data-be="addlink">Add</button></div>`}</div>`;
