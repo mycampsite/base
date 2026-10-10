@@ -1765,6 +1765,10 @@ window.__CampHub = {
   }),
   syncSheets: async (pid, fileId, btn) => run(btn, async () => {
     const steps = [["schedule", "schedule"], ["budget", "budget"], ["callsheets", "call sheets"]];
+    // the other docs this project already has get rebuilt too, so every sheet follows the plan and the same look
+    const have = ((sheetsByProject[pid] && sheetsByProject[pid].list) || []).map(s => s.name || "");
+    if (have.some(n => /shot list/i.test(n))) steps.splice(2, 0, ["shotlist", "shot list"]);
+    if (have.some(n => /production docs|crew|casting|locations|contacts/i.test(n))) steps.splice(2, 0, ["productiondocs", "crew, casting and locations"]);
     for (let i = 0; i < steps.length; i++) {
       toast("Updating the " + steps[i][1] + " from the plan (" + (i + 1) + "/" + steps.length + ")… this can take a minute.", "ok", 240000);
       let res;
