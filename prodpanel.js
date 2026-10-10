@@ -234,24 +234,16 @@ async function loadScript(id, force){
 let saveT = 0, pending = null;
 // Undo / redo for the plan (this device's own changes). Quick runs of edits (typing a time) count as one.
 const HIST = {};   // pid -> { undo:[json], redo:[json], at }
-const strip_ = (pl) => { const c = Object.assign({}, pl); delete c.callsheets; delete c.updatedAt; delete c.by; return JSON.stringify(c); };
-function remember(pid){
-  const h = HIST[pid] = HIST[pid] || { undo: [], redo: [], at: 0 };
-  const now = Date.now(), cur = strip_(planOf(pid));
-  if(now - h.at > 700 && h.undo[h.undo.length - 1] !== cur){ h.undo.push(cur); if(h.undo.length > 80) h.undo.shift(); }
-  h.at = now; h.redo.length = 0;
-}
+function remember(pid){ P.histRemember(HIST[pid] = HIST[pid] || P.histNew(), planOf(pid), Date.now()); }
 function stepHist(pid, back){
   const h = HIST[pid]; if(!h) return;
-  const from = back ? h.undo : h.redo, to = back ? h.redo : h.undo;
-  if(!from.length){ H().toast(back ? "Nothing to undo." : "Nothing to redo.", "ok", 1400); return; }
-  const cur = planOf(pid); to.push(strip_(cur));
-  const next = JSON.parse(from.pop());
-  if(cur.callsheets) next.callsheets = cur.callsheets;   // links to made docs aren't part of undo
-  h.at = 0; save(pid, next, true); rerender();
+  const next = P.histStep(h, planOf(pid), back);   // links to made docs aren't part of undo
+  if(!next){ H().toast(back ? "Nothing to undo." : "Nothing to redo.", "ok", 1400); return; }
+  save(pid, next, true); rerender();
   H().toast(back ? "Undone." : "Redone.", "ok", 1200);
 }
 function save(pid, plan, noHist){
+  if(pending && pending.pid !== pid) flush();   // another project's edit is still waiting: save it first, don't drop it
   if(!noHist) remember(pid);
   pending = { pid, plan };
   clearTimeout(saveT);
@@ -327,13 +319,9 @@ function draw(pid){
   }
 
   // The script is the truth: take deleted scenes off their days, list new ones
-  const rec = P.reconcile(plan, bd);
-  const known = new Set(Array.isArray(raw.known) ? raw.known : []);
-  const added = known.size ? bd.scenes.filter((s) => s.id && !known.has(s.id)).map((s) => s.id) : [];
-  if(canEdit && (rec.removed.length || added.length || !known.size || plan.scriptId !== scriptId)){
+  const rec = P.syncWithScript(plan, raw.known, bd, scriptId), added = rec.added;
+  if(canEdit && rec.save){
     if(rec.removed.length || added.length) S.notice[pid] = { added, removed: rec.removed };
-    rec.plan.scriptId = scriptId;
-    rec.plan.known = bd.scenes.filter((s) => s.id).map((s) => s.id);
     save(pid, rec.plan, true);
   }
   const pl = rec.plan, st = pl.settings, dates = P.planDates(pl);
@@ -478,7 +466,7 @@ function csView(pid, p, raw, pl, dates, scriptId){
   const days = cs ? (Array.isArray(cs.days) ? cs.days : Object.values(cs.days || {})) : [];
   const err = S.csErr[pid];
   const when = cs && cs.at ? new Date(cs.at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "";
-  const stale = cs && raw.updatedAt && cs.at && raw.updatedAt > cs.at + 5000;
+  const stale = P.callsheetsStale(raw);
   const auth = err && /permission|authori[sz]|scope|Google needs your OK/i.test(err);
   const errBox = err ? `<div class="csErr"><b>${auth ? "Google hasn't allowed Camp to make Docs yet" : "The call sheets didn't build"}</b>
       ${auth ? `<ol><li>Open your Camp script in Apps Script (script.google.com).</li><li>Pick <code>authorizeCallSheets</code> in the function list and press Run. Allow the permissions Google asks for.</li><li>Deploy › Manage deployments › edit › New version › Deploy.</li><li>Come back and press <b>Make call sheets</b>.</li></ol>` : `<div>${esc(err)}</div>`}</div>` : "";
@@ -568,7 +556,7 @@ function wire(box, pid, ctx){
       if(k === "auto"){ autoPlan(pid, ctx, false); return; }
       if(k === "placeNew"){
         const n = S.notice[pid]; if(!n) return;
-        update((plan) => { n.added.forEach((id) => { const i = P.suggestDay(id, plan, ctx.bd); if(i >= 0 && !plan.days.some((d) => d.scenes.indexOf(id) >= 0)) plan.days[i].scenes.push(id); }); });
+        update((plan) => { P.placeScenes(plan, n.added, ctx.bd); });
         n.added = []; if(!n.removed.length) delete S.notice[pid];
         return;
       }
@@ -621,10 +609,7 @@ function wire(box, pid, ctx){
   };
 }
 function moveScene(pid, id, toDay, at){
-  const plan = planOf(pid);
-  const from = plan.days.findIndex((d) => d.scenes.indexOf(id) >= 0);
-  plan.days.forEach((d) => { d.scenes = d.scenes.filter((x) => x !== id); });
-  if(toDay >= 0 && plan.days[toDay]){ const list = plan.days[toDay].scenes; if(at < 0 || at > list.length) list.push(id); else list.splice(at, 0, id); }
+  const { plan, from } = P.moveSceneIn(planOf(pid), id, toDay, at);
   save(pid, plan);
   // feedback: the strip flashes where it landed, the day lights up, and a line says what happened
   S.landed = { id, day: toDay }; clearTimeout(moveScene.t); moveScene.t = setTimeout(() => { S.landed = null; }, 900);

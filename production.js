@@ -233,6 +233,62 @@ function validate(plan, breakdown){
   return out;
 }
 
-const api = { DEFAULTS, MAX_DAYS, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate };
+// ---------- panel logic (pure, so the plan's save/undo/sync paths are tested) ----------
+// Move one scene to a day (-1 = Unscheduled) at a position (-1 = the end). Mutates and returns the plan.
+function moveSceneIn(plan, id, toDay, at){
+  const from = plan.days.findIndex((d) => d.scenes.indexOf(id) >= 0);
+  plan.days.forEach((d) => { d.scenes = d.scenes.filter((x) => x !== id); });
+  if(toDay >= 0 && plan.days[toDay]){ const list = plan.days[toDay].scenes; if(at < 0 || at > list.length) list.push(id); else list.splice(at, 0, id); }
+  return { plan, from };
+}
+// Put new scenes on their suggested days (skips any already placed or with no room)
+function placeScenes(plan, ids, breakdown){
+  (ids || []).forEach((id) => { const i = suggestDay(id, plan, breakdown); if(i >= 0 && !plan.days.some((d) => d.scenes.indexOf(id) >= 0)) plan.days[i].scenes.push(id); });
+  return plan;
+}
+
+// Undo history: snapshots exclude call-sheet links and save stamps, which aren't edits.
+// Quick runs of edits (within 700 ms) count as one step; at most 80 steps.
+const HIST_GAP = 700, HIST_MAX = 80;
+function histKey(plan){ const c = Object.assign({}, plan); delete c.callsheets; delete c.updatedAt; delete c.by; return JSON.stringify(c); }
+function histNew(){ return { undo: [], redo: [], at: 0 }; }
+function histRemember(h, plan, now){
+  const cur = histKey(plan);
+  if(now - h.at > HIST_GAP && h.undo[h.undo.length - 1] !== cur){ h.undo.push(cur); if(h.undo.length > HIST_MAX) h.undo.shift(); }
+  h.at = now; h.redo.length = 0;
+  return h;
+}
+// Returns the plan to save, or null when there's nothing to step to. Call-sheet links always stay current.
+function histStep(h, plan, back){
+  const from = back ? h.undo : h.redo, to = back ? h.redo : h.undo;
+  if(!from.length) return null;
+  to.push(histKey(plan));
+  const next = JSON.parse(from.pop());
+  if(plan.callsheets) next.callsheets = plan.callsheets;
+  h.at = 0;
+  return next;
+}
+
+// What the panel does each time it draws: bring the stored plan in line with the script.
+// Returns the reconciled plan, what changed, and whether it needs saving.
+// `known` comes from the stored plan (not an edit still waiting to save).
+function syncWithScript(plan, knownList, breakdown, scriptId){
+  const rec = reconcile(plan, breakdown);
+  const scenes = (breakdown && breakdown.scenes || []).filter((s) => s.id);
+  const known = new Set(Array.isArray(knownList) ? knownList : []);
+  const added = known.size ? scenes.filter((s) => !known.has(s.id)).map((s) => s.id) : [];
+  const save = !!(rec.removed.length || added.length || !known.size || rec.plan.scriptId !== scriptId);
+  if(save){ rec.plan.scriptId = scriptId; rec.plan.known = scenes.map((s) => s.id); }
+  return { plan: rec.plan, unscheduled: rec.unscheduled, removed: rec.removed, added, save };
+}
+
+// Call sheets are out of date when the plan was saved more than 5 s after they were made
+function callsheetsStale(raw){
+  const cs = raw && raw.callsheets;
+  return !!(cs && raw.updatedAt && cs.at && raw.updatedAt > cs.at + 5000);
+}
+
+const api = { DEFAULTS, MAX_DAYS, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate,
+  moveSceneIn, placeScenes, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);
