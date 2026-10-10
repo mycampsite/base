@@ -288,7 +288,30 @@ function callsheetsStale(raw){
   return !!(cs && raw.updatedAt && cs.at && raw.updatedAt > cs.at + 5000);
 }
 
+// ---------- shot list (from the storyboard) ----------
+// The storyboard's shot list numbers scenes (sh.scene = scene n) and gives each scene the script
+// heading's line id (sc.id), the same permanent id the plan uses. Shots are joined by that id, so
+// renumbering scenes never moves shots to the wrong day. Scenes added only on the storyboard (isExtra)
+// aren't in the script and are left out. Returns { sceneId: [shot, ...] } in shot order.
+function shotsBySceneId(shotlist){
+  const out = {};
+  if(!shotlist || !Array.isArray(shotlist.scenes) || !Array.isArray(shotlist.shots)) return out;
+  const idOfN = {};
+  shotlist.scenes.forEach((sc) => { if(sc && sc.id && !sc.isExtra) idOfN[String(sc.n)] = String(sc.id); });
+  shotlist.shots.forEach((sh) => {
+    const id = sh && idOfN[String(sh.scene)]; if(!id) return;
+    (out[id] = out[id] || []).push({ shot: String(sh.shot == null ? "" : sh.shot), size: String(sh.size || ""), angle: String(sh.angle || ""), move: String(sh.move || ""),
+      lens: String(sh.lens || ""), desc: String(sh.desc || ""), cast: String(sh.cast || ""), equip: String(sh.equip || ""), notes: String(sh.notes || ""), status: String(sh.status || "") });
+  });
+  return out;
+}
+// A shoot day's shots, scene by scene in the day's order
+function dayShots(day, shotMap){
+  const scenes = (day && day.scenes || []).map((id) => ({ id, shots: (shotMap && shotMap[id]) || [] }));
+  return { scenes, total: scenes.reduce((a, s) => a + s.shots.length, 0) };
+}
+
 const api = { DEFAULTS, MAX_DAYS, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate,
-  moveSceneIn, placeScenes, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale };
+  moveSceneIn, placeScenes, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);

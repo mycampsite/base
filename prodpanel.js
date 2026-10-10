@@ -8,7 +8,7 @@
 "use strict";
 const P = window.CampProduction, B = window.CampBreakdown;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
-const OPEN_KEY = "Camp_PROD_PANEL_OPEN_V1", DOOD_KEY = "Camp_PROD_DOOD_OPEN_V1";
+const OPEN_KEY = "Camp_PROD_PANEL_OPEN_V1", DOOD_KEY = "Camp_PROD_DOOD_OPEN_V1", SHOTS_KEY = "Camp_PROD_SHOTS_OPEN_V1";
 const lsGet = (k) => { try{ return localStorage.getItem(k); }catch(_e){ return null; } };
 const lsSet = (k, v) => { try{ localStorage.setItem(k, v); }catch(_e){} };
 
@@ -21,6 +21,7 @@ const S = {
   busy: {},             // pid -> what's being built right now ("cs" | "sync")             // pid -> last call-sheet error
   doodOpen: lsGet(DOOD_KEY) === "1",
   scripts: {},           // scriptId -> { state:"loading"|"ok"|"error", bd, err, modified }
+  shots: {},             // scriptId -> { state:"loading"|"ok"|"error", map:{ sceneId:[shot] } } from the storyboard
   notice: {},            // pid -> { added:[], removed:[], moved:[] } shown until dismissed
   dayTab: {},            // pid -> day shown on a phone (-1 = Unscheduled)
   setOpen: false,        // phone: the settings block
@@ -150,6 +151,11 @@ const css = `
 .doodWrap{ overflow-x:auto; }
 .dood table{ border-collapse:collapse; font-size:12px; min-width:100%; }
 .dood th, .dood td{ border-top:1px solid var(--uiBorder); padding:5px 8px; text-align:center; white-space:nowrap; }
+.shotDay{ text-align:left !important; background:#202020; font-weight:700; }
+.shotDay span{ font-weight:400; color:var(--uiMuted); margin-left:8px; }
+.dood td.desc{ text-align:left; white-space:normal; min-width:220px; }
+.dood td.st.shot{ color:#5ccf8a; } .dood td.st.reshoot{ color:#f1c76b; }
+.shotNone{ padding:9px 12px; color:var(--uiMuted); font-size:12px; }
 .dood .kid{ font-size:10.5px; color:#f1c76b; margin-left:6px; white-space:nowrap; }
 .dood th:first-child, .dood td:first-child{ text-align:left; position:sticky; left:0; background:#1b1b1b; }
 .dood td.W, .dood td.SW, .dood td.WF, .dood td.SWF{ background:rgba(143,227,166,.16); color:#bff0cc; font-weight:700; }
@@ -226,6 +232,21 @@ async function loadScript(id, force){
     S.scripts[id] = { state: "ok", doc: res.doc, bd: B.analyze(res.doc), akey: null, modified: mod, at: Date.now() };
   }catch(err){
     S.scripts[id] = { state: "error", err: (err && err.message) || String(err), bd: cur && cur.bd, modified: mod };
+  }
+  rerender();
+}
+
+// The storyboard's shot list for the same script (optional: the plan works without it)
+async function loadShots(id, force){
+  const cur = S.shots[id];
+  if(cur && !force && cur.state !== "error") return;
+  S.shots[id] = { state: "loading", map: cur && cur.map };
+  try{
+    const res = await H().ripGet({ action: "shotlistdata", fileId: id });
+    if(!res || res.ok === false || !Array.isArray(res.shots)) throw new Error((res && res.error) || "Couldn't read the shot list.");
+    S.shots[id] = { state: "ok", map: P.shotsBySceneId(res) };
+  }catch(err){
+    S.shots[id] = { state: "error", map: cur && cur.map, err: (err && err.message) || String(err) };
   }
   rerender();
 }
@@ -309,6 +330,9 @@ function draw(pid){
   const aopts = P.analyzeOpts(plan), akey = JSON.stringify(aopts);
   if(sc.doc && sc.akey !== akey){ sc.bd = B.analyze(sc.doc, aopts); sc.akey = akey; }
   const bd = sc.bd, byId = P.sceneMap(bd); S.lastBd = bd;
+  S.lastScriptId = scriptId;
+  if(!S.shots[scriptId]) loadShots(scriptId);
+  const shotMap = (S.shots[scriptId] && S.shots[scriptId].map) || {};
 
   // No plan yet: one click starts it from the script
   if(!raw){
@@ -345,7 +369,7 @@ function draw(pid){
       <span class="ctlMore"><button class="btn sm" type="button" data-a="menu" aria-haspopup="menu" aria-expanded="${S.menu}" title="More">⋯</button>${S.menu ? `<div class="ctlMenu" role="menu">
         <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room</small></button>
         <button type="button" data-a="reauto"${canEdit ? "" : " disabled"}>Re-plan all<small>Lay out every scene again from scratch</small></button>
-        <button type="button" data-a="reload">Refresh script<small>Read the latest version of the script</small></button>
+        <button type="button" data-a="reload">Refresh script<small>Read the latest script and storyboard shots</small></button>
         ${S.popout ? "" : `<button type="button" data-a="pop">Pop out<small>Open the plan in its own window</small></button>`}
       </div>` : ""}</span></div>`;
   if(S.mode === "cs"){ box.innerHTML = head("", "") + `<div class="ctlBody">${csView(pid, p, raw, pl, dates, scriptId)}</div>`; wire(box, pid, { bd, scriptId }); return; }
@@ -379,10 +403,11 @@ function draw(pid){
     const s = byId[id]; if(!s) return "";
     const isNew = n && n.added.indexOf(id) >= 0;
     return `<button class="strip${S.pick === id ? " pick" : ""}${isNew ? " new" : ""}${S.landed && S.landed.id === id ? " landed" : ""}" type="button" data-sid="${esc(id)}" draggable="${canEdit}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}">
-      <div class="t">Sc ${s.n} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}<span>${P.fmtEighths(s.eighths)} pg</span></div>
+      <div class="t">Sc ${s.n} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}<span>${shotMap[id] ? shotMap[id].length + " sh · " : ""}${P.fmtEighths(s.eighths)} pg</span></div>
       <div class="l">${esc(s.set || s.loc || "")}</div>
       <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div></button>`;
   };
+  const shotsOn = Object.keys(shotMap).length > 0;
   const unsched = rec.unscheduled.slice().sort((a, b) => byId[a].n - byId[b].n);
   let tabDay = S.dayTab[pid]; if(tabDay == null || tabDay < -1 || tabDay >= pl.days.length) tabDay = pl.days.length ? 0 : -1;
   const cols = [`<div class="col${unsched.length ? "" : " none"}${tabDay === -1 ? " sel" : ""}" data-day="-1"><div class="colHead"><b>Unscheduled</b><span class="dt">${unsched.length}</span>
@@ -392,7 +417,7 @@ function draw(pid){
       const x = stats[i], pct = Math.min(100, Math.round(x.eighths / st.maxEighths * 100));
       return `<div class="col${x.over ? " over" : ""}${S.landed && S.landed.day === i ? " bump" : ""}${tabDay === i ? " sel" : ""}" data-day="${i}">
         <div class="colHead"><b>Day ${i + 1}</b><label class="dtPick${d.date ? " pinned" : ""}" title="${d.date ? "Set to this date. Click to change it" : "Click to choose this day's date. The days after it follow on"}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(fmtDate(dates[i]) || "Set date")}</span><input type="date" value="${esc(dates[i] || "")}" data-date="${i}"${dis}></label>${d.date && canEdit ? `<button type="button" class="unpin" data-a="unpin" data-day="${i}" title="Unpin: follow on from the day before">✕</button>` : ""}
-          <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc · ${x.cast.length} cast</span></div>
+          <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc${shotsOn ? " · " + P.dayShots(d, shotMap).total + " shots" : ""} · ${x.cast.length} cast</span></div>
           <div class="cap"><i style="width:${pct}%"></i></div>
           <div class="colCall">Call <input type="time" value="${esc(d.call || st.call)}" data-call="${i}"${dis}>${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
         <div class="strips">${d.scenes.length ? d.scenes.map(strip).join("") : `<div class="colEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`}</div></div>`;
@@ -416,11 +441,25 @@ function draw(pid){
       ${rows.map((r) => `<tr><td>${esc(r.name)}${kidOf[r.name] ? ` <span class="kid" title="Under 18${kidOf[r.name].age != null ? " (age " + kidOf[r.name].age + ")" : ": confirm age"}. Limited work hours, permit and chaperone.">⚠ under 18</span>` : ""}</td>${r.marks.map((m) => `<td class="${m}">${m}</td>`).join("")}<td>${r.workDays}</td><td>${r.holdDays}</td><td><b>${r.total}</b></td></tr>`).join("")}
     </table></div></details>`;
 
+  // Shot list by shoot day: the storyboard's shots, in the order the scenes are shot
+  const shSt = S.shots[scriptId] || {};
+  const shotRows = pl.days.map((d, i) => {
+    const ds = P.dayShots(d, shotMap); if(!ds.scenes.length) return "";
+    return `<tr><td class="shotDay" colspan="7">Day ${i + 1}<span>${esc(fmtDate(dates[i]) || "no date")} · ${ds.total} shot${ds.total === 1 ? "" : "s"}</span></td></tr>` +
+      ds.scenes.map((x) => x.shots.length ? x.shots.map((sh) => `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td>${esc(sh.shot)}</td><td>${esc(sh.size)}</td><td>${esc(sh.angle)}</td><td>${esc(sh.move)}</td><td class="desc">${esc(sh.desc)}</td><td class="st${sh.status === "Shot" ? " shot" : sh.status === "Needs reshoot" ? " reshoot" : ""}">${esc(sh.status || "Not shot")}</td></tr>`).join("")
+        : `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td colspan="6" class="desc" style="color:var(--uiMuted)">No shots on the storyboard yet</td></tr>`).join("");
+  }).join("");
+  const nShots = Object.keys(shotMap).reduce((a, k) => a + shotMap[k].length, 0);
+  const shots = `<details class="dood fx" data-sec="shots"${lsGet(SHOTS_KEY) === "1" ? " open" : ""}><summary>Shot list by day · ${shSt.state === "loading" && !shotsOn ? "loading…" : nShots + " shot" + (nShots === 1 ? "" : "s")}${shSt.state === "error" ? " · couldn't refresh" : ""}</summary>
+    ${shotsOn ? `<div class="doodWrap"><table><tr><th>Sc</th><th>Shot</th><th>Size</th><th>Angle</th><th>Move</th><th>Description</th><th>Status</th></tr>${shotRows}</table></div>`
+      : `<div class="shotNone">${shSt.state === "error" ? esc(shSt.err) : shSt.state === "loading" ? "Reading the storyboard…" : "No shots yet. Add them on the Storyboard tab and they appear here under their shoot day."}</div>`}
+  </details>`;
+
   // days off set earlier (the old calendar): listed so they can be cleared
   const offs = (st.off || []);
   const cal = offs.length ? `<div class="offRow"><b>Days off</b>${offs.map((iso) => `<button type="button" class="offChip" data-a="cal" data-iso="${esc(iso)}" title="Shoot on this date again"${canEdit ? "" : " disabled"}>${esc(fmtDate(iso))} ✕</button>`).join("")}</div>` : "";
   const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit);
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${flagSec}${locSec}
+  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${locSec}
     <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it" : "Drag scenes between days, or click one to move it"}. Saves for everyone as you go.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
 }
@@ -539,7 +578,7 @@ function wire(box, pid, ctx){
         return;
       }
       if(k === "pop"){ window.open(location.pathname + "?pid=" + encodeURIComponent(pid) + "&tab=production&popout=1", "campProdPop", "popup=yes,width=1280,height=900"); return; }
-      if(k === "reload"){ loadScript(ctx.scriptId || hub.scriptIds(p)[0], true); return; }
+      if(k === "reload"){ const id = ctx.scriptId || hub.scriptIds(p)[0]; loadScript(id, true); loadShots(id, true); return; }
       if(k === "dismiss"){ delete S.notice[pid]; render(pid); return; }
       if(k === "unpick"){ S.pick = null; render(pid); return; }
       if(!canEdit) return;
@@ -583,7 +622,7 @@ function wire(box, pid, ctx){
     update((plan) => { plan.settings[k] = (k === "start" || k === "call") ? t.value : Number(t.value); });
   };
   const det = box.querySelector("details.dood:not(.fx)"); if(det) det.ontoggle = () => { S.doodOpen = det.open; lsSet(DOOD_KEY, det.open ? "1" : "0"); };
-  box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : LOCS_KEY, d.open ? "1" : "0"); });
+  box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : d.dataset.sec === "shots" ? SHOTS_KEY : LOCS_KEY, d.open ? "1" : "0"); });
   if(!canEdit) return;
   // drag and drop between columns
   const line = document.createElement("div"); line.className = "dropLine";
@@ -631,7 +670,11 @@ function confirmShrink(pid, r){
   H().confirm("Remove shoot days?", r.moved.length + " scene" + (r.moved.length === 1 ? " goes" : "s go") + " back to Unscheduled.", "Remove days", true).then((ok) => { if(ok) go(); else rerender(); });
 }
 
-function setMode(m){ if(S.popout) m = "plan"; if(m === S.mode) return; S.mode = m; S.menu = false; rerender(); }
+function setMode(m){
+  if(S.popout) m = "plan"; if(m === S.mode) return; S.mode = m; S.menu = false;
+  if(m === "plan" && S.lastScriptId) loadShots(S.lastScriptId, true);   // pick up shots added on the Storyboard tab
+  rerender();
+}
 function csError(pid, msg){ if(msg) S.csErr[pid] = msg; else delete S.csErr[pid]; rerender(); }
 document.addEventListener("keydown", (e) => {
   if(e.key === "Escape" && S.menu){ S.menu = false; rerender(); return; }
