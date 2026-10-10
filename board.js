@@ -5,6 +5,8 @@
      { cast:[{ name, type, candidates:[{ key, n, row, actor, photo, phone, email, status, notes }] }],
        locations:[{ name, type, candidates:[{ key, n, row, address, photo, phone, email, status, notes }] }],
        statuses:{ cast:[...], loc:[...] } }
+   A candidate also carries what the Board keeps in the Sheet's "Board Details" tab: showreel, audition, photos[], fav, order;
+   a group carries its brief.
    Nothing is stored here: the Sheet is the one source of truth. */
 (function (root) {
 "use strict";
@@ -84,14 +86,38 @@ function statusList(data, kind){
   const s = data && data.statuses && data.statuses[kind]; if(Array.isArray(s) && s.length) return s.map(String);
   return kind === "cast" ? ["Considering", "Callback", "Offered", "Cast", "Passed"] : ["Considering", "Scouted", "Confirmed", "Passed"];
 }
+// Favourite cards from every visible group, in group order (they also stay in their own group)
+function favoritesOf(groups){ const out = []; groups.forEach((g) => g.cards.forEach((c) => { if(c.fav) out.push(c); })); return out; }
+// The keys of a group's cards after moving one: to a position before another card, or one step earlier / later
+function reorder(keys, key, to){
+  const a = keys.slice(), i = a.indexOf(key); if(i < 0) return a;
+  let j;
+  if(to === -1 || to === 1) j = i + to;
+  else{ j = a.indexOf(to); if(j < 0) return a; if(j > i) j--; }
+  if(j < 0 || j >= a.length || j === i) return a;
+  a.splice(i, 1); a.splice(j, 0, key); return a;
+}
+function withOrder(data, kind, keys){
+  const list = KINDS[kind].list, out = Object.assign({}, data);
+  out[list] = ((data && data[list]) || []).map((g) => Object.assign({}, g, { candidates: (g.candidates || []).map((c) => { const i = keys.indexOf(c.key); return i < 0 ? c : Object.assign({}, c, { order: i + 1 }); }) }));
+  return out;
+}
+function withBrief(data, kind, group, text){
+  const list = KINDS[kind].list, out = Object.assign({}, data);
+  out[list] = ((data && data[list]) || []).map((g) => g.name === group ? Object.assign({}, g, { brief: text }) : g);
+  return out;
+}
+
 // ---------- editing (the Board writes back to the Sheet through Code.gs "boardsave") ----------
-function fieldsOf(kind){ return [KINDS[kind].field, "photo", "phone", "email", "status", "notes"]; }
+// Casting also has a showreel and an audition tape; a location has neither (just its map link and notes)
+function fieldsOf(kind){ return [KINDS[kind].field, "photo", "phone", "email", "status", "notes"].concat(kind === "cast" ? ["showreel", "audition"] : []); }
+const LINK_FIELDS = ["photo", "showreel", "audition"];
 // The Sheet's own text for each field (notes keep their line breaks), used as the starting point of an edit
 function rawOf(kind, c){ const o = {}; fieldsOf(kind).forEach((f) => { o[f] = String(c && c[f] != null ? c[f] : "").trim(); }); return o; }
 // A web link is tidied ("imdb.com/x" becomes https://imdb.com/x); anything else is returned untouched
 function tidyValues(kind, vals){
   const o = {}; fieldsOf(kind).forEach((f) => { if(vals && f in vals) o[f] = String(vals[f] == null ? "" : vals[f]).trim(); });
-  if(o.photo){ const u = safeUrl(o.photo); if(u) o.photo = u; }
+  LINK_FIELDS.forEach((f) => { if(o[f]){ const u = safeUrl(o[f]); if(u) o[f] = u; } });
   return o;
 }
 // "" when fine, else what to tell the person
@@ -99,6 +125,8 @@ function checkEdit(kind, vals, statuses, needSomething){
   const v = tidyValues(kind, vals);
   if(v.status && statuses.indexOf(v.status) < 0) return "“" + v.status + "” isn't a status the Sheet knows.";
   if(v.photo && !safeUrl(v.photo)) return "The photo needs to be a web link, like https://… or a Drive share link.";
+  if(v.showreel && !safeUrl(v.showreel)) return "The showreel needs to be a web link.";
+  if(v.audition && !safeUrl(v.audition)) return "The audition tape needs to be a web link.";
   if(v.email && !mailUrl(v.email)) return "That email address doesn't look right.";
   if(needSomething && !fieldsOf(kind).some((f) => v[f])) return "Type something first.";
   return "";
@@ -127,7 +155,7 @@ function withoutCandidate(data, kind, key, removed){
   const list = KINDS[kind].list, f = fieldsOf(kind), out = Object.assign({}, data);
   out[list] = ((data && data[list]) || []).map((g) => Object.assign({}, g, { candidates: (g.candidates || []).reduce((a, c) => {
     if(c.key !== key){ a.push(c); return a; }
-    if(!removed){ const e = Object.assign({}, c); f.forEach((k) => { e[k] = ""; }); a.push(e); }
+    if(!removed){ const e = Object.assign({}, c); f.forEach((k) => { e[k] = ""; }); e.photos = []; e.fav = false; e.order = 0; a.push(e); }
     return a;
   }, []) }));
   return out;
@@ -137,24 +165,33 @@ function withoutCandidate(data, kind, key, removed){
 function cardOf(kind, group, c, fileId){
   const f = KINDS[kind].field, main = clean(c[f]), np = notesParts(c.notes);
   const title = main || (kind === "cast" ? "Unnamed" : "No address yet");
-  const links = [];
+  // On the card: the map (a place), the showreel and audition tape (an actor), then any link typed in the notes.
+  // Phone and email are only in the detail view (contact).
+  const links = [], contact = [];
   if(kind === "loc" && mapUrl(main)) links.push({ kind: "map", label: "Map", url: mapUrl(main) });
+  const sr = safeUrl(c.showreel), au = safeUrl(c.audition);
+  if(sr) links.push({ kind: "web", label: "Showreel", url: sr });
+  if(au) links.push({ kind: "web", label: "Audition", url: au });
+  np.links.forEach((l) => { if(l.url !== sr && l.url !== au) links.push({ kind: "web", label: l.label, url: l.url }); });
   const ph = telUrl(c.phone), em = mailUrl(c.email);
-  if(ph) links.push({ kind: "tel", label: "Call", url: ph });
-  if(em) links.push({ kind: "mail", label: "Email", url: em });
-  np.links.forEach((l) => links.push({ kind: "web", label: l.label, url: l.url }));
+  if(ph) contact.push({ kind: "tel", label: "Call", url: ph });
+  if(em) contact.push({ kind: "mail", label: "Email", url: em });
   const photoLink = safeUrl(c.photo);
+  const photos = [c.photo].concat(Array.isArray(c.photos) ? c.photos : []).map(safeUrl).filter((u, i, a) => u && a.indexOf(u) === i);
   return { id: (fileId || "") + "|" + c.key, key: c.key, row: c.row, n: c.n, kind, group: group.name, groupType: clean(group.type), title, main,
-    status: clean(c.status), phone: clean(c.phone), email: clean(c.email), notes: np.text, photo: photoSrc(c.photo), photoLink, links, raw: rawOf(kind, c),
-    passed: clean(c.status) === PASSED, done: clean(c.status) === DONE[kind] };
+    status: clean(c.status), phone: clean(c.phone), email: clean(c.email), notes: np.text, photo: photoSrc(c.photo), photoLink, photos, links, contact, raw: rawOf(kind, c),
+    fav: !!c.fav, order: Number(c.order) || 0, passed: clean(c.status) === PASSED, done: clean(c.status) === DONE[kind] };
 }
 // All cards for one tab, grouped by role / location in the Sheet's order. Passed options sink to the end of their group.
 function groupsOf(data, kind, fileId){
   const list = (data && data[KINDS[kind].list]) || [];
   return list.map((g) => {
     const cards = (g.candidates || []).filter((c) => isFilled(kind, c)).map((c) => cardOf(kind, g, c, fileId));
+    // the order the director set (then the Sheet's order); passed options sink to the end
+    const byOrder = (a, b) => (a.order && b.order ? a.order - b.order : a.order ? -1 : b.order ? 1 : 0) || a.n - b.n;
+    cards.sort(byOrder);
     const keep = cards.filter((c) => !c.passed).concat(cards.filter((c) => c.passed));
-    return { name: g.name, type: clean(g.type), cards: keep, slots: (g.candidates || []).length, settled: keep.some((c) => c.done) };
+    return { name: g.name, type: clean(g.type), brief: String(g.brief || "").trim(), cards: keep, slots: (g.candidates || []).length, settled: keep.some((c) => c.done) };
   });
 }
 // The visible groups for a status chip ("All" | a status | "Unfilled") and a search
@@ -190,6 +227,6 @@ function neighbour(groups, id, dir){
   return flat[i + dir] || "";
 }
 
-const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate };
+const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, withOrder, withBrief };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampBoard = Object.assign(root.CampBoard || {}, { logic: api });
 })(typeof window !== "undefined" ? window : this);

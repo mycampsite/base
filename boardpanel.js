@@ -26,6 +26,8 @@ const S = {
   closed: {},          // "kind|group" -> true while collapsed
   bad: {},             // card id -> true when its photo didn't load
   open: null,          // card id shown in the detail view
+  briefDraft: null,
+  briefEdit: "",       // "kind|group" while its brief is being typed
   edit: null,          // the form being filled in: { kind, id, key, group, base, vals, busy, err, conflict }
   pid: null, fileId: ""
 };
@@ -109,6 +111,22 @@ const css = `
 .bdConf{ font-size:12.5px; color:#f1d39a; background:rgba(224,161,58,.1); border:1px solid rgba(224,161,58,.3); border-radius:9px; padding:8px 10px; display:grid; gap:8px; }
 .bdConf div{ display:flex; gap:8px; flex-wrap:wrap; }
 .bdQuick{ height:30px; border-radius:9px; max-width:150px; }
+.bdStar{ position:absolute; top:6px; right:6px; z-index:2; width:28px; height:28px; border-radius:50%; border:0; background:rgba(0,0,0,.5); color:#fff; font-size:15px; line-height:28px; text-align:center; padding:0; cursor:pointer; opacity:.75; }
+.bdStar:hover{ opacity:1; background:rgba(0,0,0,.7); }
+.bdStar.on{ color:var(--gold); opacity:1; }
+span.bdStar{ cursor:default; }
+.bdGrp{ font-size:11px; color:var(--uiMuted); letter-spacing:.03em; text-transform:uppercase; }
+.bdCard.dragging{ opacity:.35; }
+.bdCard.over{ outline:2px dashed var(--gold); outline-offset:-2px; }
+.bdFav .bdGN{ color:var(--gold); }
+.bdBrief{ margin:8px 2px 0; font-size:12.5px; color:var(--uiMuted); font-style:italic; white-space:pre-wrap; overflow-wrap:anywhere; max-width:80ch; }
+.bdBrief button, .bdBriefAdd{ background:none; border:0; color:var(--uiMuted); font-size:11.5px; cursor:pointer; padding:0 4px; text-decoration:underline; text-underline-offset:3px; font-style:normal; opacity:.7; }
+.bdBriefAdd{ margin:6px 2px 0; padding:0; }
+.bdBrief button:hover, .bdBriefAdd:hover{ color:var(--uiText); opacity:1; }
+.bdBriefForm{ margin:8px 2px 0; display:grid; gap:6px; max-width:620px; }
+.bdBriefForm textarea{ width:100%; min-height:64px; padding:7px 10px; border-radius:9px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); font:inherit; font-size:13px; box-sizing:border-box; resize:vertical; outline:none; }
+.bdBriefForm div{ display:flex; gap:8px; }
+.bdGroup.shut .bdBrief, .bdGroup.shut .bdBriefAdd, .bdGroup.shut .bdBriefForm{ display:none; }
 @media (max-width:640px){ .bdForm .two{ grid-template-columns:1fr; } }
 @media (max-width:640px){
   .bdShade{ align-items:flex-end; padding:0; }
@@ -208,16 +226,20 @@ function drawTools(){
   const pt = L.progressText(S.tab, c);
   prog.innerHTML = pt ? pt.replace(/^(\d+ of \d+)/, "<b>$1</b>") : "";
 }
-function cardHtml(c, kind){
+function cardHtml(c, kind, o){
+  o = o || {};
   const hasImg = c.photo && !S.bad[c.id];
-  const ph = `<div class="bdPh">${esc(initial(c))}${hasImg ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(c.photo)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}</div>`;
-  const links = c.links.map((l) => `<a class="bdBtn" href="${esc(l.url)}"${l.kind === "tel" || l.kind === "mail" ? "" : ` target="_blank" rel="noopener noreferrer"`}>${esc(l.label)}</a>`).join("");
-  return `<article class="bdCard${c.passed ? " passed" : ""}${c.done ? " done" : ""}" tabindex="0" data-id="${esc(c.id)}" aria-label="${esc(c.title + ", " + c.group + (c.status ? ", " + c.status : ""))}">${ph}
-    <div class="bdInfo"><div class="bdName">${esc(c.title)}</div>${c.status ? `<span class="bdSt ${slug(c.status)}">${esc(c.status)}</span>` : ""}${c.notes ? `<div class="bdNotes">${esc(c.notes)}</div>` : ""}${links ? `<div class="bdLinks">${links}</div>` : ""}</div></article>`;
+  const star = o.can ? `<button class="bdStar${c.fav ? " on" : ""}" type="button" data-fav="${esc(c.id)}" aria-pressed="${c.fav}" aria-label="${c.fav ? "Remove from favorites" : "Add to favorites"}" title="${c.fav ? "Remove from favorites" : "Favorite"}">★</button>` : (c.fav ? `<span class="bdStar on" title="Favorite" aria-label="Favorite">★</span>` : "");
+  const ph = `<div class="bdPh">${esc(initial(c))}${hasImg ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(c.photo)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}${star}</div>`;
+  const links = c.links.map((l) => `<a class="bdBtn" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>`).join("");
+  const drag = o.can && !o.showGroup ? ` draggable="true"` : "";
+  return `<article class="bdCard${c.passed ? " passed" : ""}${c.done ? " done" : ""}" tabindex="0" data-id="${esc(c.id)}" data-key="${esc(c.key)}" data-group="${esc(c.group)}"${drag} aria-label="${esc(c.title + ", " + c.group + (c.status ? ", " + c.status : ""))}">${ph}
+    <div class="bdInfo">${o.showGroup ? `<div class="bdGrp">${esc(c.group)}</div>` : ""}<div class="bdName">${esc(c.title)}</div>${c.status ? `<span class="bdSt ${slug(c.status)}">${esc(c.status)}</span>` : ""}${c.notes ? `<div class="bdNotes">${esc(c.notes)}</div>` : ""}${links ? `<div class="bdLinks">${links}</div>` : ""}</div></article>`;
 }
 function drawBody(p){
   const box = document.getElementById("bdBody"); if(!box) return;
   const top = box.scrollTop;
+  const ta0 = document.getElementById("bdBriefTa"); if(ta0) S.briefDraft = ta0.value;   // typing survives a redraw
   const { rec, d, groups } = current();
   const hub = H();
   if(!d){
@@ -236,12 +258,25 @@ function drawBody(p){
   const can = canWrite(p), max = d.maxOptions || 12;
   const addBtn = (g, big) => can && g.cards.length < max ? `<button class="bdAdd" type="button" data-badd="${esc(g.name)}" aria-label="Add an option to ${esc(g.name)}">+ ${big ? "Add " + noun : "Add"}</button>` : "";
   const sheetLink = d.url ? esc(d.url + ((S.tab === "cast" ? d.castGid : d.locGid) ? "#gid=" + (S.tab === "cast" ? d.castGid : d.locGid) : "")) : "";
-  box.innerHTML = vis.map((g) => {
+  const favs = L.favoritesOf(vis);
+  const favHtml = favs.length ? (() => {
+    const key = S.tab + "|__fav", shut = !!S.closed[key];
+    return `<section class="bdGroup bdFav${shut ? " shut" : ""}"><button class="bdGH" type="button" data-bg="${esc(key)}" aria-expanded="${!shut}">${ICON.chev}<span class="bdGN">★ Favorites</span><span class="bdGS">${favs.length}</span></button>
+      <div class="bdGrid ${S.tab}">${favs.map((c) => cardHtml(c, S.tab, { can, showGroup: true })).join("")}</div></section>`;
+  })() : "";
+  const briefHtml = (g) => {
+    const key = S.tab + "|" + g.name;
+    if(S.briefEdit === key) return `<div class="bdBriefForm"><textarea id="bdBriefTa" aria-label="Brief for ${esc(g.name)}" placeholder="${S.tab === "cast" ? "Who is this character? Age, look, what they need from the actor." : "What the place needs: look, feel, access, constraints."}">${esc(S.briefDraft != null ? S.briefDraft : g.brief)}</textarea><div><button class="btn sm primary" type="button" data-brsave="${esc(g.name)}">Save</button><button class="btn sm" type="button" data-brcancel="1">Cancel</button></div></div>`;
+    if(g.brief) return `<div class="bdBrief">${esc(g.brief)}${can ? ` <button type="button" data-brief="${esc(g.name)}">edit</button>` : ""}</div>`;
+    return can ? `<button class="bdBriefAdd" type="button" data-brief="${esc(g.name)}">+ brief</button>` : "";
+  };
+  box.innerHTML = favHtml + vis.map((g) => {
     const key = S.tab + "|" + g.name, shut = !!S.closed[key];
     const done = g.cards.find((c) => c.done);
     const sum = done ? `<span class="bdGS done">✓ ${esc(done.title)}</span>` : `<span class="bdGS">${g.cards.length ? g.cards.length + " option" + (g.cards.length === 1 ? "" : "s") : "no options yet"}</span>`;
     return `<section class="bdGroup${shut ? " shut" : ""}"><button class="bdGH" type="button" data-bg="${esc(key)}" aria-expanded="${!shut}">${ICON.chev}<span class="bdGN">${esc(g.name)}</span>${g.type ? `<span class="bdGT">${esc(g.type)}</span>` : ""}${sum}</button>
-      ${g.cards.length ? `<div class="bdGrid ${S.tab}">${g.cards.map((c) => cardHtml(c, S.tab)).join("")}${addBtn(g, false)}</div>` : `<div class="bdNone">No ${noun} options yet.${can ? addBtn(g, true) : ""}${sheetLink ? ` ${can ? "Or add" : "Add"} one in <a href="${sheetLink}" target="_blank" rel="noopener">the Sheet</a>.` : ""}</div>`}</section>`;
+      ${briefHtml(g)}
+      ${g.cards.length ? `<div class="bdGrid ${S.tab}">${g.cards.map((c) => cardHtml(c, S.tab, { can })).join("")}${addBtn(g, false)}</div>` : `<div class="bdNone">No ${noun} options yet.${can ? addBtn(g, true) : ""}${sheetLink ? ` ${can ? "Or add" : "Add"} one in <a href="${sheetLink}" target="_blank" rel="noopener">the Sheet</a>.` : ""}</div>`}</section>`;
   }).join("");
   box.scrollTop = top;
 }
@@ -286,8 +321,10 @@ function showDetail(id, keep){
   if(c.phone) rows.push(["Phone", `<a href="${esc(L.telUrl(c.phone) || "#")}">${esc(c.phone)}</a>`]);
   if(c.email) rows.push(["Email", L.mailUrl(c.email) ? `<a href="${esc(L.mailUrl(c.email))}">${esc(c.email)}</a>` : esc(c.email)]);
   const hint = c.photoLink && !c.photo ? `This photo link can't be shown here. Use the Photo button to open it.` : (c.photo && bad ? `The photo didn't load. If it's a Drive file, set sharing to “Anyone with the link”.` : "");
-  const links = c.links.map((l) => `<a class="bdBtn" href="${esc(l.url)}"${l.kind === "tel" || l.kind === "mail" ? "" : ` target="_blank" rel="noopener noreferrer"`}>${esc(l.label)}</a>`).join("");
+  const links = c.links.concat(c.contact).map((l) => `<a class="bdBtn" href="${esc(l.url)}"${l.kind === "tel" || l.kind === "mail" ? "" : ` target="_blank" rel="noopener noreferrer"`}>${esc(l.label)}</a>`).join("");
   const can = canWrite(S.hubP);
+  const mv = can ? `<button class="btn sm" type="button" data-bd="earlier" title="Move this option earlier in its list">Earlier</button><button class="btn sm" type="button" data-bd="later" title="Move this option later in its list">Later</button>` : "";
+  const favBtn = can ? `<button class="btn sm" type="button" data-bd="fav" aria-pressed="${c.fav}">${c.fav ? "★ Favorite" : "☆ Favorite"}</button>` : "";
   const quick = can ? `<select class="bdQuick" data-bd="status" aria-label="Set the status" title="Set the status (saved to the Sheet)"><option value="">No status</option>${statusOptions(L.statusList(d, c.kind), c.raw.status)}</select>` : "";
   const rowLink = d && d.url ? esc(d.url + (gid ? "#gid=" + gid + "&range=A" + c.row : "")) : "";
   const html = `<div class="bdShade" id="bdShade"><div class="bdDlg ${c.kind}" role="dialog" aria-modal="true" aria-label="${esc(c.title)}">
@@ -299,7 +336,7 @@ function showDetail(id, keep){
       ${c.notes ? `<div class="bdDNotes">${esc(c.notes)}</div>` : ""}
       ${hint ? `<div class="bdHint">${esc(hint)}</div>` : ""}
       ${links ? `<div class="bdLinks">${links}</div>` : ""}
-      <div class="bdDFoot"><button class="btn sm" type="button" data-bd="prev"${prev ? "" : " disabled"} aria-label="Previous option" title="Previous (←)">←</button><button class="btn sm" type="button" data-bd="next"${next ? "" : " disabled"} aria-label="Next option" title="Next (→)">→</button>${quick}<span class="sp"></span>${can ? `<button class="btn sm" type="button" data-bd="edit" title="Change this option and save it to the Sheet">Edit</button>` : ""}${rowLink ? `<a class="btn sm" href="${rowLink}" target="_blank" rel="noopener" title="Open this row in Google Sheets">${ICON.ext}<span class="lbl">Edit in Sheet</span></a>` : ""}</div>
+      <div class="bdDFoot"><button class="btn sm" type="button" data-bd="prev"${prev ? "" : " disabled"} aria-label="Previous option" title="Previous (←)">←</button><button class="btn sm" type="button" data-bd="next"${next ? "" : " disabled"} aria-label="Next option" title="Next (→)">→</button>${quick}${favBtn}${mv}<span class="sp"></span>${can ? `<button class="btn sm danger" type="button" data-bd="delete" title="Delete this option">Delete</button><button class="btn sm" type="button" data-bd="edit" title="Change this option and save it to the Sheet">Edit</button>` : ""}${rowLink ? `<a class="btn sm" href="${rowLink}" target="_blank" rel="noopener" title="Open this row in Google Sheets">${ICON.ext}<span class="lbl">Edit in Sheet</span></a>` : ""}</div>
     </div></div></div>`;
   const old = document.getElementById("bdShade");
   if(old) old.remove();
@@ -312,6 +349,10 @@ function showDetail(id, keep){
     else if(b.dataset.bd === "prev" && prev) showDetail(prev);
     else if(b.dataset.bd === "next" && next) showDetail(next);
     else if(b.dataset.bd === "edit") openEditor(c);
+    else if(b.dataset.bd === "fav") toggleFav(c);
+    else if(b.dataset.bd === "earlier") moveCard(c, -1);
+    else if(b.dataset.bd === "later") moveCard(c, 1);
+    else if(b.dataset.bd === "delete") deleteCard(c);
   });
   shade.addEventListener("change", (e) => {
     if(e.target.dataset && e.target.dataset.bd === "status") quickStatus(c, e.target.value);
@@ -353,6 +394,50 @@ async function quickStatus(c, status){
   if(S.pid) render(S.pid);
   if(S.open) showDetail(S.open, true);
 }
+async function toggleFav(c){
+  try{
+    const res = await post({ kind: c.kind, op: "set", rowKey: c.key, fields: { favorite: c.fav ? "" : "1" } });
+    setData((d) => L.withCandidate(d, c.kind, res.candidate));
+  }catch(err){ H().toast("Couldn't save: " + ((err && err.message) || err), "err"); if(err && err.gone) afterSheetMoved(); }
+  if(S.pid) render(S.pid);
+  if(S.open && findCard(S.open)) showDetail(S.open, true);
+}
+// Put a card earlier / later in its list, or (drag) before another; the order is written to the Sheet
+async function moveCard(c, to, silent){
+  const g = current().groups.find((x) => x.name === c.group); if(!g) return;
+  const keys = L.reorder(g.cards.map((x) => x.key), c.key, to);
+  if(keys.join("|") === g.cards.map((x) => x.key).join("|")) return;
+  const before = S.data[S.fileId] && S.data[S.fileId].d;
+  setData((d) => L.withOrder(d, c.kind, keys));
+  if(S.pid) render(S.pid);
+  if(S.open && !silent && findCard(S.open)) showDetail(S.open, true);
+  try{ await post({ kind: c.kind, op: "order", keys }); }
+  catch(err){
+    H().toast("Couldn't save the order: " + ((err && err.message) || err), "err");
+    if(before) setData(() => before);
+    if(S.pid) render(S.pid);
+  }
+}
+async function deleteCard(c){
+  if(!(await H().confirm("Delete " + c.title + "?", "It's removed from the Sheet too. This can't be undone from here.", "Delete", true))) return;
+  try{
+    const res = await post({ kind: c.kind, op: "clear", rowKey: c.key });
+    setData((dd) => L.withoutCandidate(dd, c.kind, c.key, !!res.removedRow));
+    if(res.removedRow) afterSheetMoved();
+    H().toast("Deleted.", "ok");
+    closeDetail(true);
+  }catch(err){ H().toast("Couldn't delete: " + ((err && err.message) || err), "err"); if(err && err.gone) afterSheetMoved(); }
+  if(S.pid) render(S.pid);
+}
+async function saveBrief(group){
+  const ta = document.getElementById("bdBriefTa"); if(!ta) return;
+  const text = ta.value.trim(), kind = S.tab;
+  S.briefEdit = ""; S.briefDraft = null;
+  setData((d) => L.withBrief(d, kind, group, text));
+  if(S.pid) render(S.pid);
+  try{ await post({ kind, op: "brief", group, text }); }
+  catch(err){ H().toast("Couldn't save the brief: " + ((err && err.message) || err), "err"); afterSheetMoved(); }
+}
 function openEditor(c, groupName){
   const kind = S.tab;
   const base = c ? Object.assign({}, c.raw) : {};
@@ -380,6 +465,7 @@ function showEditor(){
       ${inp(f1, kind === "cast" ? "Actor name" : "Address", `placeholder="${kind === "cast" ? "Who is it?" : "Street, suburb"}"`)}
       <label>Status<select data-f="status"><option value="">No status</option>${statusOptions(statuses, e.base.status)}</select></label>
       <div class="two">${inp("phone", "Phone", `inputmode="tel"`)}${inp("email", "Email", `inputmode="email"`)}</div>
+      ${kind === "cast" ? `<div class="two">${inp("showreel", "Showreel link", `inputmode="url" placeholder="YouTube, Vimeo…"`)}${inp("audition", "Audition tape link", `inputmode="url" placeholder="Self-tape or audition"`)}</div>` : ""}
       ${inp("photo", "Photo link", `inputmode="url" placeholder="Drive share link or image address"`)}
       <label>Notes<textarea data-f="notes" placeholder="Links to a reel, IMDb or listing become buttons">${esc(v.notes || "")}</textarea></label>
       ${conf}${e.err ? `<div class="bdErr" role="alert">${esc(e.err)}</div>` : ""}
@@ -488,6 +574,13 @@ function wire(box, pid, p){
     }
     const bg = t.closest("[data-bg]");
     if(bg){ const k = bg.dataset.bg; S.closed[k] = !S.closed[k]; drawBody(p); return; }
+    const fv = t.closest("[data-fav]");
+    if(fv){ const c = findCard(fv.dataset.fav); if(c) toggleFav(c); return; }
+    const br = t.closest("[data-brief]");
+    if(br){ S.briefEdit = S.tab + "|" + br.dataset.brief; S.briefDraft = null; drawBody(p); const ta = document.getElementById("bdBriefTa"); if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
+    const bs2 = t.closest("[data-brsave]");
+    if(bs2){ saveBrief(bs2.dataset.brsave); return; }
+    if(t.closest("[data-brcancel]")){ S.briefEdit = ""; S.briefDraft = null; drawBody(p); return; }
     const ad = t.closest("[data-badd]");
     if(ad){ openEditor(null, ad.dataset.badd); return; }
     const card = t.closest(".bdCard");
@@ -496,6 +589,27 @@ function wire(box, pid, p){
   box.onkeydown = (e) => {
     const card = e.target.closest && e.target.closest(".bdCard");
     if(card && e.target === card && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); showDetail(card.dataset.id); }
+  };
+  // drag a card onto another in the same list to reorder
+  box.ondragstart = (e) => {
+    const card = e.target.closest && e.target.closest(".bdCard[draggable=true]"); if(!card) return;
+    S.drag = { key: card.dataset.key, group: card.dataset.group };
+    card.classList.add("dragging");
+    try{ e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", card.dataset.key); }catch(_e){}
+  };
+  box.ondragover = (e) => {
+    const card = e.target.closest && e.target.closest(".bdCard"); if(!card || !S.drag) return;
+    if(card.dataset.group !== S.drag.group || card.dataset.key === S.drag.key || card.closest(".bdFav")) return;
+    e.preventDefault(); box.querySelectorAll(".bdCard.over").forEach((x) => { if(x !== card) x.classList.remove("over"); }); card.classList.add("over");
+  };
+  box.ondragend = () => { S.drag = null; box.querySelectorAll(".dragging,.over").forEach((x) => x.classList.remove("dragging", "over")); };
+  box.ondrop = (e) => {
+    const card = e.target.closest && e.target.closest(".bdCard"), d = S.drag; S.drag = null;
+    box.querySelectorAll(".dragging,.over").forEach((x) => x.classList.remove("dragging", "over"));
+    if(!card || !d || card.dataset.group !== d.group || card.closest(".bdFav")) return;
+    e.preventDefault();
+    const moving = current().groups.reduce((a, g) => a || g.cards.find((c) => c.key === d.key), null);
+    if(moving && card.dataset.key !== d.key) moveCard(moving, card.dataset.key, true);
   };
   box.onchange = (e) => {
     if(e.target.id === "bdScript"){ S.script[pid] = e.target.value; render(pid); }
