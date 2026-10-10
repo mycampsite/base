@@ -190,6 +190,26 @@ const BG_FLAGS_ = [
     not: "\\b(monitors? (him|her|them|the situation|his|her|their))\\b" }
 ];
 
+// Is this CAPS phrase plausibly a person being introduced (not a sound, a camera note or a heading)?
+const BG_NOT_PEOPLE_ = /^(INT|EXT|I\/E|CUT|FADE|DISSOLVE|SMASH|MATCH|V\.?O|O\.?S|O\.?C|CONT|CONTINUED|MORE|SUPER|TITLE|CARD|INSERT|CLOSE|CLOSE ON|ANGLE|ANGLE ON|POV|BACK|BACK TO|LATER|MOMENTS LATER|MONTAGE|SERIES OF SHOTS|FLASHBACK|END|THE END|BLACK|WHITE|INTERCUT|SFX|VFX|FX|BANG|BOOM|CRASH|THUD|SLAM|CLICK|BEEP|RING|RING RING|POP|WHAM|CRACK|SNAP|BUZZ|KNOCK|KNOCK KNOCK|SCREAM|SCREAMS|GUNSHOT|GUNSHOTS|BLAM|THWACK|SPLASH|HONK|DING|TICK|TOCK|SILENCE|NOTHING|EVERYONE|EVERYBODY|NOBODY|SOMEONE|ALL|BOTH|OK|OKAY|NO|YES|STOP|NOW|THEN|AND|BUT|OR|SO|DAY|NIGHT|MORNING|EVENING|DUSK|DAWN|TV|PHONE|CCTV|MEANWHILE|OUTSIDE|INSIDE|AGAIN|HERE|THERE|LOOK|WAIT|HELP|NOTE|ALSO|STILL|BEAT|PAUSE|ONCE|PRESENT DAY|SAME|SAME TIME|CONTINUOUS|OVER BLACK|ESTABLISHING|WIDE|WIDE SHOT|TIGHT|REVERSE|TRACKING|AERIAL|SLOW MOTION|FREEZE FRAME)$/;
+function bgIntroName_(nm) {
+  nm = String(nm || "").trim();
+  if (nm.length < 2 || nm.length > 28 || nm !== nm.toUpperCase() || !/[A-Z]{2}/.test(nm)) return false;
+  if (BG_NOT_PEOPLE_.test(nm)) return false;
+  if (/^[A-Z]+LY$/.test(nm)) return false;   // SUDDENLY, FINALLY, SLOWLY
+  if (/^(TWO|THREE|FOUR|FIVE|SIX|SEVERAL|SOME|MANY|DOZENS|HUNDREDS|INT|EXT)\b/.test(nm)) return false;
+  return true;
+}
+// "33", "30s", "mid-30s", "thirty-three", "forties" -> a number of years (decades round to the decade)
+function bgAgeWords_(s) {
+  s = String(s || "").toLowerCase();
+  const n = bgAgeNum_(s); if (n != null) return n;
+  const ones = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19 };
+  const tens = { teen:13, twent:20, thirt:30, fort:40, fift:50, sixt:60, sevent:70, eight:80, ninet:90 };
+  const m = s.match(/(twent|thirt|fort|fift|sixt|sevent|eight|ninet|teen)(?:y|ies|s)?(?:-([a-z]+))?/);
+  if (m && (m[1] !== "eight" || /eighty|eighties/.test(s))) return tens[m[1]] + (m[2] && ones[m[2]] ? ones[m[2]] : 0);
+  const w = s.match(/[a-z]+$/); return w && ones[w[0]] ? ones[w[0]] : null;
+}
 function bgAgeNum_(s) {
   s = String(s || "").toUpperCase();
   const m = s.match(/(\d{1,2})/);
@@ -267,6 +287,23 @@ function budgetAnalyze_(doc, opts) {
       const age = bgAgeNum_(m[2]);
       if (!intros[nm]) intros[nm] = { name: nm, age: age, scene: cur ? cur.n : 1 };
     }
+    // Other ways scripts introduce someone in CAPITALS: "DAVE, 33, ...", "SARAH, mid-30s", "MAX, forties",
+    // "SARAH, a tired nurse, ...", "this is DAVE", "meet DAVE", "a man named DAVE"
+    const N = "([A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,2})";
+    const AGE = "((?:(?:early|mid|late|Early|Mid|Late)[\\s-]*)?(?:\\d{1,2}(?:'?s)?|(?:twent|thirt|fort|fift|sixt|sevent|eight|ninet)(?:y|ies)(?:-[a-z]+)?|teens?|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|one|two|three|four|five|six|seven|eight|nine))(?:\\s*(?:-|\\s)\\s*years?(?:\\s*-?\\s*old)?)?(?![\\d:\\/]|\\.\\d)\\b";
+    const add = function (raw, age, how) {
+      const nm = String(raw || "").replace(/^(A|AN|THE|HER|HIS|THEIR|OUR)\s+/, "").trim();
+      if (!bgIntroName_(nm)) return;
+      if (!intros[nm]) intros[nm] = { name: nm, age: age, scene: cur ? cur.n : 1, how: how };
+      else if (intros[nm].age == null && age != null) intros[nm].age = age;
+    };
+    let mm;
+    const reAge = new RegExp("(?:^|[^A-Za-z])" + N + "\\s*,\\s*" + AGE, "g");
+    while ((mm = reAge.exec(String(text || ""))) !== null) add(mm[1], bgAgeWords_(mm[2]), "age");
+    const reDesc = new RegExp("(?:^|[^A-Za-z])" + N + "\\s*,\\s*(?:an?|the|his|her|their|our)\\s+[a-z]", "g");
+    while ((mm = reDesc.exec(String(text || ""))) !== null) add(mm[1], null, "desc");
+    const reMeet = new RegExp("\\b(?:this is|meet|named|called|introducing)\\s+" + N + "\\b", "gi");
+    while ((mm = reMeet.exec(String(text || ""))) !== null) { if (mm[1] === mm[1].toUpperCase()) add(mm[1], null, "meet"); }
     scanKids(text);
   };
   // "LILY, a little girl, runs in." / "Lily, 8, sits." / "little girl MIA" -> remember the child, by name

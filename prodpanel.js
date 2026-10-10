@@ -17,7 +17,8 @@ const S = {
   mode: new URLSearchParams(location.search).get("popout") === "1" ? "plan" : "off",   // "plan" | "cs" | "off" (a sheet is showing)
   warnOpen: false,       // the "to check" list
   menu: false,           // the ⋯ menu
-  csErr: {},             // pid -> last call-sheet error
+  csErr: {},
+  busy: {},             // pid -> what's being built right now ("cs" | "sync")             // pid -> last call-sheet error
   doodOpen: lsGet(DOOD_KEY) === "1",
   scripts: {},           // scriptId -> { state:"loading"|"ok"|"error", bd, err, modified }
   notice: {},            // pid -> { added:[], removed:[], moved:[] } shown until dismissed
@@ -151,6 +152,9 @@ const css = `
 .dood th:first-child, .dood td:first-child{ text-align:left; position:sticky; left:0; background:#1b1b1b; }
 .dood td.W, .dood td.SW, .dood td.WF, .dood td.SWF{ background:rgba(143,227,166,.16); color:#bff0cc; font-weight:700; }
 .dood td.H{ background:rgba(241,199,107,.12); color:#f1c76b; }
+.ctlLoad{ flex:1; min-height:min(62vh,560px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; color:var(--uiMuted); font-size:13px; padding:40px 16px; }
+.ctlLoad .spin{ width:30px; height:30px; margin-bottom:4px; }
+.ctlLoad b{ color:var(--uiText); font-weight:600; font-size:14px; }
 .ctlEmpty{ padding:18px 6px; color:var(--uiMuted); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .ctlRO{ font-size:11.5px; color:var(--uiMuted); }
 @media (max-width:760px){
@@ -264,7 +268,7 @@ function draw(pid){
   const sc = S.scripts[scriptId];
   if(!sc || (sc.state === "loading" && !sc.bd)){
     if(!sc) loadScript(scriptId);
-    box.innerHTML = head(`<span class="ctlChip">Reading the script…</span>`) + (S.open ? `<div class="ctlEmpty"><span class="spin"></span>Reading the script for scenes, pages and cast…</div>` : "");
+    box.innerHTML = head("") + `<div class="ctlLoad"><span class="spin"></span><b>${S.mode === "cs" ? "Loading call sheets…" : "Loading the plan…"}</b><span>Reading scenes, pages and cast from the script</span></div>`;
     wire(box, pid); return;
   }
   if(sc.state === "error" && !sc.bd){
@@ -438,6 +442,7 @@ function csView(pid, p, raw, pl, dates, scriptId){
   const auth = err && /permission|authori[sz]|scope|Google needs your OK/i.test(err);
   const errBox = err ? `<div class="csErr"><b>${auth ? "Google hasn't allowed Camp to make Docs yet" : "The call sheets didn't build"}</b>
       ${auth ? `<ol><li>Open your Camp script in Apps Script (script.google.com).</li><li>Pick <code>authorizeCallSheets</code> in the function list and press Run. Allow the permissions Google asks for.</li><li>Deploy › Manage deployments › edit › New version › Deploy.</li><li>Come back and press <b>Make call sheets</b>.</li></ol>` : `<div>${esc(err)}</div>`}</div>` : "";
+  if(S.busy[pid]) return `<div class="ctlLoad"><span class="spin"></span><b>${S.busy[pid] === "sync" ? "Syncing to Sheets…" : "Making call sheets…"}</b><span>One Google Doc per shoot day. This can take a minute.</span></div>`;
   if(!raw) return `<div class="csWrap"><h3>No shoot plan yet</h3><p>Call sheets follow the plan. Start it on the Plan tab first.</p></div>`;
   const list = days.length ? `<div class="csList">${days.map((d) => { const i = Number(d.day) - 1; return `<a class="csDay${stale ? " stale" : ""}" href="${esc(d.url)}" target="_blank" rel="noopener"><b>Day ${esc(d.day)} ↗</b><span>${esc(fmtDate(dates[i]) || "")}${pl.days[i] ? " · " + pl.days[i].scenes.length + " scene" + (pl.days[i].scenes.length === 1 ? "" : "s") : ""}</span></a>`; }).join("")}</div>` : "";
   return `<div class="csWrap">
@@ -456,6 +461,9 @@ function wire(box, pid, ctx){
   const hub = H(), p = hub.project(pid), canEdit = p && hub.canEdit(p);
   const update = (fn) => { const plan = planOf(pid); fn(plan); save(pid, plan); rerender(); };
   box.onclick = (e) => {
+    // The date chip hides its date input; open the calendar on any click (browsers only open it from the icon otherwise)
+    const dp = e.target.closest(".dtPick");
+    if(dp){ const inp = dp.querySelector("input[type=date]"); if(inp && !inp.disabled){ e.preventDefault(); try{ inp.showPicker(); }catch(_e){ inp.focus(); inp.click(); } } return; }
     const a = e.target.closest("[data-a]"), sEl = e.target.closest(".strip");
     if(a){
       const k = a.dataset.a;
@@ -496,11 +504,14 @@ function wire(box, pid, ctx){
         H().toast("Day off removed.", "ok", 1500);
         return;
       }
-      if(k === "cs"){ flush(); hub.makeCallsheets(pid, ctx.scriptId, a); return; }
+      if(k === "cs" || k === "sync"){
+        flush(); S.busy[pid] = k; render(pid);
+        Promise.resolve(k === "cs" ? hub.makeCallsheets(pid, ctx.scriptId, a) : hub.syncSheets(pid, ctx.scriptId, a)).finally(() => { delete S.busy[pid]; rerender(); });
+        return;
+      }
       if(k === "pop"){ window.open(location.pathname + "?pid=" + encodeURIComponent(pid) + "&tab=production&popout=1", "campProdPop", "popup=yes,width=1280,height=900"); return; }
       if(k === "reload"){ loadScript(ctx.scriptId || hub.scriptIds(p)[0], true); return; }
       if(k === "dismiss"){ delete S.notice[pid]; render(pid); return; }
-      if(k === "sync"){ flush(); hub.syncSheets(pid, ctx.scriptId, a); return; }
       if(k === "unpick"){ S.pick = null; render(pid); return; }
       if(!canEdit) return;
       if(k === "start"){

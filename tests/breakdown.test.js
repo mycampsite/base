@@ -190,5 +190,22 @@ test("plan choices: ignore a flag everywhere or for one scene, watch one, merge 
   assert.deepStrictEqual(r.locs.find((l) => l.name === "HOUSE").sets.sort(), ["KITCHEN", "LOUNGE"]);
 });
 
+test("characters introduced in action without a (age) are picked up", () => {
+  const r = B.analyze(doc([
+    ["scene", "INT. HOUSE - DAY"], ["character", "MUM"], ["dialogue", "Dinner."],
+    ["action", "A man enters the street, this is DAVE, 33 and holding a gun."],
+    ["action", "SARAH, a tired nurse, watches. MAX, mid-forties, smokes. BANG, a door slams."],
+    ["action", "Meet LUCY. CLOSE ON the gun. A boy named TOM, eight, waves."],
+    ["scene", "EXT. STREET - NIGHT"], ["action", "DAVE runs."]
+  ], 2));
+  const names = r.cast.map((c) => c.name).sort();
+  ["DAVE", "SARAH", "MAX", "LUCY", "TOM"].forEach((n) => assert.ok(names.includes(n), n + " missing: " + names.join(",")));
+  ["BANG", "CLOSE ON", "CLOSE"].forEach((n) => assert.ok(!names.includes(n), n + " should not be cast"));
+  assert.strictEqual(member(r, "DAVE").age, 33);
+  assert.deepStrictEqual(member(r, "DAVE").scenes, [1, 2]);
+  assert.strictEqual(member(r, "MAX").age, 40);
+  assert.ok(member(r, "TOM").minor, "TOM is eight");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
