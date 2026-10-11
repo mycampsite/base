@@ -1471,10 +1471,12 @@ function createDocsFlow(btn) {
     const v = await dialog({ title: "Create production docs", ok: "Create", fields,
       text: "Built from the script and saved in this project's Drive folder. Each takes up to a minute. Running one again updates it and keeps what you've typed." });
     if (!v) return;
-    const id = v.id || ids[0], kinds = v.kinds;
+    const id = v.id || ids[0], kinds = v.kinds, made = [];
+    if (!p.folderId) toast("This project has no Drive folder linked, so the docs may land in your SCREENPLAY folder instead.", "err", 9000);
     for (let i = 0; i < kinds.length; i++) {
       toast("Building " + DOCS[kinds[i]].toLowerCase() + " (" + (i + 1) + "/" + kinds.length + ")… this can take a minute.", "ok", 240000);
-      await exportDoc(kinds[i], id);
+      const r = await exportDoc(kinds[i], id);
+      (r && r.spreadsheetId ? [r] : r && r.sheet && r.sheet.spreadsheetId ? [r.sheet] : (r && Array.isArray(r.docs) ? r.docs : [])).forEach(d => { if (d && d.spreadsheetId) made.push({ id: d.spreadsheetId, name: d.name || DOCS[kinds[i]], url: d.url || "" }); });
     }
     toast("Done. Saved in the project's Drive folder.", "ok");
     current.tab = "production"; saveLast();
@@ -1486,6 +1488,12 @@ function createDocsFlow(btn) {
       if (c.err) { toast("Docs are made, but listing them failed: " + c.err, "err", 9000); break; }
       if ((c.list || []).length >= Math.min(before + want, before + 1)) break;
       await new Promise(r => setTimeout(r, 2500));
+    }
+    // Still not listed? Show the docs we just made anyway (Drive will catch up on the next refresh)
+    const c = sheetsByProject[current.pid];
+    if (c && made.length) {
+      const missing = made.filter(d => !c.list.some(x => x.id === d.id));
+      if (missing.length) { c.list = c.list.concat(missing); c.state = "ok"; delete c.err; sheetCache[current.pid] = c.list; lsSet(SHEETS_CACHE, JSON.stringify(sheetCache)); render(); }
     }
   });
 }
