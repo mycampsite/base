@@ -399,9 +399,9 @@
     #printRoot{ display:block; }
     @page{ size:A4 landscape; margin:10mm; }
   }
-  .pp{ width:277mm; height:190mm; box-sizing:border-box; page-break-after:always; break-after:page; background:#fff; color:#17171a;
+  .pp{ width:277mm; height:186mm; box-sizing:border-box; break-inside:avoid; page-break-inside:avoid; background:#fff; color:#17171a;
     font-family:Inter,system-ui,sans-serif; display:flex; flex-direction:column; overflow:hidden; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  .pp:last-child{ page-break-after:auto; break-after:auto; }
+  .pp + .pp{ page-break-before:always; break-before:page; }
   .ppHead{ height:15mm; flex:none; display:flex; justify-content:space-between; align-items:flex-end; padding-bottom:2.2mm; border-bottom:0.5mm solid #17171a; }
   .ppHead .t{ font-size:13pt; font-weight:700; letter-spacing:-.01em; line-height:1.1; }
   .ppHead .sc{ margin-top:1mm; font-size:9.5pt; color:#444; font-weight:600; letter-spacing:.02em; }
@@ -564,7 +564,7 @@ const CAST=[['Blue','#3a63d6'],['Red','#d64545'],['Orange','#e08a1e'],['Purple',
 const NC=CAST.length;
 // Characters from the Shot List, in order of first appearance; each keeps the same colour on every shot.
 let CASTLIST=[];
-function setCast(names){const seen={};CASTLIST=[];(names||[]).forEach(n=>{const k=String(n).trim().toLowerCase();if(k&&!seen[k]){seen[k]=1;CASTLIST.push({n:String(n).trim(),col:CAST[CASTLIST.length%NC][1]})}})}
+function setCast(names){const seen={};CASTLIST=[];(names||[]).forEach(n=>{const k=String(n).trim().toLowerCase();if(k&&!seen[k]&&!/^extras?(\s+\d+)?$/.test(k)){seen[k]=1;CASTLIST.push({n:String(n).trim(),col:CAST[CASTLIST.length%NC][1]})}})}
 function castOf(n){const k=String(n||'').toLowerCase();return CASTLIST.find(c=>c.n.toLowerCase()===k)||null}
 function mkF(i,d){const f={n:CAST[i%NC][0],col:CAST[i%NC][1],x:d[0],z:d[1],yaw:d[2],h:1,hd:0,hp:0,look:-1,build:'n'};Object.assign(f,cl(STN[d[3]]));if(d[4])Object.assign(f,d[4]);return f}
 function normFig(f,i){return Object.assign({n:CAST[i%NC][0],col:CAST[i%NC][1],x:0,z:0,yaw:0,h:1,hd:0,hp:0,look:-1,build:'n'},cl(STN.Stand),f)}
@@ -844,6 +844,7 @@ function newState(name,names){const d=TPL[name||'Empty']();let f;
  return {v:1,tn:name||'Empty',objs:d.o,figs:f,cam:cl(d.c),opts:Object.assign({},OPT0)}}
 // Next figure identity: a cast member not in the shot yet, otherwise an unused palette colour.
 function nextIdentity(want){const have=figs.map(g=>g.n.toLowerCase()),cols=figs.map(g=>g.col);
+ if(want==='__extra'){let n='Extra',k=2;while(have.includes(n.toLowerCase()))n='Extra '+(k++);return [n,'#9a9a96']}
  if(want){const c=castOf(want);if(c)return [c.n,c.col]}
  const c=CASTLIST.find(x=>!have.includes(x.n.toLowerCase()));if(c)return [c.n,c.col];
  const p=CAST.find(x=>!cols.includes(x[1])&&!have.includes(x[0].toLowerCase()))||CAST[figs.length%NC];let n=p[0],k=2;while(have.includes(n.toLowerCase()))n=p[0]+' '+(k++);return [n,p[1]]}
@@ -988,7 +989,7 @@ function panel(){if(!pn)return;if(mode==='draw'||!BOUND){pn.innerHTML='';return}
   h+=sec('light','Light',pills([['0','Day'],['1','Night']],'nt',OPT.night?'1':'0')+chk('shadows','Shadows')+sl(OPT.night?'Moon':'Sun','sun',0,360,1,OPT.sun,OPT.sun+'°')+chk('grid','Ground grid'))}
  else{
   h+=chk('names','Nameplates')+'<div class="lbl">Cast</div><div class="row2">'+(figs.length?selBox('c',figs.map((p,i)=>[i,p.n]),sel):'<span class="help" style="margin:0;flex:1">No figures yet</span>')
-   +(figs.length<8?(()=>{const miss=CASTLIST.filter(c=>!figs.some(g=>g.n.toLowerCase()===c.n.toLowerCase()));return miss.length?'<div style="flex:1;min-width:0">'+selBox('fa',miss.map(c=>[c.n,c.n]).concat([['__x','Extra figure']]),'','+ Add…')+'</div>':'<button type="button" data-a="fa" title="Add a figure">+ Add</button>'})():'')+'</div>'
+   +(figs.length<8?(()=>{const miss=CASTLIST.filter(c=>!figs.some(g=>g.n.toLowerCase()===c.n.toLowerCase()));return '<div style="flex:1;min-width:0">'+selBox('fa',miss.map(c=>[c.n,c.n]).concat([['__e','Extra (grey)'],['__x','Other figure']]),'','+ Add…')+'</div>'})():'')+'</div>'
    ;
   if(f)h+=`<div class="row2"><input type="color" class="figCol" data-fc="1" value="${f.col}" title="Figure colour" aria-label="Figure colour"><input type="text" data-n="1" value="${esc(f.n)}" maxlength="24" list="b3dCastNames" aria-label="Name"><button type="button" data-a="fx">Remove</button></div><datalist id="b3dCastNames">${CASTLIST.map(c=>`<option value="${esc(c.n)}">`).join('')}</datalist>`
    +'<div class="row2"><div style="flex:1;min-width:0"><div class="lbl">Pose</div>'+selBox('st',Object.keys(STN),f._pose||'',f._pose?'':'Custom')+'</div>'
@@ -1034,7 +1035,7 @@ function act(d){const f=figs[sel],o=objs.find(x=>x.id===so);let camMoved=false;
  if(a==='od'&&o){pushUndo();const n2=cl(o);n2.id=uid++;n2.x+=0.5;n2.z+=0.5;objs.push(n2);so=n2.id}
  if(a==='ox'&&o){pushUndo();objs=objs.filter(x=>x!==o);so=-1}
  if(a==='fa'&&figs.length<8){pushUndo();addFig()}
- if(d.fa&&figs.length<8){pushUndo();addFig(d.fa==='__x'?null:d.fa)}
+ if(d.fa&&figs.length<8){pushUndo();addFig(d.fa==='__x'?null:d.fa==='__e'?'__extra':d.fa)}
  if(d.fstop){pushUndo();OPT.fstop=+d.fstop}
  if(d.focus!==undefined&&d.focus!==''){pushUndo();OPT.focus=+d.focus}
  if(a==='cp'){copySel();return}
@@ -2173,7 +2174,7 @@ window.SB3D={
   // Page content area is 277 × 190 mm (A4 landscape, 10 mm margins): 15 mm header, 5 mm footer,
   // 5 mm gap under the header → 165 mm for shots. Each layout leaves room for the shot details.
   function printLayout(ratio){
-    const W = 277, H = 165, gap = 6;
+    const W = 277, H = 161, gap = 6;
     const pick = ratio >= 2.1 ? { cols:3, rows:3, info:15 }
                : ratio >= 1.2 ? { cols:3, rows:2, info:24 }
                : { cols:4, rows:1, info:34 };
@@ -2213,7 +2214,7 @@ window.SB3D={
         <div class="vsep"></div>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);" title="Brush size ( [ smaller · ] bigger )">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="2"/><circle cx="16" cy="12" r="5"/></svg>
-          <input type="range" id="weightRange" min="1" max="10" value="${S.weight}" style="width:80px;" aria-label="Brush size">
+          <input type="range" id="weightRange" min="1" max="40" value="${S.weight}" style="width:120px;" aria-label="Brush size">
         </label>
         <div class="vsep"></div>
         <div id="zoomGroup">
@@ -2318,7 +2319,7 @@ window.SB3D={
         <div class="modalRow"><div><label>Size</label>${selectHtml("fSize", SHOT_SIZE_OPTS, sh.size)}</div><div><label>Angle</label>${selectHtml("fAngle", SHOT_ANGLE_OPTS, sh.angle)}</div></div>
         <div class="modalRow" style="margin-top:8px;"><div><label>Movement</label>${selectHtml("fMove", SHOT_MOVE_OPTS, sh.move)}</div><div><label>Lens</label>${selectHtml("fLens", SHOT_LENS_OPTS, sh.lens)}</div></div>
         <div class="modalRow" style="margin-top:8px;"><div><label>Equipment</label>${selectHtml("fEquip", SHOT_EQUIP_OPTS, sh.equip)}</div><div><label>Status</label>${selectHtml("fStatus", SHOT_STATUS_OPTS, sh.status)}</div></div>
-        <label>Cast / subject</label><input id="fCast" type="text" value="${escapeHtml(sh.cast || "")}">
+        <label>Cast / subject</label><div style="display:flex;gap:6px;"><input id="fCast" type="text" value="${escapeHtml(sh.cast || "")}" style="flex:1;min-width:0;"><select id="fCastPick" style="width:auto;flex:none;max-width:46%;" aria-label="Add a character"><option value="">+ Character</option>${castPickList(sh).map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("")}</select></div>
         <label>Description</label><textarea id="fDesc" rows="3" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:#f2f0ec;font:inherit;font-size:12.5px;box-sizing:border-box;resize:vertical;">${escapeHtml(sh.desc || "")}</textarea>
         <label>Notes</label><textarea id="fNotes" rows="2" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:#f2f0ec;font:inherit;font-size:12.5px;box-sizing:border-box;resize:vertical;">${escapeHtml(sh.notes || "")}</textarea>
         <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5;">Saved straight to the Shot List Sheet &mdash; editing it there updates this too.</div>
@@ -2332,7 +2333,14 @@ window.SB3D={
     document.getElementById("fShot").onkeydown = (e) => { if(e.key === "Enter"){ e.preventDefault(); e.target.blur(); } };
     document.getElementById("fRatio").onchange = (e) => setBoardRatio(Number(e.target.value));
     bind("fEquip", "equip"); bind("fStatus", "status");
-    bind("fCast", "cast", "onchange"); bind("fDesc", "desc", "onchange"); bind("fNotes", "notes", "onchange");
+    bind("fCast", "cast", "onchange"); bind("fDesc", "desc", "onchange");
+    document.getElementById("fCastPick").onchange = (e) => {
+      const add = e.target.value; e.target.value = ""; if(!add) return;
+      const cur = splitNames(sh.cast);
+      if(add !== "Extra" && cur.some((n) => n.toLowerCase() === add.toLowerCase())) return;
+      const v = cur.concat([add]).join(", ");
+      document.getElementById("fCast").value = v; saveShotField(sh, "cast", v);
+    }; bind("fNotes", "notes", "onchange");
   }
 
   const RATIO_OPTS = [["2.39","2.39:1 · Scope"],["1.85","1.85:1 · Widescreen"],["1.7778","16:9"],["1.3333","4:3"],["0.5625","9:16 · Vertical"]];
@@ -2784,6 +2792,14 @@ window.SB3D={
      Every name in the scenes' and shots' Cast fields, in script order. Each keeps one colour on
      every shot, and a newly blocked shot starts with that shot's cast (or its scene's cast). */
   function splitNames(v){ return String(v || "").split(/\s*(?:,|;|\/|&|\band\b|\n)\s*/i).map((x) => x.trim()).filter((x) => x && x.length <= 30); }
+  // Characters for the shot's cast picker: this scene's cast first, then everyone else on the board, then Extra.
+  function castPickList(sh){
+    const sc = S.scenes.find((x) => String(x.n) === String(sh.scene));
+    const seen = {}, out = [];
+    splitNames(sc && sc.cast).concat(boardCast()).forEach((n) => { const k = n.toLowerCase(); if(!seen[k] && k !== "extra"){ seen[k] = 1; out.push(n); } });
+    out.push("Extra");
+    return out;
+  }
   function boardCast(){
     const out = [];
     S.scenes.forEach((sc) => { splitNames(sc.cast).forEach((n) => out.push(n)); orderedShotsForScene(sc.n).forEach((sh) => splitNames(sh.cast).forEach((n) => out.push(n))); });
@@ -3306,7 +3322,7 @@ window.SB3D={
     const TOOL_KEYS = { p:"pencil", n:"pen", b:"soft", e:"eraser" };
     if(TOOL_KEYS[k]){ S.tool = TOOL_KEYS[k]; savePrefs(); setDrawOn(true); return; }
     if(e.key === "[" || e.key === "]"){
-      S.weight = Math.max(1, Math.min(10, S.weight + (e.key === "]" ? 1 : -1))); savePrefs();
+      S.weight = Math.max(1, Math.min(40, S.weight + (e.key === "]" ? (S.weight >= 10 ? 2 : 1) : (S.weight > 10 ? -2 : -1)))); savePrefs();
       const r = document.getElementById("weightRange"); if(r) r.value = S.weight;
       updateBrushCursor();
       return;
