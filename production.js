@@ -87,6 +87,8 @@ function normalize(plan){
   out.locMerge = arr(plan.locMerge).filter((m) => m && m.from && m.to && m.from !== m.to).map((m) => ({ from: String(m.from), to: String(m.to) }));
   // what each scene looked like when it was last checked (see sceneChanges): a list, as ids may not suit keys
   out.base = arr(plan.base).filter((b) => b && b.id).map((b) => ({ id: String(b.id), e: Math.max(0, Math.round(Number(b.e) || 0)), c: String(b.c || ""), l: String(b.l || ""), dn: String(b.dn || "") }));
+  // cast types someone chose (Lead / Supporting / …), over the automatic ones
+  out.castType = arr(plan.castType).filter((c) => c && c.name && CAST_TYPES.indexOf(c.t) >= 0).map((c) => ({ name: String(c.name), t: c.t }));
   out.flagStatus = arr(plan.flagStatus).filter((f) => f && f.id && /^(keep|watch|ignore)$/.test(f.s)).map((f) => ({ id: String(f.id), scene: f.scene ? String(f.scene) : "", s: f.s }));
   // links to the call sheets made by the last Sync (kept as they are)
   if(plan.callsheets && typeof plan.callsheets === "object") out.callsheets = plan.callsheets;
@@ -94,11 +96,13 @@ function normalize(plan){
 }
 
 // The plan's choices in the shape breakdown.js takes: analyze(doc, analyzeOpts(plan))
+const CAST_TYPES = ["Lead", "Supporting", "Day player", "Featured (non-speaking)", "Voice only"];
 function analyzeOpts(plan){
-  const locs = {}, flags = {};
+  const locs = {}, flags = {}, types = {};
+  (plan && plan.castType || []).forEach((c) => { types[c.name] = c.t; });
   (plan && plan.locMerge || []).forEach((m) => { locs[m.from] = m.to; });
   (plan && plan.flagStatus || []).forEach((f) => { flags[f.id + (f.scene ? "@" + f.scene : "")] = f.s; });
-  return { locs, flags };
+  return Object.keys(types).length ? { locs, flags, types } : { locs, flags };
 }
 
 // Changing the number of shoot days. Scenes on days that are removed go back to Unscheduled
@@ -352,7 +356,7 @@ function dayShots(day, shotMap){
   return { scenes, total: scenes.reduce((a, s) => a + s.shots.length, 0) };
 }
 
-const api = { DEFAULTS, MAX_DAYS, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate,
+const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate,
   moveSceneIn, placeScenes, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);

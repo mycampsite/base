@@ -241,10 +241,11 @@ function bgKidCue_(name) {
 //   locs:  { "KITCHEN": "HOUSE" }  rooms that are part of one real location
 //   flags: { "weapons": "ignore", "drone@<sceneId>": "keep", "stunts": "watch" }  keep / watch / ignore, for a flag
 //          everywhere or for one scene (a scene's own choice wins)
+//   types: { "ANA": "Lead" }  a cast type someone chose (wins over the automatic one; autoType keeps what the script suggests)
 function budgetAnalyze_(doc, opts) {
   doc = (doc && typeof doc === "object") ? doc : {};
   opts = (opts && typeof opts === "object") ? opts : {};
-  const LOCMERGE = opts.locs || {}, FSTAT = opts.flags || {};
+  const LOCMERGE = opts.locs || {}, FSTAT = opts.flags || {}, CTYPES = opts.types || {};
   const lines = Array.isArray(doc.lines) ? doc.lines : [];
   const W = BG_COLS_;
   const scenes = [];
@@ -542,6 +543,7 @@ function budgetAnalyze_(doc, opts) {
     speaking[nm] = true;
   });
   const typeOrder = { "Lead": 0, "Supporting": 1, "Day player": 2, "Featured (non-speaking)": 3, "Voice only": 4 };
+  cast.forEach(function (c) { c.autoType = c.type; const t = CTYPES[c.name]; if (t && typeOrder[t] != null) c.type = t; });
   cast.sort(function (a, b) { return (typeOrder[a.type] - typeOrder[b.type]) || (b.words - a.words) || (a.first - b.first); });
   // Minors from the cast list count as child scenes
   // A "possible minor" (no age given) is dropped when you ignore the children flag everywhere

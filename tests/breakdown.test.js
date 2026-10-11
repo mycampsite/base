@@ -207,5 +207,17 @@ test("characters introduced in action without a (age) are picked up", () => {
   assert.ok(member(r, "TOM").minor, "TOM is eight");
 });
 
+test("a cast type chosen in the plan wins over the automatic one, and the automatic one is kept", () => {
+  const d = doc([
+    ["scene", "INT. HOUSE - DAY"], ["character", "ANA"], ["dialogue", "Hello there, this is a long line of dialogue."],
+    ["character", "BEN"], ["dialogue", "Hi."]
+  ], 1);
+  const auto = member(B.analyze(d), "BEN").type;
+  const r = B.analyze(d, { types: { BEN: "Lead", NOBODY: "Lead", ANA: "Not a type" } });
+  assert.strictEqual(member(r, "BEN").type, "Lead");
+  assert.strictEqual(member(r, "BEN").autoType, auto);
+  assert.strictEqual(member(r, "ANA").type, member(r, "ANA").autoType);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

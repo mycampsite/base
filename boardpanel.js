@@ -52,6 +52,7 @@ const css = `
 .bdGH{ width:100%; display:flex; align-items:center; gap:10px; padding:6px 2px; background:none; border:0; border-bottom:1px solid var(--uiBorder); color:var(--uiText); cursor:pointer; text-align:left; }
 .bdGHRow{ display:flex; align-items:stretch; gap:6px; }
 .bdGHRow .bdGH{ flex:1; min-width:0; }
+.bdType{ align-self:center; height:26px; max-width:150px; border-radius:7px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); font-size:12px; padding:0 6px; }
 .bdMv{ display:flex; gap:2px; align-items:center; border-bottom:1px solid var(--uiBorder); }
 .bdMv button{ width:26px; height:26px; border-radius:7px; border:1px solid transparent; background:none; color:var(--uiMuted); font-size:14px; cursor:pointer; padding:0; }
 .bdMv button:hover:not(:disabled){ color:var(--uiText); border-color:var(--uiBorder); }
@@ -336,13 +337,21 @@ function drawBody(p){
     if(g.brief) return `<div class="bdBrief">${esc(g.brief)}${can ? ` <button type="button" data-brief="${esc(g.name)}">edit</button>` : ""}</div>`;
     return can ? `<button class="bdBriefAdd" type="button" data-brief="${esc(g.name)}">+ brief</button>` : "";
   };
+  // cast types live in the production plan: shown (and changed) here straight away; the Sheet catches up on the next Sync
+  const PP = window.CampProdPanel, ctypes = S.tab === "cast" && PP && PP.castTypes ? PP.castTypes(S.pid, S.fileId) : null;
+  const typeHtml = (g) => {
+    const shown = (ctypes && ctypes[g.name]) || g.type;
+    if(!ctypes || !can) return shown ? `<span class="bdGT">${esc(shown)}</span>` : "";
+    const list = PP.CAST_TYPES.indexOf(shown) >= 0 || !shown ? PP.CAST_TYPES : [shown].concat(PP.CAST_TYPES);
+    return `<select class="bdType" data-ctype="${esc(g.name)}" aria-label="Type for ${esc(g.name)}" title="Cast type (follows through the plan, budget and Sheets)">${shown ? "" : `<option value="" selected>Type…</option>`}${list.map((t) => `<option value="${esc(t)}"${t === shown ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
+  };
   box.innerHTML = favHtml + vis.map((g) => {
     const key = S.tab + "|" + g.name, shut = !!S.closed[key];
     const done = g.cards.find((c) => c.done);
     const sum = done ? `<span class="bdGS done">✓ ${esc(done.title)}</span>` : `<span class="bdGS">${g.cards.length ? g.cards.length + " option" + (g.cards.length === 1 ? "" : "s") : "no options yet"}</span>`;
     const gi = groups.findIndex((x) => x.name === g.name);
     const mv = can ? `<span class="bdMv"><button type="button" data-gmv="${esc(g.name)}" data-dir="-1" aria-label="Move ${esc(g.name)} up" title="Move up"${gi <= 0 ? " disabled" : ""}>↑</button><button type="button" data-gmv="${esc(g.name)}" data-dir="1" aria-label="Move ${esc(g.name)} down" title="Move down"${gi >= groups.length - 1 ? " disabled" : ""}>↓</button></span>` : "";
-    return `<section class="bdGroup${shut ? " shut" : ""}"><div class="bdGHRow"><button class="bdGH" type="button" data-bg="${esc(key)}" aria-expanded="${!shut}">${ICON.chev}<span class="bdGN">${esc(g.name)}</span>${g.type ? `<span class="bdGT">${esc(g.type)}</span>` : ""}${sum}</button>${mv}</div>
+    return `<section class="bdGroup${shut ? " shut" : ""}"><div class="bdGHRow"><button class="bdGH" type="button" data-bg="${esc(key)}" aria-expanded="${!shut}">${ICON.chev}<span class="bdGN">${esc(g.name)}</span>${ctypes && can ? "" : typeHtml(g)}${sum}</button>${ctypes && can ? typeHtml(g) : ""}${mv}</div>
       ${briefHtml(g)}
       ${g.cards.length ? `<div class="bdGrid ${S.tab}">${g.cards.map((c) => cardHtml(c, S.tab, { can })).join("")}${addBtn(g, false)}</div>` : `<div class="bdNone">${can ? addBtn(g, true) : ""}${sheetLink ? ` ${can ? "Or add" : "Add"} one in <a href="${sheetLink}" target="_blank" rel="noopener">the Sheet</a>.` : ""}</div>`}</section>`;
   }).join("");
@@ -894,7 +903,13 @@ function wire(box, pid, p){
     if(moving && card.dataset.key !== d.key) moveCard(moving, { swap: card.dataset.key }, true);
   };
   box.onchange = (e) => {
-    if(e.target.id === "bdScript"){ S.script[pid] = e.target.value; render(pid); }
+    if(e.target.id === "bdScript"){ S.script[pid] = e.target.value; render(pid); return; }
+    const ct = e.target.dataset && e.target.dataset.ctype;
+    if(ct != null && e.target.value && window.CampProdPanel){
+      window.CampProdPanel.setCastType(pid, ct, e.target.value);
+      H().toast(ct + " is now " + e.target.value + ". The Sheets follow on the next Sync.", "ok", 2400);
+      drawBody(p);
+    }
   };
   const q = box.querySelector("#bdQ");
   if(q) q.oninput = () => { S.q = q.value; drawBody(p); };

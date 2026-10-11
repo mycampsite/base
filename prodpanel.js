@@ -482,14 +482,14 @@ function draw(pid){
   // days off set earlier (the old calendar): listed so they can be cleared
   const offs = (st.off || []);
   const cal = offs.length ? `<div class="offRow"><b>Days off</b>${offs.map((iso) => `<button type="button" class="offChip" data-a="cal" data-iso="${esc(iso)}" title="Shoot on this date again"${canEdit ? "" : " disabled"}>${esc(fmtDate(iso))} ✕</button>`).join("")}</div>` : "";
-  const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit);
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${locSec}
+  const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit), castSec = castView(pl, bd, canEdit);
+  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${castSec}${locSec}
     <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it" : "Drag scenes between days, or click one to move it"}. Saves for everyone as you go.</div></div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
 }
 
 /* ---------- script flags: keep / watch / ignore, for a flag everywhere or one scene ---------- */
-const FLAGS_KEY = "Camp_PROD_FLAGS_OPEN_V1", LOCS_KEY = "Camp_PROD_LOCS_OPEN_V1";
+const FLAGS_KEY = "Camp_PROD_FLAGS_OPEN_V1", LOCS_KEY = "Camp_PROD_LOCS_OPEN_V1", CAST_KEY = "Camp_PROD_CAST_OPEN_V1";
 function flagsView(pl, bd, canEdit){
   const list = bd.flags.filter((f) => f.scenes.length || (f.ignored || []).length);
   if(!list.length) return "";
@@ -507,6 +507,27 @@ function flagsView(pl, bd, canEdit){
       </div>`;
     }).join("")}</details>`;
 }
+/* ---------- cast: Lead / Supporting / … as the script suggests, or as you choose ---------- */
+const TYPE_LABEL = { "Featured (non-speaking)": "Featured (non-speaking)" };
+function castView(pl, bd, canEdit){
+  if(!bd.cast.length) return "";
+  const chosen = {}; (pl.castType || []).forEach((c) => { chosen[c.name] = c.t; });
+  const n = Object.keys(chosen).filter((k) => bd.cast.some((c) => c.name === k)).length;
+  return `<details class="dood fx" data-sec="cast"${lsGet(CAST_KEY) === "1" ? " open" : ""}><summary>Cast · ${bd.cast.length} character${bd.cast.length === 1 ? "" : "s"}${n ? " (" + n + " set by hand)" : ""}</summary>
+    <div class="fxNote">Camp sorts characters by how much they're in the script. Change a type and the budget, schedule, casting sheet and Board follow (Sheets on the next Sync).</div>
+    ${bd.cast.map((c) => `<div class="fxRow"><div class="fxName"><b>${esc(c.name)}</b><span>${c.onCamCount || c.scenes.length} scene${(c.onCamCount || c.scenes.length) === 1 ? "" : "s"}${chosen[c.name] && c.autoType !== c.type ? " · script suggests " + esc(c.autoType) : ""}</span></div>
+      <label class="fxIn">Type <select data-ctype="${esc(c.name)}"${canEdit ? "" : " disabled"}>${P.CAST_TYPES.map((t) => `<option value="${esc(t)}"${c.type === t ? " selected" : ""}>${esc(TYPE_LABEL[t] || t)}${t === c.autoType ? " (auto)" : ""}</option>`).join("")}</select></label></div>`).join("")}
+  </details>`;
+}
+// Set (or clear, when it's the automatic one) a character's type. Used by the Plan tab and the Board.
+function setCastType(pid, name, t, auto){
+  const plan = planOf(pid);
+  if(auto === undefined && S.lastBd && S.lastScriptId === plan.scriptId){ const c = S.lastBd.cast.find((x) => x.name === name); if(c) auto = c.autoType; }
+  plan.castType = (plan.castType || []).filter((c) => c.name !== name);
+  if(t && t !== auto && P.CAST_TYPES.indexOf(t) >= 0) plan.castType.push({ name, t });
+  save(pid, plan); rerender();
+}
+
 /* ---------- locations: rooms that are really one place ---------- */
 const ROOM_RE = /^(KITCHEN|LOUNGE|LOUNGE ROOM|LIVING ROOM|SITTING ROOM|DINING ROOM|FAMILY ROOM|BEDROOM|MASTER BEDROOM|.*'S BEDROOM|.*'S ROOM|BATHROOM|ENSUITE|TOILET|LAUNDRY|HALLWAY|HALL|CORRIDOR|STAIRS|STAIRCASE|LANDING|ATTIC|BASEMENT|CELLAR|GARAGE|STUDY|OFFICE|NURSERY|PANTRY|FRONT DOOR|BACK DOOR|PORCH|VERANDAH|VERANDA|BALCONY|BACKYARD|BACK YARD|FRONT YARD|YARD|GARDEN|DRIVEWAY|SHED|ROOFTOP)$/;
 function locsView(pl, bd, canEdit){
@@ -636,6 +657,12 @@ function wire(box, pid, ctx){
   box.onchange = (e) => {
     const t = e.target; if(!canEdit) return;
     if(t.dataset.move){ moveScene(pid, t.dataset.move, Number(t.value), -1); S.pick = null; return; }
+    if(t.dataset.ctype != null){
+      const c = (ctx.bd && ctx.bd.cast || []).find((x) => x.name === t.dataset.ctype);
+      setCastType(pid, t.dataset.ctype, t.value, c && c.autoType);
+      H().toast(t.dataset.ctype + " is now " + t.value + ". Sheets follow on the next Sync.", "ok", 2200);
+      return;
+    }
     if(t.dataset.loc != null){
       const from = t.dataset.loc; let to = t.value;
       const apply = (to2) => update((plan) => { plan.locMerge = (plan.locMerge || []).filter((m) => m.from !== from); if(to2 && to2 !== from) plan.locMerge.push({ from, to: to2 }); });
@@ -651,7 +678,7 @@ function wire(box, pid, ctx){
     update((plan) => { plan.settings[k] = (k === "start" || k === "call") ? t.value : Number(t.value); });
   };
   const det = box.querySelector("details.dood:not(.fx)"); if(det) det.ontoggle = () => { S.doodOpen = det.open; lsSet(DOOD_KEY, det.open ? "1" : "0"); };
-  box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : d.dataset.sec === "shots" ? SHOTS_KEY : LOCS_KEY, d.open ? "1" : "0"); });
+  box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : d.dataset.sec === "shots" ? SHOTS_KEY : d.dataset.sec === "cast" ? CAST_KEY : LOCS_KEY, d.open ? "1" : "0"); });
   if(!canEdit) return;
   // drag and drop between columns
   const line = document.createElement("div"); line.className = "dropLine";
@@ -714,5 +741,12 @@ document.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if(k === "z" || k === "y"){ e.preventDefault(); stepHist(S.pid, k === "z" && !e.shiftKey); }
 });
-window.CampProdPanel = { render, setMode, csError, reloadScript: (id) => loadScript(id, true) };
+// The Board reads and sets cast types through these (the plan is the one place they live)
+function castTypes(pid, scriptId){
+  const p = H().project(pid); if(!p || !p.production) return null;          // no plan yet: nothing to set
+  if(scriptId && planOf(pid).scriptId && planOf(pid).scriptId !== scriptId) return null;   // the plan is for another script
+  const out = {}; (planOf(pid).castType || []).forEach((c) => { out[c.name] = c.t; });
+  return out;
+}
+window.CampProdPanel = { render, setMode, csError, reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
 })();

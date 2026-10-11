@@ -144,5 +144,12 @@ test("shoot dates skip weekends and days off, and a pinned date moves the days a
   assert.deepStrictEqual(P.normalize({ settings: { off: { 0: "2026-11-10", 1: "bad" } } }).settings.off, ["2026-11-10"]);
 });
 
+test("cast types survive the database and reach the breakdown options", () => {
+  const p = P.normalize({ castType: { 0: { name: "ANA", t: "Lead" }, 1: { name: "BEN", t: "Hero" }, 2: { t: "Lead" } } });
+  assert.deepStrictEqual(p.castType, [{ name: "ANA", t: "Lead" }]);
+  assert.deepStrictEqual(P.analyzeOpts(p).types, { ANA: "Lead" });
+  assert.strictEqual(P.analyzeOpts(P.normalize({})).types, undefined);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
