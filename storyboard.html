@@ -254,6 +254,10 @@
   #b3dWrap .lockNote{ margin:0 0 6px; color:#e0a0a0; }
   .card.dropBefore{ box-shadow:inset 4px 0 0 var(--accent); }
   .card.dropAfter{ box-shadow:inset -4px 0 0 var(--accent); }
+  .peerDots{ display:inline-flex; gap:3px; margin-left:2px; }
+  .peerDots i{ width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow:0 0 0 1.5px var(--panel2); }
+  #peerHere{ position:absolute; right:8px; top:8px; z-index:4; display:flex; gap:4px; pointer-events:none; }
+  #peerHere span{ font-size:11px; font-weight:600; color:#fff; padding:3px 8px; border-radius:999px; }
   .prevShots, .seq{ display:flex; flex-direction:column; gap:4px; }
   .seqArrow{ text-align:center; color:var(--muted); font-size:12px; line-height:1; }
   .seqCur{ border:1.5px solid var(--accent); border-radius:6px; padding:7px 9px; font-size:12px; color:#f2f0ec; background:var(--panel3); }
@@ -446,7 +450,7 @@
   <button class="hamb" id="menuBtn" type="button" aria-label="Menu"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <a class="logo" href="index.html" aria-label="Camp home"><img src="camp-logo.png" alt="Camp"></a>
   <div class="area">Storyboard</div>
-  <div class="right"><span class="chip" id="userChip"></span><button class="btn sm" id="signOutBtn" type="button">Sign out</button></div>
+  <div class="right"><span id="liveWrap"></span><span class="chip" id="userChip"></span><button class="btn sm" id="signOutBtn" type="button">Sign out</button></div>
 </header>
 <nav id="navMenu"><a href="index.html" id="mnLib">Library</a><a href="editor.html" id="mnScript">Script</a><a href="treatment.html" id="mnTr">Treatment</a></nav>
 <div id="app" style="display:none;">
@@ -964,7 +968,7 @@ function nextIdentity(want){const have=figs.map(g=>g.n.toLowerCase()),cols=figs.
  const c=CASTLIST.find(x=>!have.includes(x.n.toLowerCase()));if(c)return [c.n,c.col];
  const p=CAST.find(x=>!cols.includes(x[1])&&!have.includes(x[0].toLowerCase()))||CAST[figs.length%NC];let n=p[0],k=2;while(have.includes(n.toLowerCase()))n=p[0]+' '+(k++);return [n,p[1]]}
 function writeBack(){if(!BOUND)return;BOUND.tn=tn;BOUND.objs=objs;BOUND.figs=figs;BOUND.cam=cl(ct);BOUND.opts=cl(OPT)}
-let chT=0;function changed(){writeBack();clearTimeout(chT);chT=setTimeout(()=>{if(HOOK.onChange&&BOUND)HOOK.onChange(BOUND)},400)}
+let chT=0;function changed(){writeBack();if(HOOK.onLive&&BOUND)HOOK.onLive(BOUND);clearTimeout(chT);chT=setTimeout(()=>{if(HOOK.onChange&&BOUND)HOOK.onChange(BOUND)},400)}
 function camEnd(){writeBack();if(HOOK.onCamEnd&&BOUND)HOOK.onCamEnd(BOUND)}
 
 /* ---------- undo ---------- */
@@ -1226,12 +1230,15 @@ function mount(o){unmount();BOUND=o.state;HOOK=o;cvs=o.canvas;ctx=cvs.getContext
  writeBack();resize();panel();hist();dirty=true;if(!raf)raf=requestAnimationFrame(tick)}
 function unmount(){if(AC){AC.abort();AC=null}if(BOUND){writeBack();clearTimeout(chT);if(HOOK.onChange)HOOK.onChange(BOUND)}
  if(raf){cancelAnimationFrame(raf);raf=0}BOUND=null;cvs=null;ctx=null;if(pn)pn.innerHTML='';pn=null;HOOK={};drag=null;pinch=null;ptrs.clear();Object.keys(K).forEach(k=>delete K[k])}
+// Show someone else's version of this shot (saved or in progress) without saving it again or touching undo.
+function replaceState(s){if(!BOUND||!s)return;BOUND=s;const ks=sel,kso=so;objs=cl(s.objs||[]).map(normObj);figs=cl(s.figs||[]).map(normFig);scanIds();tn=s.tn||'Custom';if(s.opts)OPT=Object.assign({},OPT0,cl(s.opts));sel=clamp(ks,0,Math.max(0,figs.length-1));so=objs.some(o=>o.id===kso)?kso:-1;if(s.cam&&s.cam.p){ct=cl(s.cam);cv_=cl(ct)}writeBack();if(!drag&&!sliding)panel();dirty=true;if(cvs&&!raf)raf=requestAnimationFrame(tick)}
+function busy(){return !!drag||sliding||!!pinch||Object.keys(K).some(k=>K[k]===true)}
 function setMode(m){mode=m;so=m==='set'?so:-1;panel();dirty=true;if(cvs&&!raf)raf=requestAnimationFrame(tick)}
 function setRatio(r){A=r;W=LH*A;resize()}
 // Static render for board thumbnails and print (Batch C uses this).
 function renderTo(canvas,s,ratio){if(!s)return;const c=canvas.getContext('2d');const sv={CW,CH};
  render(c,canvas.width,canvas.height,{cam:s.cam||CAM0,figs:(s.figs||[]).map(normFig),objs:(s.objs||[]).map(normObj),sel:-1,so:-1,mode:'cam',opts:Object.assign({},OPT0,s.opts||{}),thumb:true});CW=sv.CW;CH=sv.CH}
-return {buildFromScript,locFor,propsIn,setInteractive,setCast,copy:copySel,paste:pasteClip,duplicate:dupSel,hasClip:()=>!!CLIP,setLocations:o=>{customs=o&&typeof o==='object'?cl(o):{}},newState,mount,unmount,setMode,setRatio,key,undo,redo,readShot,applyShot,canUndo:()=>UND.length>0,canRedo:()=>RED.length>0,renderTo,isMounted:()=>!!BOUND,mode:()=>mode};
+return {replaceState,busy,buildFromScript,locFor,propsIn,setInteractive,setCast,copy:copySel,paste:pasteClip,duplicate:dupSel,hasClip:()=>!!CLIP,setLocations:o=>{customs=o&&typeof o==='object'?cl(o):{}},newState,mount,unmount,setMode,setRatio,key,undo,redo,readShot,applyShot,canUndo:()=>UND.length>0,canRedo:()=>RED.length>0,renderTo,isMounted:()=>!!BOUND,mode:()=>mode};
 }
 window.SB3D={
  ready(){if(API)return Promise.resolve(API);if(loading)return loading;
@@ -1510,8 +1517,212 @@ window.SB3D={
     renderLeftRailScenes();
     renderOverview();
     startShotlistWatch();
+    if(S.boardRef) startLive().catch((e) => console.warn("Live storyboard unavailable", e));
     if(cached){ sbHold(true); sbConfirm(loadP, slEarly, cached); }
     else sbCachePut({ title: S.title, room: S.roomKey, prev: S.prevRooms, sl });
+  }
+
+  /* ---------------- Live collaboration ----------------
+     Saved data (strokes, 3D blocking, shot order, frame, saved locations) is watched under
+     rooms/<room>/storyboard, so everyone's changes appear within a second. While someone is drawing or
+     moving the 3D view, their in-progress state streams to rooms/<room>/storyboardLive — but only while
+     somebody else has that same shot open, so a solo session sends nothing extra. Presence (who's here,
+     which shot) lives in rooms/<room>/storyboardPresence, the same way Treatment does it. */
+  const LIVE = { on:false, uid:"", room:null, me:null, pres:{}, offset:0, pushed:{}, blkSeen:{}, blkMine:{}, peerInk:{}, peerBlk:{}, sent3d:null, t3d:0, tInk:0, inkN:0, inkKey:"", inkRef:null, liveRef:null, raf:0, dirty:{} };
+  const peerCols = () => {
+    const p = LIVE.pres, C = (window.CampTent && window.CampTent.colors) || ["#7d8f4e","#d4932a","#5a86b8","#84707c","#c9633d","#3f9a8c","#9a5c8f","#a98a5a"];
+    const h = (s) => { let x = 2166136261; for(let i = 0; i < s.length; i++){ x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; };
+    const ids = Object.keys(p).sort((a, b) => ((p[a] && p[a].j) || 0) - ((p[b] && p[b].j) || 0) || (a < b ? -1 : 1)), used = new Set(), out = {};
+    ids.forEach((id) => { let k = h(id) % C.length; for(let i = 0; i < C.length && used.has(k); i++) k = (k + 1) % C.length; used.add(k); out[id] = C[k]; });
+    return out;
+  };
+  const peerName = (k, cols) => window.CampTent ? window.CampTent.label("", (cols || peerCols())[k]) : "Someone";
+  const peersAlive = () => { const now = Date.now() + LIVE.offset; return Object.keys(LIVE.pres).filter((k) => k !== LIVE.uid && LIVE.pres[k] && (now - Number(LIVE.pres[k].h || 0)) < 80000); };
+  const peersOn = (shotKey) => peersAlive().filter((k) => LIVE.pres[k].s === shotKey);
+  function peerDotsHtml(shotKey){
+    if(!LIVE.on) return "";
+    const cols = peerCols();
+    return peersOn(shotKey).map((k) => `<i style="background:${cols[k] || "#666"}" title="${escapeHtml(peerName(k, cols))} is on this shot"></i>`).join("");
+  }
+  function renderPeers(){
+    const w = document.getElementById("liveWrap"); if(!w) return;
+    const others = peersAlive(), cols = peerCols();
+    w.innerHTML = others.length ? `<span class="liveFaces">${others.slice(0, 5).map((k) => { const n = peerName(k, cols), sh = S.shots.find((x) => x.key === LIVE.pres[k].s);
+      return `<button type="button" class="liveFace tent" data-uid="${escapeHtml(k)}" data-name="${escapeHtml(n + (sh ? " · Shot " + sh.shot : " · Board"))}" aria-label="${escapeHtml(n)}: go to their shot" style="--tc:${cols[k]}">${window.CampTent ? window.CampTent.svg(cols[k]) : ""}</button>`; }).join("")}${others.length > 5 ? `<span class="liveFace more">+${others.length - 5}</span>` : ""}</span>` : "";
+    w.querySelectorAll(".liveFace[data-uid]").forEach((b) => { b.onclick = () => { const s = (LIVE.pres[b.dataset.uid] || {}).s; if(s && S.shots.some((x) => x.key === s)) enterFocus(s); else notify("They're looking at the board overview."); }; });
+    document.querySelectorAll(".peerDots[data-shot-key]").forEach((n) => { n.innerHTML = peerDotsHtml(n.dataset.shotKey); });
+    let here = document.getElementById("peerHere");
+    const on = S.view === "focus" ? peersOn(S.curShotKey) : [];
+    const wrap = document.getElementById("canvasWrap");
+    if(on.length && wrap){ if(!here){ here = document.createElement("div"); here.id = "peerHere"; wrap.appendChild(here); } here.innerHTML = on.map((k) => `<span style="background:${cols[k]}">${escapeHtml(peerName(k, cols))} is here</span>`).join(""); }
+    else if(here) here.remove();
+  }
+  function livePresence(){
+    if(!LIVE.on || !LIVE.me) return;
+    LIVE.me.update({ s: S.view === "focus" ? S.curShotKey : "", h: window.firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+    setTimeout(renderPeers, 0);   // after the view has built its canvas
+  }
+  // Refresh one shot's card (overview) or the open canvas (focus) after a remote change, at most once a frame.
+  function liveDirty(key){
+    LIVE.dirty[key] = 1;
+    if(LIVE.raf) return;
+    LIVE.raf = requestAnimationFrame(() => {
+      LIVE.raf = 0; const keys = Object.keys(LIVE.dirty); LIVE.dirty = {};
+      keys.forEach((k) => {
+        if(S.view === "focus" && fbKey(S.curShotKey) === k){ redrawStack(); updateUndoState(); return; }
+        if(S.view !== "overview") return;
+        const sh = S.shots.find((x) => fbKey(x.key) === k); if(!sh) return;
+        const card = document.querySelector(`.card[data-shot-key="${CSS.escape(sh.key)}"]`); if(!card) return;
+        const fr = card.querySelector(".frame"); if(!fr) return;
+        let cv = fr.querySelector("canvas");
+        if(!panelHasContent(sh.key)){ if(cv) cv.remove(); return; }
+        if(!cv){ fr.innerHTML = ""; cv = document.createElement("canvas"); cv.width = 480; cv.height = Math.round(480 / S.ratio); fr.appendChild(cv); }
+        renderComposite(sh.key, cv);
+      });
+    });
+  }
+  function applyRemotePanel(k, v){
+    const p = S.panelsCache[k] || (S.panelsCache[k] = { strokes:{}, ref:null, blocking:null, layerVis:{ sketch:true, line:true, shading:true, ref:true } });
+    if(!p.layerVis) p.layerVis = { sketch:true, line:true, shading:true, ref:true };
+    v = v || {};
+    let inkChanged = false;
+    const R = v.strokes || {};
+    Object.keys(R).forEach((sk) => {
+      if(p.strokes[sk]) return;
+      const mine = LIVE.pushed[sk];
+      if(mine && p.strokes[mine]){ p.strokes[sk] = Object.assign({}, p.strokes[mine], { _k: sk }); delete p.strokes[mine]; return; }   // our own upload landing
+      if(mine) return;   // ours, undone while uploading
+      const one = normalizePanels({ x: { strokes: { [sk]: R[sk] } } }, S.ratio).x.strokes[sk];
+      if(one){ p.strokes[sk] = one; inkChanged = true; }
+    });
+    Object.keys(p.strokes).forEach((sk) => { if(!/^l\d/.test(sk) && !R[sk] && !LIVE.pushed[sk]){ delete p.strokes[sk]; inkChanged = true; } });
+    if((v.ref || null) !== (p.ref || null)){ p.ref = v.ref || null; p._refImg = null; p._refImgId = null; inkChanged = true;
+      if(p.ref && S.view === "focus" && fbKey(S.curShotKey) === k) try{ loadReferenceThumb(p.ref, S.curShotKey); }catch(_e){} }
+    const blk = v.blocking || null;
+    if(blk && !(k in LIVE.blkSeen) && blockingBlob(p.blocking) === blk) LIVE.blkSeen[k] = blk;   // first sight: already have it
+    const wasOn = !!(p.blocking && p.blocking.on);
+    if(blk && blk !== LIVE.blkSeen[k]){
+      const mineRecent = Date.now() - (LIVE.blkMine[k] || 0) < 2500 || (__blkSaveT && __blkSaveT[k]);
+      const openHere = S.view === "focus" && fbKey(S.curShotKey) === k && blockLive();
+      if(!(openHere && (mineRecent || SB3D.busy()))){
+        LIVE.blkSeen[k] = blk;
+        p.blocking = parseBlob(blk);
+        if(openHere && p.blocking){ SB3D.replaceState(p.blocking); }
+        inkChanged = true;
+      }
+    }else if(!blk && p.blocking && !(__blkSaveT && __blkSaveT[k])){ p.blocking = null; inkChanged = true; }
+    if(S.view === "focus" && fbKey(S.curShotKey) === k && wasOn !== !!(p.blocking && p.blocking.on)){ showFocus(S.curShotKey, true); return; }
+    if(inkChanged) liveDirty(k);
+  }
+  function drawPeerInk(cv){
+    const k = fbKey(S.curShotKey);
+    Object.keys(LIVE.peerInk).forEach((u) => { const x = LIVE.peerInk[u]; if(x && x.k === k && x.st) drawStrokeOn(cv.getContext("2d"), x.st, cv.width, cv.height); });
+  }
+  // Sender: in-progress ink, in small chunks (only the new points), 10 times a second at most.
+  function liveInk(shotKey, pts){
+    if(!LIVE.on || !LIVE.liveRef || !peersOn(shotKey).length) return;
+    const now = performance.now(); if(now - LIVE.tInk < 100) return; LIVE.tInk = now;
+    const k = fbKey(shotKey);
+    if(LIVE.inkKey !== k || !LIVE.inkRef){
+      LIVE.inkKey = k; LIVE.inkN = 0;
+      const st = liveStroke([]); delete st.pts;
+      LIVE.inkRef = LIVE.liveRef.child("ink");
+      LIVE.inkRef.set({ k, st, c: {} }).catch(() => {});
+    }
+    const chunk = pts.slice(LIVE.inkN).map((q) => [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10]);
+    if(!chunk.length) return;
+    LIVE.inkN = pts.length;
+    LIVE.inkRef.child("c").push().set(JSON.stringify(chunk)).catch(() => {});
+  }
+  function liveInkEnd(){
+    if(LIVE.inkRef){ const r = LIVE.inkRef; setTimeout(() => r.remove().catch(() => {}), 400); }   // the saved stroke lands first
+    LIVE.inkRef = null; LIVE.inkKey = ""; LIVE.inkN = 0; LIVE.tInk = 0;
+  }
+  // Sender: in-progress 3D, as only the pieces that changed (camera, one figure, one set piece…).
+  function live3d(shotKey, st){
+    if(!LIVE.on || !LIVE.liveRef || !peersOn(shotKey).length){ LIVE.sent3d = null; return; }
+    const now = performance.now(); if(now - LIVE.t3d < 120){ clearTimeout(LIVE.t3dT); LIVE.t3dT = setTimeout(() => live3d(shotKey, st), 130); return; }
+    LIVE.t3d = now;
+    const k = fbKey(shotKey), cur = { k, cam: JSON.stringify(st.cam || null), tn: st.tn || "", op: JSON.stringify(st.opts || {}), f: (st.figs || []).map((x) => JSON.stringify(x)), o: (st.objs || []).map((x) => JSON.stringify(x)) };
+    const prev = LIVE.sent3d && LIVE.sent3d.k === k ? LIVE.sent3d : null, up = {};
+    if(!prev){ up["blk"] = { k, cam: cur.cam, tn: cur.tn, op: cur.op, nf: cur.f.length, no: cur.o.length, f: Object.assign({}, cur.f), o: Object.assign({}, cur.o) }; }
+    else{
+      ["cam", "tn", "op"].forEach((f) => { if(cur[f] !== prev[f]) up["blk/" + f] = cur[f]; });
+      if(cur.f.length !== prev.f.length) up["blk/nf"] = cur.f.length;
+      if(cur.o.length !== prev.o.length) up["blk/no"] = cur.o.length;
+      cur.f.forEach((x, i) => { if(x !== prev.f[i]) up["blk/f/" + i] = x; });
+      cur.o.forEach((x, i) => { if(x !== prev.o[i]) up["blk/o/" + i] = x; });
+      for(let i = cur.f.length; i < prev.f.length; i++) up["blk/f/" + i] = null;
+      for(let i = cur.o.length; i < prev.o.length; i++) up["blk/o/" + i] = null;
+    }
+    LIVE.sent3d = cur;
+    if(Object.keys(up).length) LIVE.liveRef.update(up).catch(() => {});
+    clearTimeout(LIVE.end3d);
+    LIVE.end3d = setTimeout(() => { LIVE.sent3d = null; if(LIVE.liveRef) LIVE.liveRef.child("blk").remove().catch(() => {}); }, 2500);
+  }
+  function applyPeerLive(uid, v){
+    const was = LIVE.peerInk[uid];
+    if(v && v.ink && v.ink.st){
+      const pts = []; Object.keys(v.ink.c || {}).sort().forEach((ck) => { try{ JSON.parse(v.ink.c[ck]).forEach((q) => pts.push(q)); }catch(_e){} });
+      LIVE.peerInk[uid] = { k: v.ink.k, st: Object.assign({}, v.ink.st, { pts }) };
+      if(S.view === "focus" && fbKey(S.curShotKey) === v.ink.k) liveDirty(v.ink.k);
+    }else if(was){ delete LIVE.peerInk[uid]; if(S.view === "focus" && fbKey(S.curShotKey) === was.k) liveDirty(was.k); }
+    const b = v && v.blk;
+    if(b && b.k && S.view === "focus" && fbKey(S.curShotKey) === b.k && blockLive() && !SB3D.busy() && Date.now() - (LIVE.blkMine[b.k] || 0) > 1500){
+      try{
+        const st = { v:1, tn: b.tn, cam: JSON.parse(b.cam || "null"), opts: JSON.parse(b.op || "{}"), figs: [], objs: [] };
+        for(let i = 0; i < (b.nf || 0); i++){ const x = b.f && b.f[i]; if(x) st.figs.push(JSON.parse(x)); }
+        for(let i = 0; i < (b.no || 0); i++){ const x = b.o && b.o[i]; if(x) st.objs.push(JSON.parse(x)); }
+        const p = panelData(S.curShotKey), cur = p.blocking || {};
+        const merged = Object.assign({}, cur, st);
+        if(!st.cam) merged.cam = cur.cam;
+        p.blocking = merged; SB3D.replaceState(merged);
+      }catch(_e){}
+    }
+  }
+  function livePing(){ if(LIVE.on && LIVE.room) LIVE.room.child("storyboardPing").set({ u: LIVE.uid, t: window.firebase.database.ServerValue.TIMESTAMP }).catch(() => {}); }
+  async function startLive(){
+    const fb = window.firebase, auth = fb.auth(), user = auth.currentUser;
+    if(!user || !S.boardRef) return;
+    LIVE.uid = user.uid; LIVE.room = S.boardRef.parent;
+    try{ LIVE.offset = Number((await LIVE.room.root.child(".info/serverTimeOffset").once("value")).val()) || 0; }catch(_e){}
+    const TS = fb.database.ServerValue.TIMESTAMP;
+    // saved board
+    const P = S.boardRef.child("panels");
+    P.on("child_added", (sn) => applyRemotePanel(sn.key, sn.val()));
+    P.on("child_changed", (sn) => applyRemotePanel(sn.key, sn.val()));
+    P.on("child_removed", (sn) => applyRemotePanel(sn.key, null));
+    S.boardRef.child("order").on("value", (sn) => {
+      const v = sn.val() || {}; if(JSON.stringify(v) === JSON.stringify(S.order)) return;
+      S.order = v; if(S.view === "overview" && !__dragShot){ const g = document.getElementById("gridScroll"), top = g ? g.scrollTop : 0; renderOverview(); const g2 = document.getElementById("gridScroll"); if(g2) g2.scrollTop = top; } else updateShotNav();
+    });
+    S.boardRef.child("aspect").on("value", (sn) => {
+      const r = Number(sn.val()); if(!r || Math.abs(r - S.ratio) < 0.001) return;
+      S.ratio = r; const sel = document.getElementById("ratioSel"); if(sel) sel.value = String(r);
+      if(S.view === "overview") renderOverview(); else showFocus(S.curShotKey, true);
+    });
+    S.boardRef.child("blockSets").on("value", (sn) => {
+      const v = parseBlob(sn.val()) || {}; if(JSON.stringify(v) === JSON.stringify(S.blockSets)) return;
+      S.blockSets = v; if(window.SB3D && SB3D.loaded()) SB3D.setLocations(v);
+    });
+    // in-progress strokes and 3D from other people
+    const L = LIVE.room.child("storyboardLive");
+    L.on("child_added", (sn) => { if(sn.key !== LIVE.uid) applyPeerLive(sn.key, sn.val()); });
+    L.on("child_changed", (sn) => { if(sn.key !== LIVE.uid) applyPeerLive(sn.key, sn.val()); });
+    L.on("child_removed", (sn) => { if(sn.key !== LIVE.uid) applyPeerLive(sn.key, null); });
+    LIVE.liveRef = L.child(LIVE.uid); LIVE.liveRef.onDisconnect().remove();
+    // Shot List edits: tell the room so everyone re-reads it straight away
+    let firstPing = true;
+    LIVE.room.child("storyboardPing").on("value", (sn) => { const v = sn.val(); if(firstPing){ firstPing = false; return; } if(v && v.u !== LIVE.uid) refreshShotlist(true); });
+    // presence
+    const PR = LIVE.room.child("storyboardPresence");
+    LIVE.me = PR.child(LIVE.uid); LIVE.me.onDisconnect().remove();
+    const mine = () => ({ n: "", j: TS, h: TS, s: S.view === "focus" ? S.curShotKey : "" });
+    await LIVE.me.set(mine());
+    LIVE.on = true;
+    PR.on("value", (sn) => { LIVE.pres = sn.val() || {}; if(!LIVE.pres[LIVE.uid] && !LIVE.leaving) LIVE.me.set(mine()).catch(() => {}); renderPeers(); });
+    setInterval(() => { if(LIVE.me) LIVE.me.update({ h: TS }).catch(() => {}); renderPeers(); }, 25000);
+    window.addEventListener("pagehide", () => { LIVE.leaving = true; try{ LIVE.me.remove(); LIVE.liveRef.remove(); }catch(_e){} });
   }
 
   /* ---------------- Instant open (this device's last copy of the board) ---------------- */
@@ -1835,7 +2046,7 @@ window.SB3D={
         const res = await apiPost("sb_addscene", body);
         if(!res || res.ok === false) throw new Error((res && res.error) || "Couldn't add that scene.");
         close();
-        applyShotlistData(res);
+        applyShotlistData(res); livePing();
         const added = S.scenes[S.scenes.length - 1];
         renderLeftRailScenes(); renderOverview();
         if(added){ S.curScene = added.n; scrollToScene(added.n); }
@@ -1856,7 +2067,7 @@ window.SB3D={
       setStatus("");
       if(!res || res.ok === false){ notify((res && res.error) || "Couldn't remove that scene.", true); return; }
       notify("Scene removed");
-      applyShotlistData(res);
+      applyShotlistData(res); livePing();
       if(S.curScene === sc.n) S.curScene = S.scenes.length ? S.scenes[0].n : null;
       renderLeftRailScenes(); renderOverview();
     });
@@ -1869,7 +2080,7 @@ window.SB3D={
     apiPost("sb_addshot", { fileId: S.fileId, sceneKey }).then((res) => {
       setStatus("");
       if(!res || res.ok === false){ notify((res && res.error) || "Couldn't add that shot.", true); return; }
-      applyShotlistData(res);
+      applyShotlistData(res); livePing();
       renderLeftRailScenes(); renderOverview();
       scrollToScene(sceneN);
       notify("Shot added");
@@ -1883,7 +2094,7 @@ window.SB3D={
       setStatus("");
       if(!res || res.ok === false){ notify((res && res.error) || "Couldn't delete that shot.", true); return; }
       notify("Shot " + sh.shot + " deleted");
-      applyShotlistData(res);
+      applyShotlistData(res); livePing();
       renderLeftRailScenes(); renderOverview();
     });
   }
@@ -1893,7 +2104,7 @@ window.SB3D={
     try{
       const res = await apiPost("sb_duplicateshot", { fileId: S.fileId, shotKey: sh.key });
       if(!res || res.ok === false) throw new Error((res && res.error) || "Couldn't duplicate that shot.");
-      applyShotlistData(res);
+      applyShotlistData(res); livePing();
       if(res.newShotKey){
         duplicatePanelData(sh.key, res.newShotKey);
         // Slot the copy straight after the original, then rename the scene's shots to match.
@@ -2068,6 +2279,7 @@ window.SB3D={
   function renderOverview(){
     unmountBlocking(); hideBrushCursor(); document.body.classList.remove("b3dOn", "b3dEdit");
     S.view = "overview";
+    livePresence();
     document.body.classList.add("overviewView"); document.body.classList.remove("focusView");
     document.getElementById("rightRail").style.display = "none";
     document.getElementById("toolbar") && (document.getElementById("toolbar").remove());
@@ -2188,7 +2400,7 @@ window.SB3D={
     cap.innerHTML = `
       <div class="top">
         <span class="statusDot ${statusClass}" title="${escapeHtml(sh.status || "Not shot")}"></span>
-        <span class="shotLabel">Shot ${escapeHtml(sh.shot)}</span>
+        <span class="shotLabel">Shot ${escapeHtml(sh.shot)}</span><span class="peerDots" data-shot-key="${escapeHtml(sh.key)}">${peerDotsHtml(sh.key)}</span>
         <span class="cardActions">
           <span class="cardMenu">
             <button class="miniBtn dupBtn" type="button" title="Duplicate shot" aria-label="Duplicate shot">${dupIcon()}</button>
@@ -2344,6 +2556,7 @@ window.SB3D={
     unmountBlocking();
     document.body.classList.toggle("drawOn", S.drawOn);
     S.view = "focus"; S.curShotKey = shotKey;
+    livePresence();
     if(!blockingOn(shotKey)) S.mode3d = "draw";
     document.body.classList.add("focusView"); document.body.classList.remove("overviewView");
     S.zoom = 1;
@@ -2516,7 +2729,7 @@ window.SB3D={
         if(S.curShotKey === sh.key) renderRightRailInfo(sh);
         return;
       }
-      setStatus("Saved · " + new Date().toLocaleTimeString());
+      setStatus("Saved · " + new Date().toLocaleTimeString()); livePing();
     }).catch((err) => {
       sh[field] = prev;
       setStatus("Couldn't save that change: " + (err.message || err));
@@ -2680,10 +2893,11 @@ window.SB3D={
 
   function redrawStack(){
     const p = panelData(S.curShotKey);
+    if(!p.layerVis) p.layerVis = { sketch:true, line:true, shading:true, ref:true };
     const on = document.getElementById("cvOnion");
     if(on){ const prev = S.onion && prevShotKeys(S.curShotKey, 1)[0]; if(prev) renderComposite(prev, on); else on.getContext("2d").clearRect(0, 0, on.width, on.height); }
     const cvInk = document.getElementById("cvInk");
-    if(cvInk) renderPanelToCanvas(S.curShotKey, cvInk, { hiddenLayers: { sketch: !p.layerVis.sketch, line: !p.layerVis.line, shading: !p.layerVis.shading } });
+    if(cvInk){ renderPanelToCanvas(S.curShotKey, cvInk, { hiddenLayers: { sketch: !p.layerVis.sketch, line: !p.layerVis.line, shading: !p.layerVis.shading } }); drawPeerInk(cvInk); }
     const cvRef = document.getElementById("cvRef");
     if(cvRef){
       const ctx = cvRef.getContext("2d");
@@ -2727,10 +2941,12 @@ window.SB3D={
         const ink = document.getElementById("cvInk"), ic = ink.getContext("2d");
         ic.clearRect(0, 0, ink.width, ink.height); ic.drawImage(inkSnap, 0, 0);
         drawStrokeOn(ic, liveStroke(pts), ink.width, ink.height);
+        liveInk(shotKey, pts);
         return;
       }
       ctx.clearRect(0, 0, cv.width, cv.height);
       drawStrokeOn(ctx, liveStroke(pts), cv.width, cv.height);
+      liveInk(shotKey, pts);
     };
     const finish = () => {
       if(!drawing) return;
@@ -2738,6 +2954,7 @@ window.SB3D={
       ctx.clearRect(0, 0, cv.width, cv.height);
       if(pts.length > 1) commitStroke(shotKey, liveStroke(pts));
       else if(inkSnap) redrawStack();
+      liveInkEnd();
       inkSnap = null;
       pts = [];
     };
@@ -2778,18 +2995,22 @@ window.SB3D={
     }
     if(S.boardRef){
       setStatus("Saving…");
+      if(LIVE.uid && !stroke.u) stroke.u = LIVE.uid;
       const ref = S.boardRef.child("panels/" + fbKey(shotKey) + "/strokes").push();
+      LIVE.pushed[ref.key] = localId;
       const payload = Object.assign({}, stroke, { pts: JSON.stringify(stroke.pts) });
       delete payload._k;
       ref.set(payload).then(() => {
+        delete LIVE.pushed[ref.key];
         // Undone while it was still uploading: take it back out of the cloud too (it used to reappear)
-        if(!p.strokes[localId]){ ref.remove().catch(() => {}); setStatus("Saved · " + new Date().toLocaleTimeString()); return; }
+        if(!p.strokes[localId] && !p.strokes[ref.key]){ ref.remove().catch(() => {}); setStatus("Saved · " + new Date().toLocaleTimeString()); return; }
         delete p.strokes[localId]; p.strokes[ref.key] = Object.assign({}, stroke, { _k: ref.key });
         setStatus("Saved · " + new Date().toLocaleTimeString());
       }).catch((err) => {
         // Kept on this device (p.strokes[localId] is untouched) so nothing is lost — one automatic
         // retry, then a message with the real reason instead of a generic "check your connection".
         const msg = (err && err.message) || String(err);
+        delete LIVE.pushed[ref.key];
         if(!p.strokes[localId]) return;
         if(!isRetry){ setStatus("Saving…"); setTimeout(() => commitStroke(shotKey, stroke, true), 1500); return; }
         setStatus("Not saved to the cloud (" + msg + ") — kept on this device only for now.", true);
@@ -2801,7 +3022,7 @@ window.SB3D={
   // Newest stroke first. Local ids ("l<time>") are still uploading, so they're always the newest;
   // cloud push ids sort by time on their own.
   function newestStrokeKey(p){
-    const keys = Object.keys(p.strokes || {});
+    const keys = Object.keys(p.strokes || {}).filter((k) => { const u = p.strokes[k] && p.strokes[k].u; return !u || !LIVE.uid || u === LIVE.uid; });
     if(!keys.length) return "";
     const local = keys.filter((k) => /^l\d/.test(k)).sort();
     if(local.length) return local[local.length - 1];
@@ -2835,7 +3056,7 @@ window.SB3D={
     if(!btn) return;
     if(canUndoClear()){ btn.disabled = false; const rb0 = document.getElementById("redoBtn"); if(rb0) rb0.disabled = true; return; }
     {
-      const k = fbKey(S.curShotKey), hasInk = Object.keys(panelData(S.curShotKey).strokes || {}).length > 0;
+      const k = fbKey(S.curShotKey), hasInk = !!newestStrokeKey(panelData(S.curShotKey));
       const can3d = blockLive() && SB3D.canUndo(), redo3d = blockLive() && SB3D.canRedo();
       btn.disabled = !(hasInk || can3d);
       const rb3 = document.getElementById("redoBtn"); if(rb3) rb3.disabled = !(((S.redo[k] || []).length) || redo3d);
@@ -2900,6 +3121,7 @@ window.SB3D={
         scene: () => sceneScript(shotKey),
         onBuilt: (r) => notify(r.loc + " set" + (r.added.length ? " + " + r.added.join(", ") : "") + ". Figures kept."),
         onChange: () => saveBlocking(shotKey),
+        onLive: (st) => live3d(shotKey, st),
         onCamEnd: () => { saveBlocking(shotKey); cameraToSheet(shotKey); },
         onHistory: () => updateUndoState(),
         onInfo: (t) => setShotTag(t),
@@ -2976,10 +3198,12 @@ window.SB3D={
       const blk = blockingBlob(panelData(shotKey).blocking);
       if(!blk) return;
       if(!S.boardRef){ saveLocalBoard(); return; }
+      if(LIVE.blkSeen[k] === blk) return;          // nothing new (e.g. someone else's version just arrived)
+      LIVE.blkSeen[k] = blk; LIVE.blkMine[k] = Date.now();
       setStatus("Saving…");
       S.boardRef.child("panels/" + k + "/blocking").set(blk)
         .then(() => setStatus("Saved · " + new Date().toLocaleTimeString()))
-        .catch((err) => setStatus("3D blocking not saved to the cloud (" + ((err && err.message) || err) + ").", true));
+        .catch((err) => { delete LIVE.blkSeen[k]; setStatus("3D blocking not saved to the cloud (" + ((err && err.message) || err) + ").", true); });
     }, 700);
   }
   function saveBlockSets(sets){
@@ -3226,6 +3450,7 @@ window.SB3D={
       __relabelRuns--;
       if(failed){ notify("Couldn't rename " + failed + " shot" + (failed === 1 ? "" : "s") + " in the Shot List: " + err, true); if(S.view === "overview") renderOverview(); setStatus(""); }
       else setStatus("Shots renamed · " + new Date().toLocaleTimeString());
+      livePing();
     });
     if(S.view === "overview") renderOverview();
   }
