@@ -3628,12 +3628,21 @@
   const FONT_URL = "https://fonts.googleapis.com/css?family=";
   const fontParam = (n) => encodeURIComponent(n).replace(/%20/g, "+");
   const __fontLinks = new Set();
+  const __fontFull = new Set();
   function addFontLink(href){ if(__fontLinks.has(href)) return; __fontLinks.add(href); const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; document.head.appendChild(l); }
   // Full family (all the weights and italics it has) for a font used on a page
   function ensureFont(css){
     const n = String(css || "").split(",")[0].replace(/['"]/g, "").trim();
     if(!n || BASE_FONTS.has(n) || /^(Inter|Georgia|serif|sans-serif|monospace|system-ui)$/i.test(n)) return;
+    __fontFull.add(n);
     addFontLink(FONT_URL + fontParam(n) + ":300,400,500,600,700,800,900,300italic,400italic,700italic&display=swap");
+  }
+  // Just "Aa" in a theme's heading font, for the theme cards
+  function aaFont(css, w, it){
+    const n = String(css || "").split(",")[0].replace(/['"]/g, "").trim();
+    if(!n || BASE_FONTS.has(n) || /^(Inter|Georgia|serif|sans-serif|monospace|system-ui)$/i.test(n)) return;
+    if(__fontFull.has(n)) return;                                  // already loaded in full: a later subset must never shadow it
+    addFontLink(FONT_URL + fontParam(n) + ":" + (Number(w) || 400) + (it ? "italic" : "") + "&text=Aa&display=swap");
   }
   // Just the letters of its own name, for the font menu
   const previewFont = (n) => { if(!BASE_FONTS.has(n)) addFontLink(FONT_URL + fontParam(n) + "&text=" + encodeURIComponent(n + " ()") + "&display=block"); };
@@ -3993,6 +4002,7 @@
     const key = pg.bg && pg.bg.th, th = themeOf(pg), V = vOf(pg), custom = !!(pg.bg && pg.bg.custom);
     const cards = Object.keys(THEMES).map((k) => {
       const t = THEMES[k], v = t.v[0], tk = t.tok.cover;
+      aaFont(t.fonts[tk.f], tk.w, tk.it);
       return `<button type="button" class="themeCard${k === key ? " on" : ""}" data-th="${k}" title="${esc(t.name)}"><span class="tcSw" style="background:${esc(v.bg)};color:${v.star || v.hi}"><b style="font-family:${esc(t.fonts[tk.f])};font-weight:${tk.w};${tk.it ? "font-style:italic;" : ""}${tk.st ? "font-stretch:" + tk.st + "%;" : ""}">Aa</b><i style="background:${v.acc}"></i></span><span class="tcName">${esc(t.name)}</span></button>`;
     }).join("");
     const curTpl = TEMPLATES[key];
@@ -5030,7 +5040,8 @@
     if(!pages){ pages = defaultTreatment(scriptData(T.script)); images = []; driveDirty = true; }
     T.pages = pages; T.images = images; T.mark = mark;
     if(tidyAll()) driveDirty = true;                                   // stray lines left by earlier layout switches
-    Object.keys(THEMES).forEach((k) => { ensureFont(THEMES[k].fonts.h); ensureFont(THEMES[k].fonts.b); });
+    // only the fonts this deck uses load in full; the theme cards get just their "Aa" (a few KB each, on first view)
+    new Set(T.pages.map((p) => themeOf(p))).forEach((th) => { if(th){ ensureFont(th.fonts.h); ensureFont(th.fonts.b); } });
     __z = Math.max(0, ...T.pages.flatMap((p) => p.els.map((e) => e.z || 0)));
     // Batch A dividers were 0.6mm tall (unclickable): give them the 4mm hit area, same line position
     T.pages.forEach((p) => p.els.forEach((e) => { if(e.t === "divider" && e.h < 2){ e.y = rd(e.y - 1.7); e.h = 4; } }));

@@ -1892,22 +1892,34 @@ window.__CampHub = {
     } catch (e) { window.CampProdPanel && window.CampProdPanel.csError(pid, e.message || String(e)); throw e; }
   }),
   syncSheets: async (pid, fileId, btn) => run(btn, async () => {
-    const steps = [["schedule", "schedule"], ["budget", "budget"], ["callsheets", "call sheets"]];
-    // the other docs this project already has get rebuilt too, so every sheet follows the plan and the same look
+    // Order matters only where one doc reads another: Crew & Contacts first (the Budget reads its crew rows),
+    // then Schedule, Budget and Shot list together (separate Sheets, built at the same time), call sheets last.
     const have = ((sheetsByProject[pid] && sheetsByProject[pid].list) || []).map(s => s.name || "");
-    if (have.some(n => /shot list/i.test(n))) steps.splice(2, 0, ["shotlist", "shot list"]);
-    if (have.some(n => /production docs|crew|casting|locations|contacts/i.test(n))) steps.splice(2, 0, ["productiondocs", "crew, casting and locations"]);
-    for (let i = 0; i < steps.length; i++) {
-      toast("Updating the " + steps[i][1] + " from the plan (" + (i + 1) + "/" + steps.length + ")… this can take a minute.", "ok", 240000);
-      let res;
-      try { res = await exportDoc(steps[i][0], fileId); }
-      catch (e) { if (steps[i][0] === "callsheets" && window.CampProdPanel) window.CampProdPanel.csError(pid, e.message || String(e)); throw e; }
-      if (steps[i][0] === "callsheets" && window.CampProdPanel) window.CampProdPanel.csError(pid, "");
-      rememberDocs(pid, docsFrom(res, steps[i][1]));
-      // remember where the call sheets are, so everyone can open them from the panel
-      if (steps[i][0] === "callsheets" && res && res.days) {
-        await set(ref(db, "projects/" + pid + "/production/callsheets"), { folderUrl: res.folderUrl || "", at: Date.now(), days: res.days.map(d => ({ day: d.day, url: d.url })) });
+    const first = have.some(n => /production docs|crew|casting|locations|contacts/i.test(n)) ? [["productiondocs", "crew, casting and locations"]] : [];
+    const mid = [["schedule", "schedule"], ["budget", "budget"]];
+    if (have.some(n => /shot list/i.test(n))) mid.push(["shotlist", "shot list"]);
+    const together = have.length > 0;                                   // first ever Sync: one at a time, so the Drive folder is made once
+    const stages = (together ? [first, mid] : [first, ...mid.map(m => [m])]).filter(g => g.length).concat([[["callsheets", "call sheets"]]]);
+    const total = stages.reduce((a, g) => a + g.length, 0);
+    let done = 0;
+    for (const group of stages) {
+      toast("Updating the " + group.map(g => g[1]).join(", ") + " from the plan (" + (done + 1) + (group.length > 1 ? "–" + (done + group.length) : "") + "/" + total + ")…", "ok", 240000);
+      const results = await Promise.all(group.map(async ([kind, label]) => {
+        try { const res = await exportDoc(kind, fileId); return { kind, label, res }; }
+        catch (e) { return { kind, label, err: e }; }
+      }));
+      done += group.length;
+      const failed = results.find(r => r.err);
+      for (const r of results) {
+        if (r.kind === "callsheets" && window.CampProdPanel) window.CampProdPanel.csError(pid, r.err ? (r.err.message || String(r.err)) : "");
+        if (r.err) continue;                                            // keep what did build; report the failure below
+        rememberDocs(pid, docsFrom(r.res, r.label));
+        // remember where the call sheets are, so everyone can open them from the panel
+        if (r.kind === "callsheets" && r.res && r.res.days) {
+          await set(ref(db, "projects/" + pid + "/production/callsheets"), { folderUrl: r.res.folderUrl || "", at: Date.now(), days: r.res.days.map(d => ({ day: d.day, url: d.url })) });
+        }
       }
+      if (failed) throw failed.err;
     }
     toast("Schedule, budget and call sheets now follow the plan.", "ok");
     await loadSheets(pid);
