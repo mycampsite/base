@@ -273,5 +273,16 @@ test("playerUrl keeps the embed address and adds the trimmed-player options", ()
   assert.strictEqual(B.playerUrl("https://example.com/x"), "");
 });
 
+test("groups can be moved up and down, and keep that order", () => {
+  const d = { cast: [{ name: "A", candidates: [] }, { name: "B", candidates: [] }, { name: "C", candidates: [] }] };
+  const names = B.moveGroup(["A", "B", "C"], "C", -1);
+  assert.deepStrictEqual(names, ["A", "C", "B"]);
+  assert.deepStrictEqual(B.moveGroup(["A", "B"], "A", -1), ["A", "B"]);
+  assert.deepStrictEqual(B.groupsOf(B.withGroupOrder(d, "cast", names), "cast", "f").map((g) => g.name), ["A", "C", "B"]);
+  // only some numbered: those first, the rest in the Sheet's order
+  const d2 = { cast: [{ name: "A", candidates: [] }, { name: "B", candidates: [] }, { name: "C", order: 1, candidates: [] }] };
+  assert.deepStrictEqual(B.groupsOf(d2, "cast", "f").map((g) => g.name), ["C", "A", "B"]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

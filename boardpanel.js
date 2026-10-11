@@ -50,6 +50,12 @@ const css = `
 .bdBody{ flex:1; min-height:0; overflow:auto; padding:6px 14px 28px; -webkit-overflow-scrolling:touch; }
 .bdGroup{ margin-top:16px; }
 .bdGH{ width:100%; display:flex; align-items:center; gap:10px; padding:6px 2px; background:none; border:0; border-bottom:1px solid var(--uiBorder); color:var(--uiText); cursor:pointer; text-align:left; }
+.bdGHRow{ display:flex; align-items:stretch; gap:6px; }
+.bdGHRow .bdGH{ flex:1; min-width:0; }
+.bdMv{ display:flex; gap:2px; align-items:center; border-bottom:1px solid var(--uiBorder); }
+.bdMv button{ width:26px; height:26px; border-radius:7px; border:1px solid transparent; background:none; color:var(--uiMuted); font-size:14px; cursor:pointer; padding:0; }
+.bdMv button:hover:not(:disabled){ color:var(--uiText); border-color:var(--uiBorder); }
+.bdMv button:disabled{ opacity:.25; cursor:default; }
 .bdGH:hover .bdGN{ text-decoration:underline; text-underline-offset:3px; }
 .bdGH svg{ width:14px; height:14px; color:var(--uiMuted); flex:0 0 auto; transition:transform .12s; }
 .bdGroup.shut .bdGH svg{ transform:rotate(-90deg); }
@@ -334,7 +340,9 @@ function drawBody(p){
     const key = S.tab + "|" + g.name, shut = !!S.closed[key];
     const done = g.cards.find((c) => c.done);
     const sum = done ? `<span class="bdGS done">✓ ${esc(done.title)}</span>` : `<span class="bdGS">${g.cards.length ? g.cards.length + " option" + (g.cards.length === 1 ? "" : "s") : "no options yet"}</span>`;
-    return `<section class="bdGroup${shut ? " shut" : ""}"><button class="bdGH" type="button" data-bg="${esc(key)}" aria-expanded="${!shut}">${ICON.chev}<span class="bdGN">${esc(g.name)}</span>${g.type ? `<span class="bdGT">${esc(g.type)}</span>` : ""}${sum}</button>
+    const gi = groups.findIndex((x) => x.name === g.name);
+    const mv = can ? `<span class="bdMv"><button type="button" data-gmv="${esc(g.name)}" data-dir="-1" aria-label="Move ${esc(g.name)} up" title="Move up"${gi <= 0 ? " disabled" : ""}>↑</button><button type="button" data-gmv="${esc(g.name)}" data-dir="1" aria-label="Move ${esc(g.name)} down" title="Move down"${gi >= groups.length - 1 ? " disabled" : ""}>↓</button></span>` : "";
+    return `<section class="bdGroup${shut ? " shut" : ""}"><div class="bdGHRow"><button class="bdGH" type="button" data-bg="${esc(key)}" aria-expanded="${!shut}">${ICON.chev}<span class="bdGN">${esc(g.name)}</span>${g.type ? `<span class="bdGT">${esc(g.type)}</span>` : ""}${sum}</button>${mv}</div>
       ${briefHtml(g)}
       ${g.cards.length ? `<div class="bdGrid ${S.tab}">${g.cards.map((c) => cardHtml(c, S.tab, { can })).join("")}${addBtn(g, false)}</div>` : `<div class="bdNone">${can ? addBtn(g, true) : ""}${sheetLink ? ` ${can ? "Or add" : "Add"} one in <a href="${sheetLink}" target="_blank" rel="noopener">the Sheet</a>.` : ""}</div>`}</section>`;
   }).join("");
@@ -532,6 +540,21 @@ async function moveCard(c, to, silent){
   if(S.pid) render(S.pid);
   if(S.open && !silent && findCard(S.open)) showDetail(S.open, true);
   try{ await post({ kind: c.kind, op: "order", keys }); }
+  catch(err){
+    H().toast("Couldn't save the order: " + ((err && err.message) || err), "err");
+    if(before) setData(() => before);
+    if(S.pid) render(S.pid);
+  }
+}
+// Move a whole role / location up or down the page; the order is kept in the Sheet (Board Details) so the team sees it too
+async function moveGroupTo(name, dir){
+  const kind = S.tab, names = current().groups.map((g) => g.name), next = L.moveGroup(names, name, dir);
+  if(next.join("|") === names.join("|")) return;
+  const before = S.data[S.fileId] && S.data[S.fileId].d;
+  setData((d) => L.withGroupOrder(d, kind, next));
+  if(S.pid) render(S.pid);
+  const b = document.querySelector(`[data-gmv="${CSS.escape(name)}"][data-dir="${dir}"]`); if(b && !b.disabled) b.focus();
+  try{ await post({ kind, op: "gorder", groups: next }); }
   catch(err){
     H().toast("Couldn't save the order: " + ((err && err.message) || err), "err");
     if(before) setData(() => before);
@@ -829,6 +852,8 @@ function wire(box, pid, p){
       else if(k === "create") H().createDocs(ba);
       return;
     }
+    const gm = t.closest("[data-gmv]");
+    if(gm){ if(!gm.disabled) moveGroupTo(gm.dataset.gmv, Number(gm.dataset.dir)); return; }
     const bg = t.closest("[data-bg]");
     if(bg){ const k = bg.dataset.bg; S.closed[k] = !S.closed[k]; drawBody(p); return; }
     const fv = t.closest("[data-fav]");

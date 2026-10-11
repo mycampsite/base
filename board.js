@@ -142,6 +142,19 @@ function withOrder(data, kind, keys){
   out[list] = ((data && data[list]) || []).map((g) => Object.assign({}, g, { candidates: (g.candidates || []).map((c) => { const i = keys.indexOf(c.key); return i < 0 ? c : Object.assign({}, c, { order: i + 1 }); }) }));
   return out;
 }
+// Move a role / location up (dir -1) or down (+1) among the visible names; returns every group name in its new order
+function moveGroup(names, name, dir){
+  const out = names.slice(), i = out.indexOf(name), j = i + dir;
+  if(i < 0 || j < 0 || j >= out.length) return out;
+  out.splice(i, 1); out.splice(j, 0, name);
+  return out;
+}
+// The data with the groups numbered in this order (what the Sheet's Board Details tab keeps)
+function withGroupOrder(data, kind, names){
+  const list = KINDS[kind].list, out = Object.assign({}, data);
+  out[list] = ((data && data[list]) || []).map((g) => { const i = names.indexOf(g.name); return Object.assign({}, g, { order: i < 0 ? 0 : i + 1 }); });
+  return out;
+}
 function withBrief(data, kind, group, text){
   const list = KINDS[kind].list, out = Object.assign({}, data);
   out[list] = ((data && data[list]) || []).map((g) => g.name === group ? Object.assign({}, g, { brief: text }) : g);
@@ -228,7 +241,10 @@ function cardOf(kind, group, c, fileId){
 // All cards for one tab, grouped by role / location in the Sheet's order. Passed options sink to the end of their group.
 function groupsOf(data, kind, fileId){
   const list = (data && data[KINDS[kind].list]) || [];
-  return list.map((g) => {
+  // roles / locations the director moved up or down come first in that order, the rest follow in the Sheet's order
+  const idx = list.map((g, i) => ({ g, i, o: Number(g.order) || 0 }));
+  idx.sort((a, b) => (a.o && b.o ? a.o - b.o : a.o ? -1 : b.o ? 1 : 0) || a.i - b.i);
+  return idx.map((x) => x.g).map((g) => {
     const cards = (g.candidates || []).filter((c) => isFilled(kind, c)).map((c) => cardOf(kind, g, c, fileId));
     // the order the director set (then the Sheet's order); passed options sink to the end
     const byOrder = (a, b) => (a.order && b.order ? a.order - b.order : a.order ? -1 : b.order ? 1 : 0) || a.n - b.n;
@@ -270,6 +286,6 @@ function neighbour(groups, id, dir){
   return flat[i + dir] || "";
 }
 
-const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, embedUrl, playerUrl, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, linesOf, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
+const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, embedUrl, playerUrl, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, linesOf, withOrder, withBrief, moveGroup, withGroupOrder, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampBoard = Object.assign(root.CampBoard || {}, { logic: api });
 })(typeof window !== "undefined" ? window : this);
