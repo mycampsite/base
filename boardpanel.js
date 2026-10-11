@@ -394,6 +394,9 @@ function showDetail(id, keep){
   const seenE = {}, vids = [];
   c.links.forEach((l) => { const e = L.playerUrl(l.url); if(e && !seenE[e]){ seenE[e] = 1; vids.push({ label: l.label, e }); } });
   const vidHtml = vids.length ? `<div class="bdSec bdVids"><div class="bdLbl">Videos</div>${vids.map((v) => `<div class="bdVid"><div class="bdVidT">${esc(v.label)}</div><div class="bdFrame"><iframe src="${esc(v.e)}" title="${esc(c.title + " – " + v.label)}" loading="lazy" allow="encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe></div></div>`).join("")}</div>` : "";
+  const same = (g) => g.cards.some((x) => x.id !== c.id && x.title.toLowerCase() === c.title.toLowerCase());
+  const others = can ? current().groups.filter((g) => g.name !== c.group) : [];
+  const also = others.length ? `<select class="bdQuick" data-bd="alsoadd" aria-label="Also add to another ${c.kind === "cast" ? "role" : "location"}" title="Copies this option into another ${c.kind === "cast" ? "role" : "location"}"><option value="">Also add to another ${c.kind === "cast" ? "role" : "location"}…</option>${others.map((g) => `<option value="${esc(g.name)}"${same(g) ? " disabled" : ""}>${esc(g.name)}${same(g) ? " (already there)" : ""}</option>`).join("")}</select>` : "";
   const html = `<div class="bdShade" id="bdShade"><div class="bdDlg view ${c.kind}" role="dialog" aria-modal="true" aria-label="${esc(c.title)}">
     <div class="bdDHead"><div style="flex:1;min-width:0"><h2>${esc(c.title)}</h2><div class="bdDMeta">${esc(c.group)}${c.groupType ? " · " + esc(c.groupType) : ""}</div></div>${favT}<button class="iconBtn" type="button" data-bd="close" aria-label="Close" title="Close (Esc)">${ICON.close}</button></div>
     ${hero}${galHtml}
@@ -405,7 +408,7 @@ function showDetail(id, keep){
       ${hint ? `<div class="bdHint">${esc(hint)}</div>` : ""}
     </div>
     ${vidHtml}
-    <div class="bdDFoot">${can ? `<button class="bdDel" type="button" data-bd="delete">Delete option</button>` : ""}<span class="sp"></span>${rowLink ? `<a class="btn sm" href="${rowLink}" target="_blank" rel="noopener" title="Open this row in Google Sheets">${ICON.ext}<span class="lbl">Sheet</span></a>` : ""}${can ? `<button class="btn sm primary" type="button" data-bd="edit">Edit</button>` : ""}</div>
+    <div class="bdDFoot">${can ? `<button class="bdDel" type="button" data-bd="delete">Delete option</button>` : ""}<span class="sp"></span>${also}${rowLink ? `<a class="btn sm" href="${rowLink}" target="_blank" rel="noopener" title="Open this row in Google Sheets">${ICON.ext}<span class="lbl">Sheet</span></a>` : ""}${can ? `<button class="btn sm primary" type="button" data-bd="edit">Edit</button>` : ""}</div>
   </div></div>`;
   const old = document.getElementById("bdShade"), oldDlg = old && old.querySelector(".bdDlg"), top = keep && oldDlg ? oldDlg.scrollTop : 0;
   if(old) old.remove();
@@ -426,6 +429,7 @@ function showDetail(id, keep){
   });
   shade.addEventListener("change", (e) => {
     if(e.target.dataset && e.target.dataset.bd === "status") quickStatus(c, e.target.value);
+    else if(e.target.dataset && e.target.dataset.bd === "alsoadd") alsoAdd(c, e.target.value, e.target);
   });
   shade.addEventListener("error", onImgError, true);
   const hd = document.getElementById("bdHero"); let x0 = null;
@@ -457,6 +461,33 @@ async function post(body){
   return res;
 }
 function afterSheetMoved(){ load(S.fileId, true); }   // rows moved (added / removed): read the true row numbers again
+// Copy an option into another role / location: a new option there with the same name, photos, contact, notes, showreels and
+// audition tapes. The status starts empty (it's decided per role) and the copies are separate from then on. Writes to the Sheet
+// with the same "add" the + Add button uses, so this touches ripple/sync: the Sheet gains a row (the Board re-reads row numbers).
+async function alsoAdd(c, group, sel){
+  if(!group || S.alsoBusy) return;
+  const done = () => { S.alsoBusy = false; if(sel){ sel.disabled = false; sel.value = ""; } };
+  const target = current().groups.find((g) => g.name === group);
+  if(target && target.cards.some((x) => x.title.toLowerCase() === c.title.toLowerCase())){ H().toast(c.title + " is already in " + group + ".", "err"); done(); return; }
+  const fields = {};
+  L.fieldsOf(c.kind).forEach((k) => { if(k !== "status" && k !== "photo" && c.raw[k]) fields[k] = c.raw[k]; });
+  const pf = L.photoFields(c.photos);
+  if(pf.photo) fields.photo = pf.photo;
+  if(pf.photos.length) fields.photos = pf.photos;
+  S.alsoBusy = true; if(sel) sel.disabled = true;
+  try{
+    const res = await post({ kind: c.kind, op: "add", group, fields });
+    setData((dd) => L.withCandidate(dd, c.kind, res.candidate));
+    if(res.inserted) afterSheetMoved();
+    H().toast("Added to " + group + ".", "ok");
+    if(S.pid) render(S.pid);
+  }catch(err){
+    H().toast("Couldn't add: " + ((err && err.message) || err), "err");
+    if(err && err.gone) afterSheetMoved();
+  }
+  done();
+  if(S.open && findCard(S.open) && !S.edit) showDetail(S.open, true);
+}
 // The status dropdown in the detail view: one field, saved at once
 async function quickStatus(c, status){
   status = String(status || "");
