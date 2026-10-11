@@ -59,10 +59,8 @@
   window.CampTent = {
     colors: ["#7d8f4e", "#d4932a", "#5a86b8", "#84707c", "#c9633d", "#3f9a8c", "#9a5c8f", "#a98a5a"],
     names: ["Olive", "Amber", "Blue", "Mauve", "Terracotta", "Teal", "Plum", "Sand"],
-    // Someone with no name shows as their tent's colour ("Amber") instead of "Someone"
+    // Everyone is shown as their tent's colour ("Amber"), never by a typed name
     label: function (name, color) {
-      var n = String(name == null ? "" : name).trim();
-      if (n && n.toLowerCase() !== "someone") return n;
       var i = this.colors.indexOf(String(color || "").toLowerCase());
       return this.names[i >= 0 ? i : 0];
     },

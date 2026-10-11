@@ -14475,7 +14475,10 @@ ${TP.join("\n")}
     const others = (__LIVE.present || []).filter(k => k !== __LIVE.uid);
     if(!__LIVE.active || !others.length){ if(box) box.remove(); return; }
     if(!box){ box = document.createElement("div"); box.id = "liveFaces"; box.className = "liveFaces"; }
-    if(pill && box.nextSibling !== pill && pill.parentElement) pill.parentElement.insertBefore(box, pill);
+    // Tents live in the top banner, next to Sign out (the Live pill stays in the menu bar)
+    const bRight = document.querySelector("#banner .right");
+    if(bRight){ if(box.parentElement !== bRight) bRight.insertBefore(box, bRight.firstChild); }
+    else if(pill && box.nextSibling !== pill && pill.parentElement) pill.parentElement.insertBefore(box, pill);
     const colors = __lcColors();
     const esc = (t) => String(t).replace(/[&<>"]/g, (m) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[m]);
     const shown = others.slice(0, 4);
@@ -14486,7 +14489,7 @@ ${TP.join("\n")}
       const uid = b.dataset.uid, c = __LC.data[uid];
       const spot = c && __lcResolve({ l: c.fl, o: c.fo, pt: c.fpt });
       const el = spot && (spot.node.nodeType === 1 ? spot.node : spot.node.parentElement);
-      if(!el){ try{ showSaveToast("ok", ((__LIVE.presence[uid] && __LIVE.presence[uid].n) || "They") + " hasn't clicked into the script yet.", 3000); }catch(_e){} return; }
+      if(!el){ try{ showSaveToast("ok", __lcName(uid, colors) + " hasn't clicked into the script yet.", 3000); }catch(_e){} return; }
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       __LC.moved[uid] = Date.now(); __lcRender(); setTimeout(__lcRender, 4600);
     };

@@ -545,7 +545,7 @@
     #banner{ padding:0 8px; }
     #toolbar{ gap:6px; padding:0 8px; height:48px; overflow-x:auto; scrollbar-width:none; }
     #toolbar::-webkit-scrollbar{ display:none; }
-    #toolbar .back, #toolbar .sep, #statusMsg, #liveWrap{ display:none !important; }
+    #toolbar .back, #toolbar .sep, #statusMsg{ display:none !important; }
     #toolbar .title{ font-size:13px; max-width:34vw; }
     #toolbar .btn.sm{ padding:0 10px; }
     #restyleBtn span{ display:none; }
@@ -635,7 +635,7 @@
   <button class="hamb" id="menuBtn" type="button" aria-label="Menu"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <a class="logo" href="index.html" aria-label="Camp home"><img src="camp-logo.png" alt="Camp"></a>
   <div class="area">Treatment</div>
-  <div class="right"><span class="chip" id="userChip"></span><button class="btn sm" id="signOutBtn" type="button">Sign out</button></div>
+  <div class="right"><span id="liveWrap"></span><span class="chip" id="userChip"></span><button class="btn sm" id="signOutBtn" type="button">Sign out</button></div>
 </header>
 <nav id="navMenu"><a href="index.html" id="mnLib">Library</a><a href="editor.html" id="mnScript">Script</a><a href="storyboard.html" id="mnSb">Storyboard</a></nav>
 <div id="loading"><div class="loadBox"><span class="spinBox big" aria-hidden="true"><span class="spin"></span></span><div id="loadMsg">Opening your treatment…</div><div class="loadBar"><i id="loadBar"></i></div></div></div>
@@ -647,7 +647,6 @@
     <div id="statusMsg"></div>
     <div id="photoNote" class="photoNote" hidden><span class="dotPulse"><i></i><i></i><i></i></span><span></span></div>
     <div class="grow"></div>
-    <span id="liveWrap"></span>
     <div class="tbGroup">
       <button class="iconBtn" id="undoBtn" type="button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
       <button class="iconBtn" id="redoBtn" type="button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>

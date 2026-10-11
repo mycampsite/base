@@ -49,3 +49,14 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 .liveFace.tent:hover, .liveFace.tent:focus-visible{ background:color-mix(in srgb, var(--tc, #d4932a) 18%, transparent) !important; transform:none; }
 .liveFace.tent::after{ content:attr(data-name); position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%); z-index:400; padding:7px 13px; border-radius:999px; background:#1d1e22; border:1px solid rgba(255,255,255,.18); box-shadow:0 6px 18px rgba(0,0,0,.4); color:#f2f0ec; font:600 12px/1 Inter, system-ui, sans-serif; white-space:nowrap; pointer-events:none; opacity:0; visibility:hidden; transition:opacity .12s; }
 .liveFace.tent:hover::after, .liveFace.tent:focus-visible::after{ opacity:1; visibility:visible; }
+
+/* Tents in the top banner (Script and Treatment): beside Sign out; on phones the page name makes room for them */
+#banner .liveFaces{ display:inline-flex; align-items:center; }
+#banner #liveWrap{ display:flex; align-items:center; gap:8px; }
+#banner #liveWrap:empty{ display:none; }
+@media (max-width:760px){
+  #banner .liveFace.tent{ width:28px; height:32px; }
+  #banner .liveFace.tent svg{ width:24px; height:27px; }
+  #banner:has(.liveFaces) .area{ display:none; }
+  #banner .livePill:not(.off){ display:none; }
+}
