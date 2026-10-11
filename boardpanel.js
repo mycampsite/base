@@ -52,6 +52,7 @@ const css = `
 .bdGH{ width:100%; display:flex; align-items:center; gap:10px; padding:6px 2px; background:none; border:0; border-bottom:1px solid var(--uiBorder); color:var(--uiText); cursor:pointer; text-align:left; }
 .bdGHRow{ display:flex; align-items:stretch; gap:6px; }
 .bdGHRow .bdGH{ flex:1; min-width:0; }
+.bdPlanHint{ margin-top:12px; font-size:12px; color:var(--uiMuted); }
 .bdType{ align-self:center; height:26px; max-width:150px; border-radius:7px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); font-size:12px; padding:0 6px; }
 .bdMv{ display:flex; gap:2px; align-items:center; border-bottom:1px solid var(--uiBorder); }
 .bdMv button{ width:26px; height:26px; border-radius:7px; border:1px solid transparent; background:none; color:var(--uiMuted); font-size:14px; cursor:pointer; padding:0; }
@@ -256,7 +257,7 @@ function render(pid){
   if(!p){ box.innerHTML = ""; return; }
   const ids = hub.scriptIds(p);
   if(!ids.length){
-    box.innerHTML = `<div class="bdBody"><div class="emptyBox bdEmpty"><b>No script in this project yet</b><p>Add a script first. The Board shows the casting and location options kept in its production sheet.</p></div></div>`;
+    box.innerHTML = `<div class="bdBody"><div class="emptyBox bdEmpty"><b>No script in this project yet</b><p>Add a script to this project first.</p></div></div>`;
     S.fileId = ""; return;
   }
   const want = S.script[pid], planId = p.production && p.production.scriptId;
@@ -319,7 +320,7 @@ function drawBody(p){
   const tabMissing = S.tab === "cast" ? d.hasCast === false : d.hasLocations === false;
   if(tabMissing){ box.innerHTML = `<div class="emptyBox bdEmpty"><b>This sheet has no ${S.tab === "cast" ? "Casting" : "Locations"} Shortlist tab</b><p>Update the production docs (Create ▸ Crew, casting and locations) to add it.</p></div>`; return; }
   const status = S.status[S.tab], vis = L.filterGroups(groups, status, S.q);
-  if(!groups.length){ box.innerHTML = `<div class="emptyBox bdEmpty"><b>${S.tab === "cast" ? "No speaking characters found in the script" : "No locations found in the script"}</b><p>They appear here as soon as the script has them and the production docs are updated.</p></div>`; return; }
+  if(!groups.length){ box.innerHTML = `<div class="emptyBox bdEmpty"><b>${S.tab === "cast" ? "No speaking characters found in the script" : "No locations found in the script"}</b><p>They show up once the production docs are updated.</p></div>`; return; }
   if(!vis.length){ box.innerHTML = `<div class="emptyBox bdEmpty"><b>Nothing matches</b><p>${S.q ? "No names or notes match “" + esc(S.q) + "”." : "No options have that status."}</p><button class="btn" type="button" data-ba="clear">Clear filters</button></div>`; return; }
   const noun = S.tab === "cast" ? "actor" : "place";
   const can = canWrite(p), max = d.maxOptions || 12;
@@ -345,7 +346,8 @@ function drawBody(p){
     const list = PP.CAST_TYPES.indexOf(shown) >= 0 || !shown ? PP.CAST_TYPES : [shown].concat(PP.CAST_TYPES);
     return `<select class="bdType" data-ctype="${esc(g.name)}" aria-label="Type for ${esc(g.name)}" title="Cast type (follows through the plan, budget and Sheets)">${shown ? "" : `<option value="" selected>Type…</option>`}${list.map((t) => `<option value="${esc(t)}"${t === shown ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
   };
-  box.innerHTML = favHtml + vis.map((g) => {
+  const planHint = S.tab === "cast" && can && !ctypes && PP ? `<div class="bdPlanHint">Start the shoot plan (Production › Plan) to set cast types here.</div>` : "";
+  box.innerHTML = planHint + favHtml + vis.map((g) => {
     const key = S.tab + "|" + g.name, shut = !!S.closed[key];
     const done = g.cards.find((c) => c.done);
     const sum = done ? `<span class="bdGS done">✓ ${esc(done.title)}</span>` : `<span class="bdGS">${g.cards.length ? g.cards.length + " option" + (g.cards.length === 1 ? "" : "s") : "no options yet"}</span>`;
@@ -511,7 +513,7 @@ async function quickStatus(c, status){
   if(status === c.raw.status) return;
   try{
     const res = await post({ kind: c.kind, op: "set", rowKey: c.key, fields: { status }, base: { status: c.raw.status } });
-    if(res.conflict){ H().toast("The status was changed in the Sheet meanwhile. Showing the Sheet's version.", "err"); setData((d) => L.withCandidate(d, c.kind, res.candidate)); }
+    if(res.conflict){ H().toast("Changed in the Sheet meanwhile: showing that version.", "err"); setData((d) => L.withCandidate(d, c.kind, res.candidate)); }
     else setData((d) => L.withCandidate(d, c.kind, res.candidate));
   }catch(err){ H().toast("Couldn't save: " + ((err && err.message) || err), "err"); if(err && err.gone) afterSheetMoved(); }
   if(S.pid) render(S.pid);
@@ -601,7 +603,7 @@ async function makeDisplayPhoto(c, url){
   const list = L.makeDisplay(c.photos, url), pf = L.photoFields(list);
   try{
     const res = await post({ kind: c.kind, op: "set", rowKey: c.key, fields: { photo: pf.photo, photos: pf.photos }, base: { photo: c.raw.photo, photos: L.photoFields(c.photos).photos.join("\n") } });
-    if(res.conflict) H().toast("The photos changed in the Sheet meanwhile. Showing the Sheet's version.", "err");
+    if(res.conflict) H().toast("Changed in the Sheet meanwhile: showing that version.", "err");
     setData((d) => L.withCandidate(d, c.kind, res.candidate));
   }catch(err){ H().toast("Couldn't save: " + ((err && err.message) || err), "err"); }
   if(S.pid) render(S.pid);
@@ -907,7 +909,7 @@ function wire(box, pid, p){
     const ct = e.target.dataset && e.target.dataset.ctype;
     if(ct != null && e.target.value && window.CampProdPanel){
       window.CampProdPanel.setCastType(pid, ct, e.target.value);
-      H().toast(ct + " is now " + e.target.value + ". The Sheets follow on the next Sync.", "ok", 2400);
+      H().toast(ct + ": " + e.target.value, "ok", 1600);
       drawBody(p);
     }
   };

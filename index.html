@@ -1059,7 +1059,7 @@ function renderList(p) {
   }).join("");
   const sh0 = sheetsByProject[current.pid];
   const nudge = (tab === "scripts" && owner && sh0 && sh0.state === "ok" && !sh0.list.length)
-    ? `<div class="emptyBox" style="margin-top:14px;align-items:flex-start;text-align:left"><b>Set up the rest of this project</b><p>Create a budget, schedule, shot list and crew docs from your script. The Storyboard and Treatment tabs set up theirs.</p><button class="btn" type="button" data-act="create">Create production docs…</button></div>` : "";
+    ? `<div class="emptyBox" style="margin-top:14px;align-items:flex-start;text-align:left"><b>Set up the rest of this project</b><p>Budget, schedule, shot list and crew docs, built from your script.</p><button class="btn" type="button" data-act="create">Create production docs…</button></div>` : "";
   pane.innerHTML = head + note + rows + nudge;
   wireList(pane);
 }
@@ -1317,7 +1317,7 @@ $("newProject").onclick = e => run(e.currentTarget, async () => {
   pendingProject = r.pid; current.tab = "scripts";
   document.body.classList.remove("sideOpen");
   if (blank) {
-    try { await createBlankScript(r.pid, name); toast("Project created with a blank script. Its storyboard and treatment are ready too.", "ok"); }
+    try { await createBlankScript(r.pid, name); toast("Project created.", "ok"); }
     catch (err) { toast("Project created, but the blank script wasn't: " + err.message); }
   } else if (v.fileId) {
     // ⚠ Camp/sync: linking makes the script's live room members-only

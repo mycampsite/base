@@ -414,7 +414,7 @@ function draw(pid){
     ${badOrder ? `<span class="ctlChip warn" title="A pinned date is on or before the day ahead of it">⚠ Days out of date order</span>` : ""}
     ${sc.state === "loading" ? `<span class="ctlChip">Updating from script…</span>` : ""}
     ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}
-    ${P.callsheetsStale(raw) ? `<span class="ctlChip warn" title="Flags, locations, cast types or days changed since the Sheets were last built. The budget, schedule and call sheets catch up on the next Sync.">⟳ Sheets behind the plan${hub.isOwner(p) ? ": Sync" : " (owner Syncs)"}</span>` : ""}`;
+    ${P.callsheetsStale(raw) ? `<span class="ctlChip warn" title="The plan changed since the last Sync">⟳ Sheets behind the plan${hub.isOwner(p) ? ": Sync" : " (owner Syncs)"}</span>` : ""}`;
   const hh = HIST[pid] || { undo: [], redo: [] };
   const acts = `<div class="ctlActs">
       ${canEdit ? `<span class="ctlUR"><button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
@@ -441,7 +441,7 @@ function draw(pid){
     </div></details>`;
 
   const hasDocs = hub.hasSheets(pid);
-  const docsNudge = hasDocs === false ? `<div class="ctlDocs">No budget or schedule sheets yet.${hub.isOwner(p) ? ` <button class="btn sm" type="button" data-a="create">Create production docs…</button>` : " The owner can create them."}</div>` : "";
+  const docsNudge = hasDocs === false ? `<div class="ctlDocs">No production docs yet.${hub.isOwner(p) ? ` <button class="btn sm" type="button" data-a="create">Create production docs…</button>` : " The owner can create them."}</div>` : "";
   const n = S.notice[pid];
   const sceneName = (id) => { const s = byId[id]; return s ? "Sc " + s.n : "a deleted scene"; };
   const notice = n ? `<div class="ctlNote"><div><b>The script changed</b><ul>
@@ -528,7 +528,7 @@ function flagsView(pl, bd, canEdit){
   const sid = (n) => { const s = bd.scenes[n - 1]; return s ? (s.id || "n" + n) : ""; };
   const nIgn = list.filter((f) => glob[f.id] === "ignore").length, nWatch = list.filter((f) => glob[f.id] === "watch").length;
   return `<details class="dood fx" data-sec="flags"${lsGet(FLAGS_KEY) === "1" ? " open" : ""}><summary>Script flags · ${list.length}${nWatch ? " · " + nWatch + " watching" : ""}${nIgn ? " · " + nIgn + " ignored" : ""}</summary>
-    <div class="fxNote">Wrong flag? Ignore it (or click a scene to ignore it there). Watch keeps it, marked to check. Docs update on the next Sync.</div>
+    <div class="fxNote">Ignore a wrong flag everywhere, or click a scene to ignore it there.</div>
     ${list.map((f) => {
       const g = glob[f.id] || "keep", all = f.scenes.concat(f.ignored || []).sort((a, b) => a - b);
       return `<div class="fxRow${g === "ignore" ? " ign" : g === "watch" ? " wat" : ""}">
@@ -545,7 +545,7 @@ function castView(pl, bd, canEdit){
   const chosen = {}; (pl.castType || []).forEach((c) => { chosen[c.name] = c.t; });
   const n = Object.keys(chosen).filter((k) => bd.cast.some((c) => c.name === k)).length;
   return `<details class="dood fx" data-sec="cast"${lsGet(CAST_KEY) === "1" ? " open" : ""}><summary>Cast · ${bd.cast.length} character${bd.cast.length === 1 ? "" : "s"}${n ? " (" + n + " set by hand)" : ""}</summary>
-    <div class="fxNote">Camp sorts characters by how much they're in the script. Change a type and the budget, schedule, casting sheet and Board follow (Sheets on the next Sync).</div>
+    <div class="fxNote">Set by how much each character is in the script. Change any type here.</div>
     ${bd.cast.map((c) => `<div class="fxRow"><div class="fxName"><b>${esc(c.name)}</b><span>${c.onCamCount || c.scenes.length} scene${(c.onCamCount || c.scenes.length) === 1 ? "" : "s"}${chosen[c.name] && c.autoType !== c.type ? " · script suggests " + esc(c.autoType) : ""}</span></div>
       <label class="fxIn">Type <select data-ctype="${esc(c.name)}"${canEdit ? "" : " disabled"}>${P.CAST_TYPES.map((t) => `<option value="${esc(t)}"${c.type === t ? " selected" : ""}>${esc(TYPE_LABEL[t] || t)}${t === c.autoType ? " (auto)" : ""}</option>`).join("")}</select></label></div>`).join("")}
   </details>`;
@@ -578,7 +578,7 @@ function locsView(pl, bd, canEdit){
       <div class="lcBtns"><button type="button" class="btn sm primary" data-a="lcok">${f.place ? "Add" : "Make place"}</button><button type="button" class="btn sm" data-a="lccancel">Cancel</button></div></div>` : "";
   const grouped = list.filter((x) => x.areas.length > 1 || x.areas[0] !== x.name).length;
   return `<details class="dood fx" data-sec="locs"${lsGet(LOCS_KEY) === "1" || inForm ? " open" : ""}><summary>Locations · ${list.length} place${list.length === 1 ? "" : "s"}${names.length !== list.length ? " (" + names.length + " in the script)" : ""}</summary>
-    <div class="fxNote">A place is one real location you shoot at. Its areas (kitchen, yard, garage…) are sets within it: one address, one location fee, moves between areas aren't company moves.
+    <div class="fxNote">Group areas (kitchen, yard…) into the one real place you shoot at.
       ${canEdit ? `<button type="button" class="btn sm" data-a="lcnew">New place…</button>` : ""}
       ${rooms.length > 1 && canEdit ? `<button type="button" class="btn sm" data-a="rooms" data-rooms="${esc(rooms.join("|"))}">Put ${rooms.length} rooms in one place…</button>` : ""}</div>
     ${form}
@@ -602,7 +602,7 @@ function csView(pid, p, raw, pl, dates, scriptId){
   const errBox = err ? `<div class="csErr"><b>${auth ? "Google hasn't allowed Camp to make Docs yet" : "The call sheets didn't build"}</b>
       ${auth ? `<ol><li>Open your Camp script in Apps Script (script.google.com).</li><li>Pick <code>authorizeCallSheets</code> in the function list and press Run. Allow the permissions Google asks for.</li><li>Deploy › Manage deployments › edit › New version › Deploy.</li><li>Come back and press <b>Make call sheets</b>.</li></ol>` : `<div>${esc(err)}</div>`}</div>` : "";
   if(S.busy[pid]) return `<div class="ctlLoad"><span class="spin"></span><b>${S.busy[pid] === "sync" ? "Syncing to Sheets…" : "Making call sheets…"}</b><span>One Google Doc per shoot day. This can take a minute.</span></div>`;
-  if(!raw) return `<div class="csWrap"><h3>No shoot plan yet</h3><p>Call sheets follow the plan. Start it on the Plan tab first.</p></div>`;
+  if(!raw) return `<div class="csWrap"><h3>No shoot plan yet</h3><p>Start the plan on the Plan tab first.</p></div>`;
   const list = days.length ? `<div class="csList">${days.map((d) => { const i = Number(d.day) - 1; return `<a class="csDay${stale ? " stale" : ""}" href="${esc(d.url)}" target="_blank" rel="noopener"><b>Day ${esc(d.day)} ↗</b><span>${esc(fmtDate(dates[i]) || "")}${pl.days[i] ? " · " + pl.days[i].scenes.length + " scene" + (pl.days[i].scenes.length === 1 ? "" : "s") : ""}</span></a>`; }).join("")}</div>` : "";
   return `<div class="csWrap">
     <p>One Google Doc per shoot day. ${days.length ? `Last made ${esc(when)}.` : ""}${stale ? " <b style=\"color:#f1c76b\">The plan changed since then.</b>" : ""}</p>
@@ -636,7 +636,7 @@ function wire(box, pid, ctx){
       if(k === "fx" && canEdit){
         const id = a.dataset.f, v = a.dataset.v;
         update((plan) => { plan.flagStatus = (plan.flagStatus || []).filter((x) => x.scene || x.id !== id); if(v !== "keep") plan.flagStatus.push({ id, scene: "", s: v }); if(v === "keep") plan.flagStatus = plan.flagStatus.filter((x) => x.id !== id); });
-        H().toast(v === "ignore" ? "Flag ignored. It drops out of the docs on the next Sync." : v === "watch" ? "Flag kept and marked to watch." : "Flag kept.", "ok", 2200); return;
+        H().toast(v === "ignore" ? "Flag ignored." : v === "watch" ? "Watching this flag." : "Flag kept.", "ok", 1600); return;
       }
       if(k === "fxsc" && canEdit){
         const id = a.dataset.f, sc = a.dataset.s, on = a.dataset.on === "1";
@@ -739,7 +739,7 @@ function wire(box, pid, ctx){
     if(t.dataset.ctype != null){
       const c = (ctx.bd && ctx.bd.cast || []).find((x) => x.name === t.dataset.ctype);
       setCastType(pid, t.dataset.ctype, t.value, c && c.autoType);
-      H().toast(t.dataset.ctype + " is now " + t.value + ". Sheets follow on the next Sync.", "ok", 2200);
+      H().toast(t.dataset.ctype + ": " + t.value, "ok", 1600);
       return;
     }
     if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }
