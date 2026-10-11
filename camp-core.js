@@ -84,7 +84,9 @@
     let key = getCloudKey();
     for(let tries = 0; tries < 2; tries++){
       const qs = new URLSearchParams(Object.assign({ action, key }, params || {}));
-      const j = await fetchJson_(ep + "?" + qs.toString());
+      let j = await fetchJson_(ep + "?" + qs.toString());
+      // A read can be repeated safely: when Drive is slow to answer (or answers with an error page) try once more, with longer to wait
+      if(j && (j.network || j.transient) && navigator.onLine !== false){ await new Promise((r) => setTimeout(r, 1500)); j = await fetchJson_(ep + "?" + qs.toString(), null, 50000); }
       if(j && j.auth === false){ await askPassword(tries > 0); key = getCloudKey(); continue; }
       return j;
     }
