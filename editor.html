@@ -14368,7 +14368,7 @@ ${TP.join("\n")}
     const n = present.length;
     pill.className = "counterPill livePill"; pill.onclick = null;
     pill.innerHTML = `<span class="liveDot"></span><span class="n">Live${n > 1 ? " · " + n : ""}</span>`;
-    const names = present.map(k => (__LIVE.presence[k] && __LIVE.presence[k].n) || "Someone");
+    const __pc = __lcColors(), names = present.map(k => __lcName(k, __pc));
     pill.title = n > 1 ? "Editing together: " + names.join(", ") : "Live: changes appear for your team straight away";
     try{ __lcFaces(pill); __lcRender(); }catch(_e){}
   }
@@ -14384,6 +14384,7 @@ ${TP.join("\n")}
     for(const id of ids){ let k = __lcHash(id) % __LC_COLORS.length; for(let i = 0; i < __LC_COLORS.length && used.has(k); i++) k = (k + 1) % __LC_COLORS.length; used.add(k); out[id] = __LC_COLORS[k]; }
     return out;
   }
+  const __lcName = (k, cols) => { const n = __LIVE.presence[k] && __LIVE.presence[k].n; return window.CampTent ? window.CampTent.label(n, (cols || __lcColors())[k]) : (n || "Someone"); };
   const __lcInitials = (n) => { const p = String(n || "?").trim().split(/\s+/); return ((p[0] || "?")[0] + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase(); };
   const __lcText = (el) => { let n = 0; const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null); while(w.nextNode()) n += w.currentNode.nodeValue.length; return n; };
   // A caret spot as { l: paragraph id, o: character offset, pt: dual-dialogue side }, ignoring page-break splits
@@ -14440,7 +14441,7 @@ ${TP.join("\n")}
       if(uid === __LIVE.uid || !present.has(uid)) continue;
       const c = __LC.data[uid]; if(!c) continue;
       const col = colors[uid] || __LC_COLORS[0];
-      const name = (__LIVE.presence[uid] && __LIVE.presence[uid].n) || "Someone";
+      const name = __lcName(uid, colors);
       let A = null, F = null;
       try{ A = __lcResolve({ l: c.l, o: c.o, pt: c.pt }); F = (c.fl === c.l && c.fo === c.o && c.fpt === c.pt) ? A : __lcResolve({ l: c.fl, o: c.fo, pt: c.fpt }); }catch(_e){}
       if(!F) continue;
@@ -14478,8 +14479,8 @@ ${TP.join("\n")}
     const colors = __lcColors();
     const esc = (t) => String(t).replace(/[&<>"]/g, (m) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[m]);
     const shown = others.slice(0, 4);
-    box.innerHTML = shown.map(k => { const n = (__LIVE.presence[k] && __LIVE.presence[k].n) || "Someone"; const col = colors[k] || "#7d8f4e"; return `<button type="button" class="liveFace tent" data-uid="${k}" data-name="${esc(n)}" aria-label="${esc(n)}: click to jump to where they are" style="--tc:${col}">${window.CampTent ? window.CampTent.svg(col) : esc(__lcInitials(n))}</button>`; }).join("") +
-      (others.length > shown.length ? `<span class="liveFace more" title="${esc(others.slice(4).map(k => (__LIVE.presence[k] && __LIVE.presence[k].n) || "Someone").join(", "))}">+${others.length - shown.length}</span>` : "");
+    box.innerHTML = shown.map(k => { const n = __lcName(k, colors); const col = colors[k] || "#7d8f4e"; return `<button type="button" class="liveFace tent" data-uid="${k}" data-name="${esc(n)}" aria-label="${esc(n)}: click to jump to where they are" style="--tc:${col}">${window.CampTent ? window.CampTent.svg(col) : esc(__lcInitials(n))}</button>`; }).join("") +
+      (others.length > shown.length ? `<span class="liveFace more" title="${esc(others.slice(4).map(k => __lcName(k, colors)).join(", "))}">+${others.length - shown.length}</span>` : "");
     box.onclick = (e) => {
       const b = e.target.closest(".liveFace[data-uid]"); if(!b) return;
       const uid = b.dataset.uid, c = __LC.data[uid];

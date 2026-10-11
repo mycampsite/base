@@ -48,6 +48,14 @@
   // The little hand-drawn tent that stands for each person working live (Treatment, Script editor). Each person gets a colour.
   window.CampTent = {
     colors: ["#7d8f4e", "#d4932a", "#5a86b8", "#84707c", "#c9633d", "#3f9a8c", "#9a5c8f", "#a98a5a"],
+    names: ["Olive", "Amber", "Blue", "Mauve", "Terracotta", "Teal", "Plum", "Sand"],
+    // Someone with no name shows as their tent's colour ("Amber") instead of "Someone"
+    label: function (name, color) {
+      var n = String(name == null ? "" : name).trim();
+      if (n && n.toLowerCase() !== "someone") return n;
+      var i = this.colors.indexOf(String(color || "").toLowerCase());
+      return this.names[i >= 0 ? i : 0];
+    },
     svg: function (color) {
       var c = /^#[0-9a-f]{6}$/i.test(color || "") ? color : "#7d8f4e";
       return '<svg viewBox="0 0 40 44" aria-hidden="true" focusable="false"><circle cx="20" cy="5" r="3.1" fill="' + c + '"/>' +

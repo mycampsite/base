@@ -4559,6 +4559,7 @@
     ids.forEach((id) => { let k = lcHash(id) % LV_COLORS.length; for(let i = 0; i < LV_COLORS.length && used.has(k); i++) k = (k + 1) % LV_COLORS.length; used.add(k); out[id] = LV_COLORS[k]; });
     return out;
   }
+  const peerName = (k, cols) => { const n = (LV.presence[k] || {}).n; return window.CampTent ? window.CampTent.label(n, (cols || liveColors())[k]) : (n || "Someone"); };
   const alivePeers = () => { const now = Date.now() + LV.offset; return Object.keys(LV.presence).filter((k) => k !== LV.uid && LV.presence[k] && (now - Number(LV.presence[k].h || 0)) < 80000); };
   const initials = (n) => { const p = String(n || "?").trim().split(/\s+/); return ((p[0] || "?")[0] + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase(); };
   function electLeader(){
@@ -4583,8 +4584,8 @@
       return;
     }
     const others = alivePeers(), cols = liveColors();
-    const faces = others.slice(0, 4).map((k) => { const n = (LV.presence[k] || {}).n || "Someone"; const col = cols[k] || "#7d8f4e"; return `<button type="button" class="liveFace tent" data-uid="${esc(k)}" data-name="${esc(n)}" aria-label="${esc(n)}: click to jump to their page" style="--tc:${col}">${window.CampTent ? window.CampTent.svg(col) : esc(initials(n))}</button>`; }).join("");
-    const names = others.map((k) => (LV.presence[k] || {}).n || "Someone");
+    const faces = others.slice(0, 4).map((k) => { const n = peerName(k, cols); const col = cols[k] || "#7d8f4e"; return `<button type="button" class="liveFace tent" data-uid="${esc(k)}" data-name="${esc(n)}" aria-label="${esc(n)}: click to jump to their page" style="--tc:${col}">${window.CampTent ? window.CampTent.svg(col) : esc(initials(n))}</button>`; }).join("");
+    const names = others.map((k) => peerName(k, cols));
     w.innerHTML = `<span class="liveFaces">${faces}${others.length > 4 ? `<span class="liveFace more">+${others.length - 4}</span>` : ""}</span><span class="livePill" title="${esc(others.length ? "Editing together: " + names.join(", ") : "Live: changes appear for your team straight away")}"><span class="liveDot"></span>${others.length ? "Live · " + (others.length + 1) : "Live"}</span>`;
     w.querySelectorAll(".liveFace[data-uid]").forEach((b) => {
       b.onclick = () => { const p = LV.presence[b.dataset.uid], i = p ? T.pages.findIndex((x) => x.id === p.pg) : -1; if(i >= 0) gotoPage(i); else notify("They haven't opened a page yet."); };
@@ -4593,7 +4594,7 @@
   function updateNavDots(){
     const cols = liveColors(), peers = LV.on ? alivePeers() : [];
     document.querySelectorAll("#leftRail .navDots").forEach((n) => {
-      n.innerHTML = peers.filter((k) => (LV.presence[k] || {}).pg === n.dataset.pid).map((k) => `<i style="background:${cols[k] || "#666"}" title="${esc((LV.presence[k] || {}).n || "Someone")}"></i>`).join("");
+      n.innerHTML = peers.filter((k) => (LV.presence[k] || {}).pg === n.dataset.pid).map((k) => `<i style="background:${cols[k] || "#666"}" title="${esc(peerName(k, cols))}"></i>`).join("");
     });
   }
   function drawRemote(){
@@ -4606,7 +4607,7 @@
       const el = findEl(p.sel); if(!el) return;
       const c = cols[uid] || "#888", d = document.createElement("div"); d.className = "rsel";
       d.style.cssText = `left:${el.x * k}px;top:${el.y * k}px;width:${el.w * k}px;height:${el.h * k}px;border-color:${c};`;
-      d.innerHTML = `<span style="background:${c}">${esc(p.n || "Someone")}</span>`;
+      d.innerHTML = `<span style="background:${c}">${esc(peerName(uid, cols))}</span>`;
       stage.appendChild(d);
     });
   }
