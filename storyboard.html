@@ -254,7 +254,11 @@
   #b3dWrap .lockNote{ margin:0 0 6px; color:#e0a0a0; }
   .card.dropBefore{ box-shadow:inset 4px 0 0 var(--accent); }
   .card.dropAfter{ box-shadow:inset -4px 0 0 var(--accent); }
-  .prevShots{ display:flex; flex-direction:column; gap:8px; }
+  .prevShots, .seq{ display:flex; flex-direction:column; gap:4px; }
+  .seqArrow{ text-align:center; color:var(--muted); font-size:12px; line-height:1; }
+  .seqCur{ border:1.5px solid var(--accent); border-radius:6px; padding:7px 9px; font-size:12px; color:#f2f0ec; background:var(--panel3); }
+  .seqCur b{ font-weight:600; color:var(--muted); margin-right:4px; }
+  .seqEnd{ border:1px dashed var(--border); border-radius:6px; padding:9px; font-size:11.5px; color:var(--muted); text-align:center; }
   .prevShot{ display:block; width:100%; padding:0; border:1px solid var(--border); border-radius:6px; background:var(--paper); overflow:hidden; cursor:pointer; position:relative; }
   .prevShot:hover{ border-color:#6a6a62; }
   .prevShot canvas{ width:100%; display:block; }
@@ -479,6 +483,7 @@
 <div id="sbToast" role="status" aria-live="polite"><span id="sbToastMsg"></span></div>
 
 <script src="camp-core.js"></script>
+<script src="breakdown.js"></script>
 <script>
 /* ================= 3D blocking engine (SB3D) =================
    Draws a sketch-style 3D set, figures and camera underneath a shot's drawing. three.js is only
@@ -565,6 +570,8 @@ const NC=CAST.length;
 // Characters from the Shot List, in order of first appearance; each keeps the same colour on every shot.
 let CASTLIST=[];
 function setCast(names){const seen={};CASTLIST=[];(names||[]).forEach(n=>{const k=String(n).trim().toLowerCase();if(k&&!seen[k]&&!/^extras?(\s+\d+)?$/.test(k)){seen[k]=1;CASTLIST.push({n:String(n).trim(),col:CAST[CASTLIST.length%NC][1]})}})}
+// Characters the script marks as under 18 get a shorter figure by default (age known: roughly to scale).
+function kidH(n){const m=window.SB_MINORS||{},k=String(n||'').trim().toLowerCase();if(!Object.prototype.hasOwnProperty.call(m,k))return 1;const a=m[k];return a!=null?clamp((75+6*a)/174,0.55,0.95):0.72}
 function castOf(n){const k=String(n||'').toLowerCase();return CASTLIST.find(c=>c.n.toLowerCase()===k)||null}
 function mkF(i,d){const f={n:CAST[i%NC][0],col:CAST[i%NC][1],x:d[0],z:d[1],yaw:d[2],h:1,hd:0,hp:0,look:-1,build:'n'};Object.assign(f,cl(STN[d[3]]));if(d[4])Object.assign(f,d[4]);return f}
 function normFig(f,i){return Object.assign({n:CAST[i%NC][0],col:CAST[i%NC][1],x:0,z:0,yaw:0,h:1,hd:0,hp:0,look:-1,build:'n'},cl(STN.Stand),f)}
@@ -839,7 +846,7 @@ function load(d,name){objs=d.o;figs=d.f.map((x,i)=>mkF(i,x));ct=cl(d.c);sel=0;so
 function scanIds(){let mx=uid-1;objs.forEach(o=>{if(o.id>mx)mx=o.id});uid=mx+1}
 function newState(name,names){const d=TPL[name||'Empty']();let f;
  const who=(names||[]).map(castOf).filter(Boolean).slice(0,8);
- if(who.length){const n=who.length;f=who.map((c,i)=>{const pose=IDLE[(i*3)%IDLE.length],x=(i-(n-1)/2)*1.1,z=(i%2)*-0.35;const g=mkF(i,[x,z,clamp(-x*12,-25,25),pose]);g.n=c.n;g.col=c.col;g._pose=pose;return g})}
+ if(who.length){const n=who.length;f=who.map((c,i)=>{const pose=IDLE[(i*3)%IDLE.length],x=(i-(n-1)/2)*1.1,z=(i%2)*-0.35;const g=mkF(i,[x,z,clamp(-x*12,-25,25),pose]);g.n=c.n;g.col=c.col;g.h=kidH(c.n);g._pose=pose;return g})}
  else f=d.f.map((x,i)=>mkF(i,x));
  return {v:1,tn:name||'Empty',objs:d.o,figs:f,cam:cl(d.c),opts:Object.assign({},OPT0)}}
 // Next figure identity: a cast member not in the shot yet, otherwise an unused palette colour.
@@ -1003,7 +1010,7 @@ function syncCam(){if(!pn||mode!=='cam'||sliding)return;const set=(k,v,t)=>{cons
  const mm=mmOf(ct.fov),d=dist(ct);set('mm',mmToV(mm),Math.round(mm)+'mm');set('cy',ct.p[1],ct.p[1].toFixed(2)+' m');set('dol',d,d.toFixed(1)+' m');set('roll',Math.round(ct.roll),Math.round(ct.roll)+'°')}
 function addFig(want){const id=nextIdentity(want),ix=0,x=ct.t[0]+(Math.random()-0.5)*0.6,z=ct.t[2]+(Math.random()-0.5)*0.6;
  const taken=figs.map(g=>g._pose),pool=IDLE.filter(p=>!taken.includes(p)),pose=(pool.length?pool:IDLE)[Math.floor(Math.random()*(pool.length||IDLE.length))];
- const f=mkF(ix,[x,z,Math.atan2(ct.p[0]-x,ct.p[2]-z)/R,pose]);f._pose=pose;f.n=id[0];f.col=id[1];f.tw+=Math.round((Math.random()-0.5)*12);f.hd+=Math.round((Math.random()-0.5)*30);figs.push(f);sel=figs.length-1}
+ const f=mkF(ix,[x,z,Math.atan2(ct.p[0]-x,ct.p[2]-z)/R,pose]);f._pose=pose;f.n=id[0];f.col=id[1];f.h=kidH(f.n);f.tw+=Math.round((Math.random()-0.5)*12);f.hd+=Math.round((Math.random()-0.5)*30);figs.push(f);sel=figs.length-1}
 function removeFig(i){figs.splice(i,1);figs.forEach(g=>{if(g.look===i)g.look=-1;else if(g.look>i)g.look--});if(OPT.focus===i)OPT.focus=-1;else if(OPT.focus>i)OPT.focus--;sel=clamp(sel,0,Math.max(0,figs.length-1))}
 let CLIP=null;
 function copySel(){if(mode==='set'&&so!==-1){const o=objs.find(x=>x.id===so);if(o){CLIP={t:'obj',v:cl(o)};panel();return true}}
@@ -1058,7 +1065,7 @@ function onPanelInput(e){const el=e.target,k=el.dataset.k;if(el.dataset.fc&&figs
 function onPanelChange(e){const el=e.target;if(el.dataset.sel){if(el.value!=='')act({[el.dataset.sel]:el.value});return}if(el.dataset.k&&['mm','cy','dol','roll'].includes(el.dataset.k)){camEnd();return}
  if(el.dataset.fc){return}
  if(el.dataset.o){pushUndo();OPT[el.dataset.o]=el.checked;if(el.dataset.o==='lock')panel();kick();return}
- if(el.dataset.n&&figs[sel]){const v=el.value.trim().slice(0,24);if(v&&v!==figs[sel].n){pushUndo();const c=castOf(v);figs[sel].n=c?c.n:v;if(c)figs[sel].col=c.col}panel();kick()}}
+ if(el.dataset.n&&figs[sel]){const v=el.value.trim().slice(0,24);if(v&&v!==figs[sel].n){pushUndo();const c=castOf(v);figs[sel].n=c?c.n:v;if(c)figs[sel].col=c.col;if(figs[sel].h===1)figs[sel].h=kidH(figs[sel].n)}panel();kick()}}
 
 /* ---------- loop: draws only when something changed ---------- */
 let dirty=true,raf=0,last=0;
@@ -1307,6 +1314,7 @@ window.SB3D={
     // away; the drawings come live from the shared board as usual. Drive is checked in the background.
     const cached = sbCacheGet(S.fileId);
     sbLoadStep("Loading the panels…", 40, 90);
+    try{ window.SB_MINORS = JSON.parse(localStorage.getItem("Camp_SB_MINORS_" + S.fileId) || "{}") || {}; }catch(_e){ window.SB_MINORS = {}; }
     if(cached){
       S.title = cached.title || "Untitled Script"; S.roomKey = cached.room || ""; S.prevRooms = cached.prev || [];
     }else{
@@ -1314,6 +1322,7 @@ window.SB3D={
       if(!loadRes || loadRes.ok === false){ showFatal((loadRes && loadRes.error) || "Couldn't open that script."); return; }
       S.fileId = loadRes.fileId || S.fileId;
       Object.assign(S, sbMetaOf(loadRes));
+      adoptMinors(loadRes);
       const chip = document.getElementById("userChip"); chip.textContent = (loadRes.me && (loadRes.me.email || loadRes.me.name)) || ""; chip.title = chip.textContent;
     }
     document.getElementById("pageTitle").textContent = S.title + " — Storyboard";
@@ -1398,6 +1407,16 @@ window.SB3D={
 
   /* ---------------- Instant open (this device's last copy of the board) ---------------- */
   const SB_CACHE = "Camp_SB_CACHE_V1:";
+  // Under-18 characters from the script breakdown (same engine as Production), cached per script.
+  function adoptMinors(res){
+    try{
+      if(!res || res.ok === false || !res.doc || !window.CampBreakdown) return;
+      const m = {};
+      (window.CampBreakdown.analyze(res.doc).cast || []).forEach((c) => { if(c.minor && c.name) m[String(c.name).trim().toLowerCase()] = c.age != null ? Number(c.age) : null; });
+      window.SB_MINORS = m;
+      try{ localStorage.setItem("Camp_SB_MINORS_" + S.fileId, JSON.stringify(m)); }catch(_e){}
+    }catch(_e){}
+  }
   function sbCacheGet(fileId){
     if(!fileId) return null;
     try{ const v = JSON.parse(localStorage.getItem(SB_CACHE + fileId) || "null"); return v && v.sl && Array.isArray(v.sl.shots) && Array.isArray(v.sl.scenes) ? v : null; }catch(_e){ return null; }
@@ -1443,6 +1462,7 @@ window.SB3D={
   async function sbConfirm(loadP, slP, cached){
     let res = null;
     try{ res = await loadP; }catch(_e){ res = null; }
+    adoptMinors(res);
     const transient = (x) => !x || (x.ok === false && (x.network || x.transient));   // connection trouble, not a real answer
     if(transient(res)){
       // Drive unreachable: still take a fresh shot list if that request got through
@@ -2980,7 +3000,7 @@ window.SB3D={
   async function refreshShotlist(force){
     if(__slBusy || __sbHeld || document.hidden || !S.fileId) return;
     if(!force && Date.now() - __slLast < 5000) return;
-    if(__dragShot || document.querySelector(".modalShade")) return;
+    if(__dragShot || __relabelRuns || document.querySelector(".modalShade")) return;
     __slBusy = true; __slLast = Date.now();
     try{
       const sl = await apiGet("shotlistdata", { fileId: S.fileId });
@@ -2996,7 +3016,7 @@ window.SB3D={
       const now = Date.now();
       Object.keys(__pendingEdits).forEach((k) => {
         const pe = __pendingEdits[k];
-        if(now - pe.t > 15000){ delete __pendingEdits[k]; return; }
+        if(!pe.hold && now - pe.t > 15000){ delete __pendingEdits[k]; return; }
         const [key, field] = [k.slice(0, k.lastIndexOf("|")), k.slice(k.lastIndexOf("|") + 1)];
         const sh = sl.shots.find((x) => x.key === key); if(sh) sh[field] = pe.v;
       });
@@ -3052,12 +3072,13 @@ window.SB3D={
     saveShotField(sh, "shot", v, true);
     updateShotNav();
   }
-  let __relabelBusy = Promise.resolve();
+  let __relabelBusy = Promise.resolve(), __relabelRuns = 0;
   function relabelScene(sceneN, shots){
     const changes = shots.map((sh, i) => [sh, String(sceneN) + shotLetters(i)]).filter(([sh, want]) => sh.shot !== want);
     if(!changes.length) return;
     // Rename on screen straight away, then write each change to the Sheet in order.
-    changes.forEach(([sh, want]) => { sh._prevShot = sh.shot; sh.shot = want; __pendingEdits[sh.key + "|shot"] = { v: want, t: Date.now() }; });
+    changes.forEach(([sh, want]) => { sh._prevShot = sh.shot; sh.shot = want; __pendingEdits[sh.key + "|shot"] = { v: want, t: Date.now(), hold: true }; });
+    __relabelRuns++;
     setStatus("Renaming shots…");
     __relabelBusy = __relabelBusy.then(async () => {
       let failed = 0, err = "";
@@ -3065,12 +3086,15 @@ window.SB3D={
         try{
           const res = await apiPost("sb_editshot", { fileId: S.fileId, shotKey: sh.key, field: "shot", value: want });
           if(!res || res.ok === false) throw new Error((res && res.error) || "unknown error");
+          const pe = __pendingEdits[sh.key + "|shot"]; if(pe && pe.v === want){ pe.hold = false; pe.t = Date.now(); }
         }catch(e){ failed++; err = e.message || String(e); sh.shot = sh._prevShot; delete __pendingEdits[sh.key + "|shot"]; }
         delete sh._prevShot;
       }
+      __relabelRuns--;
       if(failed){ notify("Couldn't rename " + failed + " shot" + (failed === 1 ? "" : "s") + " in the Shot List: " + err, true); if(S.view === "overview") renderOverview(); setStatus(""); }
       else setStatus("Shots renamed · " + new Date().toLocaleTimeString());
     });
+    if(S.view === "overview") renderOverview();
   }
 
 
@@ -3082,36 +3106,44 @@ window.SB3D={
     const out = []; for(let j = i - 1; j >= 0 && out.length < n; j--) out.push(all[j].key);
     return out;
   }
+  // Sequence strip: previous → this shot → next, read top to bottom like the cut.
   function renderPrevShots(shotKey, rail){
-    const keys = prevShotKeys(shotKey, 2);
+    const all = boardOrder(), i = all.findIndex((x) => x.key === shotKey);
+    const prev = i > 0 ? all[i - 1] : null, cur = all[i] || null, next = i >= 0 && i < all.length - 1 ? all[i + 1] : null;
     const box = document.createElement("div");
     box.className = "divider"; box.style.marginTop = "14px";
-    box.innerHTML = `<div class="rail-label">SHOTS</div>
-      <div class="shotNav railNav">
+    box.innerHTML = `<div class="rail-label">SEQUENCE <span class="pos" id="shotPos" style="font-weight:500;letter-spacing:0;"></span></div>
+      <div class="seq"></div>
+      <div class="shotNav railNav" style="margin-top:8px;">
         <button class="btn" id="prevShotBtn" type="button" title="Previous shot (←)" aria-label="Previous shot">&lsaquo; Prev</button>
-        <span class="pos" id="shotPos"></span>
         <button class="btn" id="nextShotBtn" type="button" title="Next shot (→)" aria-label="Next shot">Next &rsaquo;</button>
       </div>
-      <div class="rail-label" style="padding-top:12px;">PREVIOUS SHOTS</div>
-      <label class="onionRow" title="Ghost the previous shot over this one (O)"><input type="checkbox" id="onionChk"${S.onion ? " checked" : ""}${keys.length ? "" : " disabled"}> Onion skin</label>
-      <div class="prevShots"></div>`;
+      <label class="onionRow" title="Ghost the previous shot over this one (O)"><input type="checkbox" id="onionChk"${S.onion ? " checked" : ""}${prev ? "" : " disabled"}> Onion skin (previous)</label>`;
     rail.appendChild(box);
     box.querySelector("#onionChk").onchange = (e) => { S.onion = e.target.checked; redrawStack(); };
     box.querySelector("#prevShotBtn").onclick = () => stepShot(-1);
     box.querySelector("#nextShotBtn").onclick = () => stepShot(1);
     setTimeout(updateShotNav, 0);
-    const list = box.querySelector(".prevShots");
-    if(!keys.length){ list.innerHTML = `<div style="font-size:11.5px;color:var(--muted);padding:2px 4px;">This is the first shot.</div>`; return; }
-    keys.forEach((k) => {
-      const sh = S.shots.find((x) => x.key === k); if(!sh) return;
+    const list = box.querySelector(".seq");
+    const thumb = (sh, tag) => {
       const b = document.createElement("button");
       b.type = "button"; b.className = "prevShot"; b.title = "Go to shot " + sh.shot;
-      if(panelHasContent(k)){ const cv = document.createElement("canvas"); cv.width = 432; cv.height = Math.round(432 / S.ratio); b.appendChild(cv); renderComposite(k, cv); }
+      if(panelHasContent(sh.key)){ const cv = document.createElement("canvas"); cv.width = 432; cv.height = Math.round(432 / S.ratio); b.appendChild(cv); renderComposite(sh.key, cv); }
       else b.insertAdjacentHTML("beforeend", `<div class="none" style="aspect-ratio:${S.ratio} / 1;">No sketch</div>`);
-      b.insertAdjacentHTML("beforeend", `<span class="lbl">${escapeHtml("Sc " + sh.scene + " · " + sh.shot)}</span>`);
-      b.onclick = () => { history.replaceState({ view: "focus", shotKey: k }, "", location.href); showFocus(k, true); };
-      list.appendChild(b);
-    });
+      const newScene = cur && String(sh.scene) !== String(cur.scene);
+      b.insertAdjacentHTML("beforeend", `<span class="lbl">${tag} · ${escapeHtml((newScene ? "Sc " + sh.scene + " · " : "") + sh.shot)}</span>`);
+      b.onclick = () => { history.replaceState({ view: "focus", shotKey: sh.key }, "", location.href); showFocus(sh.key, true); };
+      return b;
+    };
+    const arrow = () => { const a = document.createElement("div"); a.className = "seqArrow"; a.textContent = "↓"; return a; };
+    const empty = (t) => { const d = document.createElement("div"); d.className = "seqEnd"; d.textContent = t; return d; };
+    list.appendChild(prev ? thumb(prev, "&larr; Previous") : empty("Start of the board"));
+    list.appendChild(arrow());
+    const me = document.createElement("div"); me.className = "seqCur";
+    me.innerHTML = `<b>This shot</b> ${escapeHtml(cur ? cur.shot : "")}`;
+    list.appendChild(me);
+    list.appendChild(arrow());
+    list.appendChild(next ? thumb(next, "Next &rarr;") : empty("End of the board"));
   }
 
   /* ---------------- Reorder: slot a dragged shot before / after another ---------------- */
