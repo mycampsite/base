@@ -316,26 +316,26 @@
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; display:flex; align-items:center; gap:4px;
     padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); overflow-x:auto; -webkit-overflow-scrolling: touch;
     background: rgba(22,22,24,.96); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(255,255,255,.1); transition: transform .12s ease; scrollbar-width: none;
+    border-top: 1px solid rgba(255,255,255,.1); scrollbar-width: none;
+    /* No sliding animation: it trailed the keyboard and made the bar wobble. Moved straight to the keyboard each frame. */
+    transition: none; will-change: transform; touch-action: pan-x; overscroll-behavior-x: contain;
   }
   .touchBar::-webkit-scrollbar{ display:none; }
   .touchBar[hidden]{ display:none; }
   .touchBar button{
-    flex: 0 0 auto; height: 38px; min-width: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.1);
+    flex: 0 0 auto; height: 42px; min-width: 42px; padding: 0 13px; border-radius: 10px; border: 1px solid rgba(255,255,255,.1);
     background: rgba(255,255,255,.05); color: rgba(255,255,255,.88); font: 600 13.5px Inter, system-ui, sans-serif; touch-action: manipulation;
     display:inline-flex; align-items:center; justify-content:center;
   }
   .touchBar button.on{ background: #ececf0; color: #111; border-color: #ececf0; }
-  .touchBar .tbIcon{ padding: 0; width: 38px; }
+  .touchBar .tbIcon{ padding: 0; width: 42px; }
   .touchBar .tbIcon svg{ width: 18px; height: 18px; }
   .touchBar .tbSep{ flex: 0 0 1px; height: 24px; background: rgba(255,255,255,.12); margin: 0 4px; }
-  body.hasTouchBar{ padding-bottom: 70px; }
+  body.hasTouchBar{ padding-bottom: 74px; }
   .top{ transition: transform .18s ease; }
   body.kbOpen .top{ transform: translateY(-100%); }
-  body.kbOpen .touchBar{ padding: 4px 6px; gap: 3px; border-top-color: rgba(255,255,255,.14); }
-  body.kbOpen .touchBar button{ height: 32px; min-width: 32px; padding: 0 9px; font-size: 12.5px; }
-  body.kbOpen .touchBar .tbIcon{ width: 32px; padding: 0; }
-  body.kbOpen .touchBar .tbSep{ height: 18px; margin: 0 2px; }
+  /* Keyboard up: the bar sits right on it. Buttons keep the same size so nothing resizes under your thumb. */
+  body.kbOpen .touchBar{ padding: 6px 8px; border-top-color: rgba(255,255,255,.14); }
 
   /* ---------- Page slider ---------- */
   .pageRail{ position: fixed; z-index: 45; width: 22px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -14843,13 +14843,13 @@ ${TP.join("\n")}
     };
     // While the keyboard is up, only move the page if the line you're typing is hidden
     // (behind the keyboard / toolbar or under the top), by the smallest amount, and never while you're scrolling.
-    let kcRaf = 0;
-    function keepCaret(){
-      clearTimeout(kcRaf);
-      kcRaf = setTimeout(() => {
-        kcRaf = 0;
+    // Typing follows the caret on the very next frame (no delay, one line at a time); the 160ms wait is only for the keyboard sliding up.
+    let kcT = 0, kcF = 0;
+    function keepCaret(fast){
+      clearTimeout(kcT); cancelAnimationFrame(kcF);
+      const run = () => {
         if(!document.body.classList.contains("kbOpen")) return;
-        if(Date.now() - lastTouch < 900) return;
+        if(Date.now() - lastTouch < 600) return;
         const ae = document.activeElement;
         if(!ae || !ae.isContentEditable || (ae.closest && ae.closest("#notesArea"))) return;
         const sel = window.getSelection(); if(!sel || !sel.rangeCount) return;
@@ -14862,17 +14862,21 @@ ${TP.join("\n")}
         const hdr = Math.max(0, (document.querySelector("header.top")?.getBoundingClientRect().bottom || 0) - top);
         const y = rect.top - top;
         let dy = 0;
-        if(y + rect.height > h - 14) dy = (y + rect.height) - (h - 14) + 28;
-        else if(y < hdr + 8) dy = y - (hdr + 8) - 28;
+        if(y + rect.height > h - 48) dy = (y + rect.height) - (h - 48);
+        else if(y < hdr + 8) dy = y - (hdr + 36);
         if(dy) window.scrollTo(window.scrollX, Math.max(0, window.scrollY + Math.round(dy)));
-      }, 160);
+      };
+      if(fast === true) kcF = requestAnimationFrame(run); else kcT = setTimeout(run, 160);
     }
-    vv?.addEventListener("resize", place); vv?.addEventListener("scroll", place);
-    window.addEventListener("resize", place);
+    // Keyboard resize / scroll events fire many times a frame: place the bar once per frame
+    let plRaf = 0;
+    const placeSoon = () => { if(plRaf) return; plRaf = requestAnimationFrame(() => { plRaf = 0; place(); }); };
+    vv?.addEventListener("resize", placeSoon); vv?.addEventListener("scroll", placeSoon);
+    window.addEventListener("resize", placeSoon);
     window.addEventListener("orientationchange", () => { maxH = 0; setTimeout(place, 300); });
     document.addEventListener("focusin", () => setTimeout(place, 60));
     document.addEventListener("focusout", () => setTimeout(place, 60));
-    document.getElementById("scriptEditor")?.addEventListener("input", keepCaret);
+    document.getElementById("scriptEditor")?.addEventListener("input", () => keepCaret(true));
 
     // Scenes / Comments / Resolved: the desktop side panel, slid in as a drawer on smaller screens
     let shade = null;
