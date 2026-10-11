@@ -52,6 +52,8 @@
   .btn.dangerFill{ background:#c4413a; border-color:#c4413a; color:#fff; }
   .btn.danger{ color:var(--err); }
   .btn.sm{ height:28px; padding:0 9px; font-size:12px; border-radius:8px; }
+  #banner .btn{ display:inline-flex; align-items:center; text-decoration:none; white-space:nowrap; color:#f1d39a; border-color:rgba(224,161,58,.4); }
+  @media (max-width:640px){ #banner{ flex-wrap:wrap; } #banner span{ flex:1 1 100%; } }
   .btn svg{ width:15px; height:15px; flex:0 0 auto; }
   .iconBtn{ width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1px solid transparent; background:transparent; color:var(--uiMuted); cursor:pointer; flex:0 0 auto; text-decoration:none; touch-action:manipulation; }
   .iconBtn:hover{ background:rgba(255,255,255,.07); border-color:var(--uiBorder); color:var(--uiText); }
@@ -440,7 +442,9 @@
         </div>
         <div id="ctl"></div>
         <div id="banner">
-          <span>Sheets show a login wall? Sign into the Google account that owns them in this browser.</span>
+          <span>Sheet blank or asking you to sign in? Your browser blocks Google's sign-in inside other sites.</span>
+          <button id="bnSign" class="btn sm" type="button" title="Opens the Sheet in a small window. Sign in there if asked, close it, and the Sheet reloads here.">Sign in &amp; reload</button>
+          <a id="bnOpen" class="btn sm" target="_blank" rel="noopener">Open in new tab</a>
           <button id="dismiss" class="iconBtn" type="button" aria-label="Dismiss" title="Dismiss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
         <div id="budgetHint" class="hidden"><b>Rates</b><span>Compare rates on this sheet's <b>Settings</b> tab: <b>Pay basis</b> (Indie / MEAA / Award) and <b>Prices</b> (Low / Typical / High).</span><button id="hintX" class="iconBtn" type="button" aria-label="Hide" title="Hide">✕</button></div>
@@ -506,7 +510,7 @@ const ERRORS = {
 };
 const NEW_ACTIONS = ["renameProject", "archiveProject", "setProjectStatus", "unlinkScript", "clearRoomData"];
 const TABS = ["scripts", "storyboard", "treatment", "board", "production"];
-const LS_LAST = "Camp_HUB_LAST_V2", LS_BANNER = "Camp_HUB_BANNER_HIDDEN_V1";
+const LS_LAST = "Camp_HUB_LAST_V2", LS_BANNER = "Camp_HUB_BANNER_HIDDEN_V2";
 // Shared with the Library and editor (don't rename)
 const ENDPOINT_KEYS = ["SCRIPTY_CLOUD_ENDPOINT_V1", "SCRIPTY_CLOUD_ENDPOINT", "SCRIPTY_CLOUD_URL", "CLOUD_ENDPOINT", "SCRIPTY_GAS_ENDPOINT", "SCRIPTY_CLOUD_ENDPOINT_V0"];
 const KEY_KEY = "SCRIPTY_CLOUD_KEY_V1";
@@ -2027,6 +2031,14 @@ const moveCurrent = dir => {
 // ---------- banner, phone sidebar, keyboard ----------
 if (lsGet(LS_BANNER) === "1") $("banner").classList.add("hidden");
 $("dismiss").onclick = () => { $("banner").classList.add("hidden"); lsSet(LS_BANNER, "1"); };
+// A browser that blocks third-party cookies can't show Google's sign-in inside the hub's frame. Opening the
+// Sheet in its own window is first-party, so sign-in works there (Chrome then usually lets the frame in too).
+$("bnOpen").addEventListener("click", () => { $("bnOpen").href = $("open").href || "https://docs.google.com/spreadsheets/"; });
+$("bnSign").onclick = () => {
+  const w = window.open($("open").href || "https://docs.google.com/spreadsheets/", "campSheetSignin", "popup,width=560,height=720");
+  if (!w) { toast("Your browser blocked the pop-up. Use Open in new tab instead.", "err"); return; }
+  const t = setInterval(() => { if (w.closed) { clearInterval(t); dropFrames(); showFrame(); toast("Reloading the Sheet…", "ok"); } }, 600);
+};
 $("hintX").onclick = () => { $("budgetHint").classList.add("hidden"); lsSet(HINT_KEY, "1"); };
 if (lsGet("camp.sideCollapsed") === "1") document.body.classList.add("sideCollapsed");
 $("menuToggle").onclick = () => {
