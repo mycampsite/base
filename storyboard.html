@@ -528,10 +528,33 @@ const TY={
  bed:{p:[[-0.8,0.8,0,0.45,-1,1],[-0.8,0.8,0,1.0,-1.1,-1.0]]},
  counter:{p:[[-1,1,0,0.92,-0.3,0.3]]},
  stairs:{p:[0,1,2,3].map(i=>[-0.5,0.5,0,0.2*(4-i),-0.8+0.4*i,-0.4+0.4*i])},
- pillar:{p:[[-0.15,0.15,0,2.6,-0.15,0.15]]}
+ pillar:{p:[[-0.15,0.15,0,2.6,-0.15,0.15]]},
+ // more set dressing (all built from boxes, metres, origin on the floor at the centre)
+ desk:{p:[[-0.7,0.7,0.72,0.76,-0.35,0.35],[-0.68,-0.62,0,0.72,-0.33,0.33],[0.62,0.68,0,0.72,-0.33,0.33],[0.2,0.62,0.3,0.72,-0.33,0.33]]},
+ bookcase:{p:[[-0.45,0.45,0,1.9,-0.17,-0.13],[-0.45,-0.41,0,1.9,-0.17,0.17],[0.41,0.45,0,1.9,-0.17,0.17],[-0.45,0.45,0,0.04,-0.17,0.17],[-0.45,0.45,0.48,0.52,-0.17,0.17],[-0.45,0.45,0.96,1,-0.17,0.17],[-0.45,0.45,1.44,1.48,-0.17,0.17],[-0.45,0.45,1.86,1.9,-0.17,0.17]]},
+ wardrobe:{p:[[-0.6,0.6,0,2.0,-0.3,0.3],[-0.02,0.02,0.2,1.9,0.3,0.31]]},
+ fridge:{p:[[-0.35,0.35,0,1.8,-0.33,0.33],[0.25,0.28,0.9,1.5,0.33,0.37]]},
+ stove:{p:[[-0.3,0.3,0,0.9,-0.3,0.3],[-0.3,0.3,0.9,1.0,-0.3,-0.25],[-0.22,0.22,0.15,0.6,0.3,0.31]]},
+ sink:{p:[[-0.4,0.4,0,0.82,-0.25,0.25],[-0.42,0.42,0.82,0.86,-0.27,0.27],[-0.03,0.03,0.86,1.05,-0.22,-0.16],[-0.03,0.03,1.0,1.05,-0.2,-0.05]]},
+ toilet:{p:[[-0.18,0.18,0,0.4,-0.1,0.3],[-0.2,0.2,0.4,0.44,-0.12,0.32],[-0.2,0.2,0.4,0.8,-0.3,-0.12]]},
+ bath:{p:[[-0.85,0.85,0,0.55,-0.38,0.38],[-0.78,0.78,0.5,0.56,-0.31,0.31]]},
+ shower:{p:[[-0.45,0.45,0,0.06,-0.45,0.45],[-0.45,0.45,0,2.0,-0.45,-0.42],[-0.45,-0.42,0,2.0,-0.45,0.45],[-0.04,0.04,1.8,2.0,-0.42,-0.3]]},
+ tv:{p:[[-0.6,0.6,0,0.5,-0.2,0.2],[-0.55,0.55,0.55,1.2,-0.03,0.0],[-0.05,0.05,0.5,0.6,-0.04,0.0]]},
+ lamp:{p:[[-0.12,0.12,0,0.03,-0.12,0.12],[-0.015,0.015,0,1.5,-0.015,0.015],[-0.18,0.18,1.4,1.65,-0.18,0.18]]},
+ plant:{p:[[-0.15,0.15,0,0.3,-0.15,0.15],[-0.25,0.25,0.3,0.8,-0.25,0.25],[-0.15,0.15,0.8,1.05,-0.15,0.15]]},
+ tree:{p:[[-0.12,0.12,0,2.2,-0.12,0.12],[-1.1,1.1,1.8,2.8,-1.1,1.1],[-0.8,0.8,2.8,3.6,-0.8,0.8],[-0.4,0.4,3.6,4.1,-0.4,0.4]]},
+ bush:{p:[[-0.6,0.6,0,0.7,-0.45,0.45],[-0.35,0.35,0.7,1.0,-0.3,0.3]]},
+ fence:{p:[[-1.5,1.5,0.3,0.4,-0.02,0.02],[-1.5,1.5,1.0,1.1,-0.02,0.02]].concat([-1.45,-0.9,-0.35,0.2,0.75,1.3].map(x=>[x,x+0.15,0,1.2,-0.03,0.03]))},
+ bench:{p:[[-0.8,0.8,0.42,0.47,-0.2,0.2],[-0.8,0.8,0.5,0.85,-0.2,-0.16],[-0.75,-0.7,0,0.42,-0.18,0.18],[0.7,0.75,0,0.42,-0.18,0.18]]},
+ bbq:{p:[[-0.45,0.45,0.75,1.0,-0.28,0.28],[-0.45,0.45,1.0,1.25,-0.28,-0.2],[-0.42,-0.36,0,0.75,-0.25,0.25],[0.36,0.42,0,0.75,-0.25,0.25],[0.45,0.75,0.85,0.9,-0.25,0.25]]},
+ car:{p:[[-0.9,0.9,0.25,0.9,-2.2,2.2],[-0.8,0.8,0.9,1.45,-1.1,0.8],[-0.95,-0.75,0,0.6,-1.6,-1.1],[0.75,0.95,0,0.6,-1.6,-1.1],[-0.95,-0.75,0,0.6,1.1,1.6],[0.75,0.95,0,0.6,1.1,1.6]]},
+ balloons:{p:[[-0.06,0.06,0,0.06,-0.06,0.06]].concat([[-0.25,1.8,0.05],[0.2,1.95,-0.1],[0.02,2.15,0.18],[-0.12,2.05,-0.25],[0.3,1.75,0.22]].map(b=>[b[0]-0.13,b[0]+0.13,b[1],b[1]+0.3,b[2]-0.13,b[2]+0.13])).concat([[-0.25,1.8,0.05],[0.2,1.95,-0.1],[0.02,2.15,0.18],[-0.12,2.05,-0.25],[0.3,1.75,0.22]].map(b=>[b[0]*0.5-0.006,b[0]*0.5+0.006,0.06,b[1]*0.98,b[2]*0.5-0.006,b[2]*0.5+0.006]))},
+ rug:{p:[[-1,1,0,0.015,-0.7,0.7]]},
+ shed:{p:[[-1.2,1.2,0,2.1,-1,1],[-1.3,1.3,2.1,2.25,-1.1,1.1],[-0.4,0.4,0.05,1.9,1,1.02]]},
+ trampoline:{p:[[-1.2,1.2,0.75,0.8,-1.2,1.2],[-1.25,-1.15,0,0.75,-0.05,0.05],[1.15,1.25,0,0.75,-0.05,0.05],[-0.05,0.05,0,0.75,-1.25,-1.15],[-0.05,0.05,0,0.75,1.15,1.25]]}
 };
 TY.slab=TY.ceiling;
-const PAL=['floor','wall','door','window','ceiling','roof','box','table','chair','sofa','bed','counter','stairs','pillar'];
+const PAL=['floor','wall','door','window','ceiling','roof','box','table','chair','sofa','bed','counter','stairs','pillar','desk','bookcase','wardrobe','rug','lamp','tv','plant','fridge','stove','sink','toilet','bath','shower','tree','bush','fence','bench','bbq','shed','trampoline','car','balloons'];
 const FACES=[[0,2,6,4],[1,5,7,3],[0,4,5,1],[2,3,7,6],[0,1,3,2],[4,6,7,5]];
 const ROOFV=[[-1.5,0,-1.5],[1.5,0,-1.5],[1.5,0,1.5],[-1.5,0,1.5],[0,1,-1.5],[0,1,1.5]], ROOFF=[[0,3,5,4],[2,1,4,5],[3,2,5],[1,0,4]], ROOFE=[[0,1],[1,2],[2,3],[3,0],[4,5],[0,4],[1,4],[2,5],[3,5]];
 function ob(t,x,z,r,sz,w,y,d){return {id:uid++,t,x,z,r:r||0,sz:sz||1,w:w||1,y:y||0,d:d||1}}
@@ -879,6 +902,20 @@ const TPL={
   f:[[-1.5,0,90,'Walk'],[0,0.5,-90,'Walk',{build:'f'}],[2,-1,180,'Pockets'],[-3,-1.5,0,'Slouch'],[1,2,200,'Crouch']],c:{p:[1,1.6,7],t:[0,1,-1],fov:50,roll:0}}),
  House:()=>({o:[ob('wall',0,-3,0,1,2),ob('wall',-3,0,90,1,2),ob('wall',3,0,90,1,2),ob('wall',0,3,0,1,2),ob('door',0,3.06),ob('window',-1.8,3.05),ob('window',1.8,3.05),ob('roof',0,0,0,2.1,1,2.4),ob('box',3.8,4.2,15,1.2)],
   f:[[-0.8,5,180,'Walk',{build:'f',h:0.95}],[1.2,5.6,-150,'Wave',{build:'m'}]],c:{p:[7,2.2,11],t:[0,1.6,1],fov:40,roll:0}}),
+ Kitchen:()=>({o:[ob('floor',0,0),ob('wall',0,-3,0,1,2),ob('wall',-3,0,90,1,2),ob('wall',3,0,90,1,2),ob('ceiling',0,0,0,1,1,2.4),ob('counter',-1,-2.65,0,1,1.2),ob('sink',0.65,-2.7),ob('stove',1.45,-2.7),ob('fridge',2.5,-2.6),ob('counter',-2.65,-0.8,90,1,1),ob('window',0.65,-2.95),ob('door',-2.95,1.6,90),ob('table',0.3,0.4,0,1,1.1),ob('chair',-0.5,0.4,90),ob('chair',1.1,0.4,-90)],
+  f:[[0.6,-1.9,180,'Akimbo'],[-0.5,0.4,90,'Sit',{build:'f'}]],c:{p:[0.5,1.65,4.2],t:[0.3,1,-1.2],fov:46,roll:0}}),
+ Bathroom:()=>({o:[ob('floor',0,0,0,1,0.42,0,0.5),ob('wall',0,-1.5,0,1,0.85),ob('wall',-1.25,0,90),ob('wall',1.25,0,90),ob('ceiling',0,0,0,1,0.42,2.4,0.5),ob('bath',-0.35,-1.07),ob('toilet',0.95,-0.5,-90),ob('sink',-0.85,0.45,90),ob('shower',0.75,1.0),ob('window',0.6,-1.47,0,0.8),ob('door',-0.25,1.5)],
+  f:[[0.1,0.3,180,'Akimbo']],c:{p:[0.2,1.6,2.6],t:[0,1.1,-0.6],fov:60,roll:0}}),
+ Backyard:()=>({o:[ob('floor',0,0,0,2),ob('fence',-4.5,-6,0,1,1),ob('fence',-1.5,-6),ob('fence',1.5,-6),ob('fence',4.5,-6),ob('fence',-6,-4.5,90),ob('fence',-6,-1.5,90),ob('fence',6,-4.5,90),ob('fence',6,-1.5,90),ob('tree',-3.8,-3.8),ob('bush',3.5,-5.2),ob('bush',-5.2,0.5,90),ob('bbq',3,-1.5,-90),ob('table',0,-0.5,0,1,1.4),ob('chair',-0.6,0.3,180),ob('chair',0.6,-1.3,0),ob('trampoline',-3,1.8),ob('shed',4.2,-4.6)],
+  f:[[2.3,-1.4,90,'Akimbo'],[-0.6,0.3,180,'Sit',{build:'f'}],[0.9,0.6,200,'Crossed',{build:'m'}]],c:{p:[1.5,1.7,6.5],t:[0,1,-1.5],fov:46,roll:0}}),
+ Party:()=>({o:[ob('floor',0,0),ob('wall',0,-3,0,1,2),ob('wall',-3,0,90,1,2),ob('wall',3,0,90,1,2),ob('ceiling',0,0,0,1,1,2.4),ob('table',0,-1.8,0,1,1.6),ob('balloons',-1.4,-2.3),ob('balloons',1.4,-2.3,40),ob('balloons',-2.4,0.8,-30),ob('sofa',2.2,0.6,-90),ob('box',0.4,-1.8,15,0.5,1,0.75)],
+  f:[[-0.6,-1,160,'Wave'],[0.8,-0.6,200,'Phone',{build:'f'}],[-1.6,0.6,120,'Crossed',{h:0.72}]],c:{p:[0,1.6,4.5],t:[0,1,-1],fov:48,roll:0}}),
+ Bedroom:()=>({o:[ob('floor',0,0),ob('wall',0,-3,0,1,2),ob('wall',-3,0,90,1,2),ob('wall',3,0,90,1,2),ob('ceiling',0,0,0,1,1,2.4),ob('bed',0,-1.85),ob('box',-1.1,-2.6,0,0.75),ob('box',1.1,-2.6,0,0.75),ob('lamp',1.1,-2.6,0,0.6,1,0.45),ob('wardrobe',-2.6,0.6,90),ob('window',1.6,-2.95),ob('door',2.95,1.6,90),ob('rug',0,-0.3)],
+  f:[[0.6,-1.4,0,'Sit',{build:'f'}]],c:{p:[1.2,1.6,3.8],t:[0,0.8,-1.5],fov:48,roll:0}}),
+ Office:()=>({o:[ob('floor',0,0),ob('wall',0,-3,0,1,2),ob('wall',-3,0,90,1,2),ob('wall',3,0,90,1,2),ob('ceiling',0,0,0,1,1,2.4),ob('desk',0,-1.6),ob('chair',0,-1),ob('chair',0.2,-2.4,180),ob('bookcase',-1.9,-2.8),ob('bookcase',-1,-2.8),ob('plant',2.4,-2.4),ob('window',1.4,-2.95),ob('door',2.95,1.4,90)],
+  f:[[0,-1,180,'Sit'],[0.9,0.2,200,'Akimbo',{build:'f'}]],c:{p:[1.5,1.6,3.5],t:[0,1,-1.5],fov:46,roll:0}}),
+ Bar:()=>({o:[ob('floor',0,0,0,1.3),ob('wall',0,-4,0,1,2.7),ob('wall',-4,0,90,1,2.7),ob('counter',0,-2.5,0,1,2.2),ob('bookcase',-1,-3.8,0,1,1.4),ob('bookcase',1,-3.8,0,1,1.4),ob('chair',-1.3,-1.9,180,1.25),ob('chair',0,-1.9,180,1.25),ob('chair',1.3,-1.9,180,1.25),ob('table',2.4,1,0,1,0.8),ob('chair',2,1.6,180),ob('lamp',-2.6,0.8)],
+  f:[[0,-3.1,0,'Akimbo'],[-1.3,-1.9,180,'Sit',{ly:0.15}],[2,1.6,180,'Sit',{build:'f'}]],c:{p:[2.5,1.6,4],t:[0,1.1,-2],fov:48,roll:0}}),
  Car:()=>({o:[ob('floor',0,0,0,0.383,0.74),ob('ceiling',0,0,0,0.383,0.74,1.5),ob('pillar',-0.85,0.5,0,0.58),ob('pillar',0.85,0.5,0,0.58),ob('pillar',-0.85,-1.1,0,0.58),ob('pillar',0.85,-1.1,0,0.58),ob('box',0,0.9,0,0.58,4.9,0.5),ob('chair',-0.4,0.2,0,1.15),ob('chair',0.4,0.2,0,1.15),ob('sofa',0,-0.75,0,0.9)],
   f:[[-0.4,0.2,0,'Sit',{ly:0.06,wl:[0.15,0.86,0.4],wr:[-0.15,0.86,0.4],hd:10}],[0.4,0.2,0,'Sit',{ly:0.06,lean:6,hd:-10}],[-0.45,-0.75,0,'Sit',{lean:14}],[0,-0.75,0,'Sit'],[0.45,-0.75,0,'Sit',{hd:20}]],c:{p:[0,1.05,1],t:[0,1,-0.3],fov:62,roll:0}})
 };
@@ -893,6 +930,28 @@ let BOUND=null,HOOK={},AC=null;
 const dist=c=>Math.hypot(c.p[0]-c.t[0],c.p[1]-c.t[1],c.p[2]-c.t[2]);
 function load(d,name){objs=d.o;figs=d.f.map((x,i)=>mkF(i,x));ct=cl(d.c);sel=0;so=-1;tn=name}
 function scanIds(){let mx=uid-1;objs.forEach(o=>{if(o.id>mx)mx=o.id});uid=mx+1}
+// ---- Build from script: choose a location from the scene heading, then add props the action names ----
+const LOC_WORDS=[[/\b(KITCHEN|KITCHENETTE|PANTRY)\b/,'Kitchen'],[/\b(BATHROOM|RESTROOM|TOILET|ENSUITE|EN-SUITE|WASHROOM|LAVATORY)\b/,'Bathroom'],
+ [/\b(BACKYARD|BACK YARD|GARDEN|YARD|PATIO|DECK|LAWN|PARK)\b/,'Backyard'],[/\b(PARTY|BIRTHDAY|CELEBRATION)\b/,'Party'],[/\b(BEDROOM|DORM|NURSERY)\b/,'Bedroom'],
+ [/\b(OFFICE|STUDY|CLASSROOM|LIBRARY)\b/,'Office'],[/\b(BAR|PUB|CAFE|CAFÉ|RESTAURANT|DINER|CLUB)\b/,'Bar'],[/\b(CAR|TAXI|UBER|CAB|VAN|UTE|TRUCK)\b/,'Car'],
+ [/\b(STREET|ROAD|SIDEWALK|FOOTPATH|ALLEY|LANE|CAR PARK|PARKING)\b/,'Street'],[/\b(LIVING ROOM|LOUNGE|APARTMENT|FLAT|ROOM|HALLWAY)\b/,'Room']];
+const PROP_WORDS=[[/\b(desk)s?\b/i,'desk'],[/\b(book ?case|book ?shel(f|ves)|shelves)\b/i,'bookcase'],[/\b(wardrobe|closet)s?\b/i,'wardrobe'],[/\b(fridge|refrigerator)s?\b/i,'fridge'],
+ [/\b(stove|oven|cooktop)s?\b/i,'stove'],[/\b(sink|basin|vanity)s?\b/i,'sink'],[/\b(toilet|loo)s?\b/i,'toilet'],[/\b(bath ?tub|bath)s?\b/i,'bath'],[/\b(shower)s?\b/i,'shower'],
+ [/\b(tv|television|telly)s?\b/i,'tv'],[/\b(lamp)s?\b/i,'lamp'],[/\b(pot plant|plant)s?\b/i,'plant'],[/\b(tree)s?\b/i,'tree'],[/\b(bush|bushes|hedge|shrub)s?\b/i,'bush'],
+ [/\b(fence)s?\b/i,'fence'],[/\b(park bench|bench seat)\b/i,'bench'],[/\b(bbq|barbecue|barbie|grill)s?\b/i,'bbq'],[/\b(shed)s?\b/i,'shed'],[/\b(trampoline)s?\b/i,'trampoline'],
+ [/\b(car|sedan|taxi|ute|van)s?\b/i,'car'],[/\b(balloon)s?\b/i,'balloons'],[/\b(rug|carpet)s?\b/i,'rug'],[/\b(bed)s?\b/i,'bed'],[/\b(sofa|couch|lounge suite)s?\b/i,'sofa'],
+ [/\b(table)s?\b/i,'table'],[/\b(chair|stool)s?\b/i,'chair'],[/\b(kitchen bench|benchtop|counter|bar top)s?\b/i,'counter'],[/\b(stairs|staircase|steps)\b/i,'stairs'],[/\b(box|boxes|crate)\b/i,'box']];
+function locFor(heading){const h=String(heading||'').toUpperCase();if(/\b(CAR PARK|PARKING (LOT|GARAGE))\b/.test(h))return 'Street';for(const [re,t] of LOC_WORDS)if(re.test(h)&&!(t==='Car'&&/\bCAR PARK\b/.test(h)))return t;return /^\s*EXT/.test(h)?'Street':'Room'}
+function propsIn(text){const t=String(text||''),out=[];PROP_WORDS.forEach(([re,k])=>{if(re.test(t)&&!out.includes(k))out.push(k)});return out}
+function freeSpot(r){const taken=objs.filter(o=>{const T=TY[o.t];return T&&!T.k}).map(o=>[o.x,o.z]);
+ for(let i=0;i<120;i++){const a=i*2.39996,d=0.9+0.16*i,x=Math.cos(a)*d,z=Math.sin(a)*d;if(Math.abs(x)>r||Math.abs(z)>r)continue;
+  if(taken.every(p=>Math.hypot(p[0]-x,p[1]-z)>1.15)&&figs.every(f=>Math.hypot(f.x-x,f.z-z)>0.8))return [x,z]}
+ return [(Math.random()-0.5)*r,(Math.random()-0.5)*r]}
+function buildFromScript(heading,text){const loc=locFor(heading),keep=figs.slice();load(TPL[loc](),loc);objs.forEach(x=>{x.id=uid++});
+ if(keep.length)figs=keep;
+ const have=objs.map(o=>o.t),added=[],r=['Bathroom','Car'].includes(loc)?1.0:loc==='Backyard'||loc==='Street'?4.5:2.4;
+ propsIn(text).forEach(k=>{if(have.includes(k)||(loc==='Car'&&k==='car'))return;const [x,z]=freeSpot(r),n=ob(k,x,z,Math.round((Math.random()-0.5)*4)*45);objs.push(n);added.push(k)});
+ sel=clamp(sel,0,Math.max(0,figs.length-1));so=-1;return {loc,added}}
 function newState(name,names){const d=TPL[name||'Empty']();let f;
  const who=(names||[]).map(castOf).filter(Boolean).slice(0,8);
  if(who.length){const n=who.length;f=who.map((c,i)=>{const pose=IDLE[(i*3)%IDLE.length],x=(i-(n-1)/2)*1.1,z=(i%2)*-0.35;const g=mkF(i,[x,z,clamp(-x*12,-25,25),pose]);g.n=c.n;g.col=c.col;g.h=kidH(c.n);g._pose=pose;return g})}
@@ -1037,7 +1096,7 @@ function panel(){if(!pn)return;if(mode==='draw'||!BOUND){pn.innerHTML='';return}
    +sec('camMore','Options','<div class="lbl">Drag to</div>'+pills([['orbit','Orbit'],['look','Look'],['move','Move']],'cm',cmode)+'<div class="lbl">Look</div>'+pills([['0','Day'],['1','Night']],'nt',OPT.night?'1':'0')+chk('guides','Thirds guide')+chk('names','Nameplates')+'<div class="lockRow'+(OPT.lock?' on':'')+'">'+chk('lock','Lock camera')+'</div>')}
  else if(mode==='set'){
   h+='<div class="lbl">Location</div>'+selBox('tp',Object.keys(TPL).concat(Object.keys(customs)),TPL[tn]||customs[tn]?tn:'',TPL[tn]||customs[tn]?'':'Custom')
-   +'<div class="pills mt">'+(HOOK.prevShot&&HOOK.prevShot()?'<button type="button" data-a="prev">Copy previous shot</button>':'')+'<button type="button" data-a="sv">Save as location</button></div>'
+   +'<div class="pills mt">'+(HOOK.prevShot&&HOOK.prevShot()?'<button type="button" data-a="prev">Copy previous shot</button>':'')+'<button type="button" data-a="sv">Save as location</button>'+(HOOK.scene&&HOOK.scene()?'<button type="button" data-a="bs" title="Pick a location and add props named in this scene">Build from script</button>':'')+'</div>'
    +'<div class="lbl">Add</div>'+selBox('ad',PAL.map(t=>[t,cap(t)]),'','Add an item…');
   if(o)h+='<div class="lbl">Selected · '+cap(o.t)+'</div>'+sl('Size','sz',0.2,4,0.05,o.sz,o.sz.toFixed(2)+'×',1)+sl('Rotate','r',-180,180,1,ndeg(o.r),ndeg(o.r)+'°',1)
    +sec('objMore','Shape',sl('Width','w',0.2,6,0.05,o.w,o.w.toFixed(2)+'×',1)+sl('Depth','d',0.2,6,0.05,o.d,o.d.toFixed(2)+'×',1)+sl('Lift','y',0,5,0.01,o.y,o.y.toFixed(2)+' m',1))
@@ -1086,6 +1145,7 @@ function act(d){const f=figs[sel],o=objs.find(x=>x.id===so);let camMoved=false;
  if(d.lk!==undefined&&d.lk!==''&&f){pushUndo();f.look=+d.lk}
  if(d.bd&&f){pushUndo();f.build=d.bd}
  const a=d.a;
+ if(a==='bs'&&HOOK.scene){const sc=HOOK.scene();if(sc){pushUndo();const r=buildFromScript(sc.heading,sc.text);if(HOOK.onBuilt)HOOK.onBuilt(r);camMoved=true}}
  if(a==='prev'&&HOOK.prevShot){const p=HOOK.prevShot();if(p){pushUndo();useState(p)}}
  if(a==='sv'){let k=Object.keys(customs).length+1;while(customs['My set '+k])k++;const nm='My set '+k;customs[nm]={objs:cl(objs),figs:cl(figs),opts:cl(OPT),tn:nm};tn=nm;if(HOOK.onLocations)HOOK.onLocations(cl(customs))}
  if(a==='od'&&o){pushUndo();const n2=cl(o);n2.id=uid++;n2.x+=0.5;n2.z+=0.5;objs.push(n2);so=n2.id}
@@ -1171,7 +1231,7 @@ function setRatio(r){A=r;W=LH*A;resize()}
 // Static render for board thumbnails and print (Batch C uses this).
 function renderTo(canvas,s,ratio){if(!s)return;const c=canvas.getContext('2d');const sv={CW,CH};
  render(c,canvas.width,canvas.height,{cam:s.cam||CAM0,figs:(s.figs||[]).map(normFig),objs:(s.objs||[]).map(normObj),sel:-1,so:-1,mode:'cam',opts:Object.assign({},OPT0,s.opts||{}),thumb:true});CW=sv.CW;CH=sv.CH}
-return {setInteractive,setCast,copy:copySel,paste:pasteClip,duplicate:dupSel,hasClip:()=>!!CLIP,setLocations:o=>{customs=o&&typeof o==='object'?cl(o):{}},newState,mount,unmount,setMode,setRatio,key,undo,redo,readShot,applyShot,canUndo:()=>UND.length>0,canRedo:()=>RED.length>0,renderTo,isMounted:()=>!!BOUND,mode:()=>mode};
+return {buildFromScript,locFor,propsIn,setInteractive,setCast,copy:copySel,paste:pasteClip,duplicate:dupSel,hasClip:()=>!!CLIP,setLocations:o=>{customs=o&&typeof o==='object'?cl(o):{}},newState,mount,unmount,setMode,setRatio,key,undo,redo,readShot,applyShot,canUndo:()=>UND.length>0,canRedo:()=>RED.length>0,renderTo,isMounted:()=>!!BOUND,mode:()=>mode};
 }
 window.SB3D={
  ready(){if(API)return Promise.resolve(API);if(loading)return loading;
@@ -1456,10 +1516,32 @@ window.SB3D={
 
   /* ---------------- Instant open (this device's last copy of the board) ---------------- */
   const SB_CACHE = "Camp_SB_CACHE_V1:";
+  // Scene heading + action text from the script, for "Build from script" in 3D blocking.
+  function adoptScript(doc){
+    const out = []; let cur = null;
+    (Array.isArray(doc.lines) ? doc.lines : []).forEach((l) => {
+      const t = String((l && l.type) || ""), txt = Array.isArray(l && l.runs) ? l.runs.map((r) => String((r && r.t) || "")).join("") : "";
+      if(t === "scene"){ cur = { heading: txt.trim(), text: "" }; out.push(cur); }
+      else if(cur && t === "action") cur.text += " " + txt;
+    });
+    window.SB_SCRIPT = out;
+  }
+  function sceneScript(shotKey){
+    const sh = S.shots.find((x) => x.key === shotKey), L = window.SB_SCRIPT || [];
+    const sc = sh && S.scenes.find((x) => String(x.n) === String(sh.scene));
+    if(!sc) return null;
+    const set = String(sc.set || "").toUpperCase().trim();
+    let hit = L[Number(sc.n) - 1];
+    if(set && !(hit && hit.heading.toUpperCase().includes(set))) hit = L.find((x) => x.heading.toUpperCase().includes(set)) || hit;
+    const heading = hit ? hit.heading : [sc.ie, sc.set].filter(Boolean).join(". ");
+    return heading ? { heading, text: hit ? hit.text : "" } : null;
+  }
   // Under-18 characters from the script breakdown (same engine as Production), cached per script.
   function adoptMinors(res){
     try{
-      if(!res || res.ok === false || !res.doc || !window.CampBreakdown) return;
+      if(!res || res.ok === false || !res.doc) return;
+      try{ adoptScript(res.doc); }catch(_e){}
+      if(!window.CampBreakdown) return;
       const m = {};
       (window.CampBreakdown.analyze(res.doc).cast || []).forEach((c) => { if(c.minor && c.name) m[String(c.name).trim().toLowerCase()] = c.age != null ? Number(c.age) : null; });
       window.SB_MINORS = m;
@@ -2815,6 +2897,8 @@ window.SB3D={
         canvas: cvNow, panel: document.getElementById("b3dWrap"), state: panelData(shotKey).blocking,
         ratio: S.ratio, mode: S.mode3d, interactive: !S.drawOn,
         prevShot: () => prevBlocking(shotKey),
+        scene: () => sceneScript(shotKey),
+        onBuilt: (r) => notify(r.loc + " set" + (r.added.length ? " + " + r.added.join(", ") : "") + ". Figures kept."),
         onChange: () => saveBlocking(shotKey),
         onCamEnd: () => { saveBlocking(shotKey); cameraToSheet(shotKey); },
         onHistory: () => updateUndoState(),
