@@ -394,7 +394,8 @@ function draw(pid){
     ${rec.changed.length ? `<span class="ctlChip warn" title="Scenes on shoot days that changed in the script">⚠ ${rec.changed.length} revised</span>` : ""}
     ${badOrder ? `<span class="ctlChip warn" title="A pinned date is on or before the day ahead of it">⚠ Days out of date order</span>` : ""}
     ${sc.state === "loading" ? `<span class="ctlChip">Updating from script…</span>` : ""}
-    ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}`;
+    ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}
+    ${P.callsheetsStale(raw) ? `<span class="ctlChip warn" title="Flags, locations, cast types or days changed since the Sheets were last built. The budget, schedule and call sheets catch up on the next Sync.">⟳ Sheets behind the plan${hub.isOwner(p) ? "" : " (owner Syncs)"}</span>` : ""}`;
   const hh = HIST[pid] || { undo: [], redo: [] };
   const acts = `<div class="ctlActs">
       ${canEdit ? `<span class="ctlUR"><button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
