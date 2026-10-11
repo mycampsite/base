@@ -255,5 +255,16 @@ test("several showreels and audition tapes, each its own button", () => {
   assert.strictEqual(B.checkEdit("cast", { showreel: "https://youtu.be/1\nvimeo.com/2" }, ["Cast"]), "");
 });
 
+test("embedUrl turns YouTube and Vimeo links into player addresses and nothing else", () => {
+  assert.strictEqual(B.embedUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ");
+  assert.strictEqual(B.embedUrl("https://youtu.be/dQw4w9WgXcQ?t=5"), "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ");
+  assert.strictEqual(B.embedUrl("https://youtube.com/shorts/dQw4w9WgXcQ"), "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ");
+  assert.strictEqual(B.embedUrl("https://vimeo.com/123456789"), "https://player.vimeo.com/video/123456789");
+  assert.strictEqual(B.embedUrl("https://vimeo.com/123456789/abcdef1234"), "https://player.vimeo.com/video/123456789?h=abcdef1234");
+  assert.strictEqual(B.embedUrl("https://www.imdb.com/name/nm0000001/"), "");
+  assert.strictEqual(B.embedUrl("https://youtube.com/watch?v=<script>"), "");
+  assert.strictEqual(B.embedUrl("javascript:alert(1)"), "");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

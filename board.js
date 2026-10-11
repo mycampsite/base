@@ -47,6 +47,23 @@ function photoSrc(u){
   if(h === "dropbox.com"){ x.searchParams.delete("dl"); x.searchParams.set("raw", "1"); return x.href; }
   return u;
 }
+// A YouTube or Vimeo link as the address its player can be embedded from, or "" for any other link.
+function embedUrl(u){
+  u = safeUrl(u); if(!u) return "";
+  let x; try{ x = new URL(u); }catch(e){ return ""; }
+  const h = x.hostname.replace(/^(www|m)\./i, "").toLowerCase(), p = x.pathname; let id = "", m;
+  if(h === "youtu.be") id = p.slice(1).split("/")[0];
+  else if(h === "youtube.com" || h === "youtube-nocookie.com"){
+    if(p === "/watch") id = x.searchParams.get("v") || "";
+    else if((m = p.match(/^\/(?:embed|shorts|live|v)\/([^/?]+)/))) id = m[1];
+  }
+  if(id) return /^[\w-]{6,20}$/.test(id) ? "https://www.youtube-nocookie.com/embed/" + id : "";
+  if(h === "vimeo.com" || h === "player.vimeo.com"){
+    m = p.match(/^\/(?:video\/|channels\/[^/]+\/|groups\/[^/]+\/videos\/)?(\d{5,12})(?:\/([0-9a-f]{8,}))?\/?$/i);
+    if(m) return "https://player.vimeo.com/video/" + m[1] + (m[2] ? "?h=" + m[2] : "");
+  }
+  return "";
+}
 function mapUrl(address){ address = clean(address); return address ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address) : ""; }
 function telUrl(phone){ phone = clean(phone); const d = phone.replace(/[^\d+]/g, ""); return d.replace(/\D/g, "").length >= 6 ? "tel:" + d : ""; }
 function mailUrl(email){ email = clean(email); return /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]{2,}$/.test(email) ? "mailto:" + email : ""; }
@@ -247,6 +264,6 @@ function neighbour(groups, id, dir){
   return flat[i + dir] || "";
 }
 
-const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, linesOf, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
+const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, embedUrl, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, linesOf, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampBoard = Object.assign(root.CampBoard || {}, { logic: api });
 })(typeof window !== "undefined" ? window : this);

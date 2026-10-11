@@ -88,6 +88,24 @@ const css = `
 /* the photo keeps the card's frame (a headshot crop for actors, a wide crop for places) whatever the picture's own shape */
 .bdDlg .bdPh{ aspect-ratio:3/4; height:auto; min-height:0; margin:16px 0 16px 16px; border-radius:10px; font-size:64px; }
 .bdDlg.loc .bdPh{ aspect-ratio:4/3; }
+.bdDlg.view{ display:block; width:min(980px,100%); }
+.bdDlg.view > .bdDHead{ position:sticky; top:0; z-index:6; align-items:center; padding:12px 18px; background:#1a1b1f; border-bottom:1px solid var(--uiBorder); }
+.bdHero{ position:relative; display:grid; place-items:center; width:100%; height:min(62vh,640px); background:#0f1013; color:#5d5d5d; font-size:64px; font-weight:700; overflow:hidden; }
+.bdHero.empty{ height:140px; }
+.bdHero[data-bd=view]{ cursor:zoom-in; }
+.bdHero img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+.bdDlg.view .bdDBody{ min-height:0; padding:16px 18px; }
+.bdGal{ padding:14px 18px 0; }
+.bdGalGrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+.bdGalI{ position:relative; aspect-ratio:1; padding:0; border:0; border-radius:10px; overflow:hidden; background:#242424; cursor:zoom-in; }
+.bdGalI img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transition:transform .15s; }
+.bdGalI:hover img{ transform:scale(1.04); }
+.bdVids{ padding:0 18px 16px; gap:14px; }
+.bdVid{ display:grid; gap:6px; }
+.bdVidT{ font-size:12.5px; color:var(--uiMuted); font-weight:600; }
+.bdFrame{ position:relative; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
+.bdFrame iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; }
+.bdDlg.view .bdDFoot{ position:sticky; bottom:0; z-index:6; margin:0; padding:12px 18px; background:#1a1b1f; }
 .bdDBody{ padding:16px 18px 16px; display:flex; flex-direction:column; gap:14px; min-width:0; min-height:100%; box-sizing:border-box; }
 .bdDHead{ display:flex; align-items:flex-start; gap:8px; }
 .bdDHead h2{ margin:0; font-size:19px; line-height:1.25; flex:1; overflow-wrap:anywhere; }
@@ -177,6 +195,7 @@ span.bdStar{ cursor:default; }
   .bdDlg, .bdDlg.loc{ grid-template-columns:1fr; border-radius:14px 14px 0 0; max-height:92%; }
   .bdDlg .bdPh{ width:min(62%, 240px); margin:16px auto 0; }
   .bdDlg.loc .bdPh{ width:auto; margin:16px 16px 0; }
+  .bdHero{ height:min(48vh,420px); } .bdGalGrid{ grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); }
   #boardPane .bdTools{ padding:8px 10px 0; } .bdBody{ padding:4px 10px 24px; }
   .bdSearch{ flex:1 1 100%; }
 }
@@ -376,27 +395,37 @@ function showDetail(id, keep){
     : (c.status ? `<span class="bdSt ${slug(c.status)}">${esc(c.status)}</span>` : `<span class="bdDMeta">No status</span>`);
   const sec = (label, body) => body ? `<div class="bdSec"><div class="bdLbl">${label}</div>${body}</div>` : "";
   const rowLink = d && d.url ? esc(d.url + (gid ? "#gid=" + gid + "&range=A" + c.row : "")) : "";
-  const html = `<div class="bdShade" id="bdShade"><div class="bdDlg ${c.kind}" role="dialog" aria-modal="true" aria-label="${esc(c.title)}">
-    <div class="bdPh"${c.photos.length ? ` data-bd="view" title="View ${c.photos.length > 1 ? "all " + c.photos.length + " photos" : "the photo"}"` : ""}>${esc(initial(c))}${c.photo && !bad ? `<img referrerpolicy="no-referrer" src="${esc(c.photo)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}${c.photos.length > 1 ? `<span class="bdCount">▣ ${c.photos.length}</span>` : ""}</div>
+  const heroSrc = c.photo && !bad ? (L.viewSrc(c.photos[0], true) || c.photo) : "";
+  const gal = c.photos.map((u, i) => [L.viewSrc(u), i]).slice(1).filter((p) => p[0]);
+  const hero = `<div class="bdHero${heroSrc ? "" : " empty"}"${c.photos.length ? ` data-bd="view" data-i="0" title="View ${c.photos.length > 1 ? "all " + c.photos.length + " photos" : "the photo"}"` : ""}>${esc(initial(c))}${heroSrc ? `<img referrerpolicy="no-referrer" src="${esc(heroSrc)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}${c.photos.length > 1 ? `<span class="bdCount">▣ ${c.photos.length}</span>` : ""}</div>`;
+  const galHtml = gal.length ? `<div class="bdSec bdGal"><div class="bdLbl">Photos</div><div class="bdGalGrid">${gal.map((p) => `<button class="bdGalI" type="button" data-bd="view" data-i="${p[1]}" aria-label="View photo ${p[1] + 1}"><img class="gal" loading="lazy" referrerpolicy="no-referrer" src="${esc(p[0])}" alt=""></button>`).join("")}</div></div>` : "";
+  const seenE = {}, vids = [];
+  c.links.forEach((l) => { const e = L.embedUrl(l.url); if(e && !seenE[e]){ seenE[e] = 1; vids.push({ label: l.label, e }); } });
+  const vidHtml = vids.length ? `<div class="bdSec bdVids"><div class="bdLbl">Videos</div>${vids.map((v) => `<div class="bdVid"><div class="bdVidT">${esc(v.label)}</div><div class="bdFrame"><iframe src="${esc(v.e)}" title="${esc(c.title + " – " + v.label)}" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div></div>`).join("")}</div>` : "";
+  const html = `<div class="bdShade" id="bdShade"><div class="bdDlg view ${c.kind}" role="dialog" aria-modal="true" aria-label="${esc(c.title)}">
+    <div class="bdDHead"><div style="flex:1;min-width:0"><h2>${esc(c.title)}</h2><div class="bdDMeta">${esc(c.group)}${c.groupType ? " · " + esc(c.groupType) : ""}</div></div>${favT}<button class="iconBtn" type="button" data-bd="close" aria-label="Close" title="Close (Esc)">${ICON.close}</button></div>
+    ${hero}${galHtml}
     <div class="bdDBody">
-      <div class="bdDHead"><div style="flex:1;min-width:0"><h2>${esc(c.title)}</h2><div class="bdDMeta">${esc(c.group)}${c.groupType ? " · " + esc(c.groupType) : ""}</div></div>${favT}<button class="iconBtn" type="button" data-bd="close" aria-label="Close" title="Close (Esc)">${ICON.close}</button></div>
       ${sec("Status", status)}
       ${sec(c.kind === "loc" ? "Address &amp; contact" : "Contact", rows.length ? `<dl class="bdRows">${rows.map((r) => `<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join("")}</dl>` : "")}
       ${sec("Links", c.links.length ? `<div class="bdLinks">${c.links.map(btn).join("")}</div>` : "")}
       ${sec("Notes", c.notes ? `<div class="bdDNotes">${esc(c.notes)}</div>` : "")}
       ${hint ? `<div class="bdHint">${esc(hint)}</div>` : ""}
-      <div class="bdDFoot">${can ? `<button class="bdDel" type="button" data-bd="delete">Delete option</button>` : ""}<span class="sp"></span>${rowLink ? `<a class="btn sm" href="${rowLink}" target="_blank" rel="noopener" title="Open this row in Google Sheets">${ICON.ext}<span class="lbl">Sheet</span></a>` : ""}${can ? `<button class="btn sm primary" type="button" data-bd="edit">Edit</button>` : ""}</div>
-    </div></div></div>`;
-  const old = document.getElementById("bdShade");
+    </div>
+    ${vidHtml}
+    <div class="bdDFoot">${can ? `<button class="bdDel" type="button" data-bd="delete">Delete option</button>` : ""}<span class="sp"></span>${rowLink ? `<a class="btn sm" href="${rowLink}" target="_blank" rel="noopener" title="Open this row in Google Sheets">${ICON.ext}<span class="lbl">Sheet</span></a>` : ""}${can ? `<button class="btn sm primary" type="button" data-bd="edit">Edit</button>` : ""}</div>
+  </div></div>`;
+  const old = document.getElementById("bdShade"), oldDlg = old && old.querySelector(".bdDlg"), top = keep && oldDlg ? oldDlg.scrollTop : 0;
   if(old) old.remove();
   document.body.insertAdjacentHTML("beforeend", html);
   const shade = document.getElementById("bdShade");
+  if(top){ const dlg = shade.querySelector(".bdDlg"); if(dlg) dlg.scrollTop = top; }
   shade.addEventListener("click", (e) => {
     if(e.target === shade){ closeDetail(); return; }
     const b = e.target.closest("[data-bd]"); if(!b) return;
     if(b.dataset.bd === "close") closeDetail();
     else if(b.dataset.bd === "edit") openEditor(c);
-    else if(b.dataset.bd === "view") openViewer(c.id, 0);
+    else if(b.dataset.bd === "view") openViewer(c.id, +b.dataset.i || 0);
     else if(b.dataset.bd === "fav") toggleFav(c);
     else if(b.dataset.bd === "delete") deleteCard(c);
   });
@@ -764,7 +793,9 @@ async function removeOption(){
 
 /* ---------- interaction ---------- */
 function onImgError(e){
-  const img = e.target; if(!img || img.tagName !== "IMG" || !img.dataset.card) return;
+  const img = e.target; if(!img || img.tagName !== "IMG") return;
+  if(img.classList.contains("gal")){ const b = img.closest("button"); if(b) b.remove(); return; }
+  if(!img.dataset.card) return;
   S.bad[img.dataset.card] = true; img.remove();
   if(S.open === img.dataset.card) showDetail(S.open, true);
 }
