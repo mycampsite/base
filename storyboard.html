@@ -24,7 +24,20 @@
   button{ font-family:inherit; cursor:pointer; }
   input,select{ font-family:inherit; }
   .disp{ font-family:Inter,system-ui,sans-serif; letter-spacing:-.01em; }
-  #app{ display:flex; flex-direction:column; height:100vh; }
+  /* Banner (same on every Camp page) */
+  #banner{ position:fixed; top:0; left:0; right:0; height:58px; z-index:150; display:flex; align-items:center; gap:10px; padding:0 12px; background:rgba(20,20,20,.985); border-bottom:1px solid var(--border); }
+  #banner .logo img{ height:34px; display:block; }
+  #banner .area{ position:absolute; left:50%; transform:translateX(-50%); font-size:13px; font-weight:700; letter-spacing:.24em; text-transform:uppercase; opacity:.92; pointer-events:none; white-space:nowrap; }
+  #banner .right{ margin-left:auto; display:flex; align-items:center; gap:8px; }
+  #banner .btn.sm{ padding:5px 10px; font-size:12.5px; }
+  .chip{ display:inline-flex; align-items:center; height:28px; padding:0 10px; border:1px solid var(--border); border-radius:999px; font-size:12px; color:var(--muted); max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chip:empty{ display:none; }
+  .hamb{ display:none; width:34px; height:34px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,.04); color:inherit; align-items:center; justify-content:center; padding:0; }
+  #navMenu{ position:fixed; top:62px; left:12px; z-index:160; display:none; min-width:190px; padding:6px; background:#1d1e22; border:1px solid rgba(255,255,255,.16); border-radius:12px; box-shadow:0 10px 35px rgba(0,0,0,.35); }
+  #navMenu.show{ display:block; }
+  #navMenu a{ display:block; padding:8px 10px; border-radius:8px; font-size:13px; }
+  #navMenu a:hover{ background:rgba(255,255,255,.07); }
+  #app{ display:flex; flex-direction:column; height:100vh; padding-top:58px; }
 
   /* Top bar */
   #topbar{ height:56px; flex-shrink:0; display:flex; align-items:center; gap:16px; padding:0 20px; border-bottom:1px solid var(--border); }
@@ -324,6 +337,7 @@
 
   /* Phones / narrow windows */
   @media (max-width: 760px){
+    .hamb{ display:inline-flex; } #banner .logo{ display:none; } .chip{ display:none; } #banner{ padding:0 8px; }
     #topbar{ height:auto; min-height:52px; flex-wrap:wrap; gap:8px 10px; padding:8px 12px; }
     #topbar .sep, #statusMsg:empty{ display:none; }
     #topbar .title{ max-width:none; flex:1 1 auto; min-width:0; font-size:14px; }
@@ -422,6 +436,13 @@
   sbLoadStep(null, 6, 50);
 })();
 </script>
+<header id="banner">
+  <button class="hamb" id="menuBtn" type="button" aria-label="Menu"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="logo" href="index.html" aria-label="Camp home"><img src="camp-logo.png" alt="Camp"></a>
+  <div class="area">Storyboard</div>
+  <div class="right"><span class="chip" id="userChip"></span><button class="btn sm" id="signOutBtn" type="button">Sign out</button></div>
+</header>
+<nav id="navMenu"><a href="index.html" id="mnLib">Library</a><a href="editor.html" id="mnScript">Script</a><a href="treatment.html" id="mnTr">Treatment</a></nav>
 <div id="app" style="display:none;">
   <div id="topbar">
     <a class="back" id="backLink" href="index.html">&larr; Library</a>
@@ -1290,6 +1311,7 @@ window.SB3D={
       if(!loadRes || loadRes.ok === false){ showFatal((loadRes && loadRes.error) || "Couldn't open that script."); return; }
       S.fileId = loadRes.fileId || S.fileId;
       Object.assign(S, sbMetaOf(loadRes));
+      const chip = document.getElementById("userChip"); chip.textContent = (loadRes.me && (loadRes.me.email || loadRes.me.name)) || ""; chip.title = chip.textContent;
     }
     document.getElementById("pageTitle").textContent = S.title + " — Storyboard";
     document.title = S.title + " · Storyboard — Camp";
@@ -1306,6 +1328,21 @@ window.SB3D={
           const ref = document.referrer ? new URL(document.referrer) : null;
           if(ref && ref.origin === location.origin && /(hub|index)\.html$/i.test(ref.pathname) && (!hub || ref.pathname.toLowerCase().endsWith("index.html"))){ e.preventDefault(); location.href = document.referrer; }
         }catch(_e){}
+      };
+      // The banner's menu (phones) and Sign out, like the other pages
+      const q = "?fileId=" + encodeURIComponent(S.fileId) + cloudParam() + (hub ? "&hub=" + encodeURIComponent(hub) : "");
+      const mnLib = document.getElementById("mnLib"); mnLib.href = b.href; mnLib.onclick = b.onclick; mnLib.textContent = hub ? "Project" : "Library";
+      document.getElementById("mnScript").href = "editor.html" + q;
+      document.getElementById("mnTr").href = "treatment.html" + q;
+      const menu = document.getElementById("navMenu");
+      document.getElementById("menuBtn").onclick = (e) => { e.stopPropagation(); menu.classList.toggle("show"); };
+      document.addEventListener("click", (e) => { if(!e.target.closest("#navMenu")) menu.classList.remove("show"); });
+      document.getElementById("signOutBtn").onclick = async () => {
+        try{
+          if(window.Camp && typeof window.Camp.signOut === "function") await window.Camp.signOut();
+          else if(window.firebase && window.firebase.apps && window.firebase.apps.length) await window.firebase.auth().signOut();
+        }catch(_e){}
+        location.href = "index.html";
       };
     }
 
