@@ -4616,7 +4616,7 @@
   }
   function liveReason(err){
     const m = String((err && (err.code || err.message)) || err);
-    if(/permission/i.test(m)) return "Firebase refused access (" + m + "). The treatment lives under rooms/<room>/treatment and treatmentPresence, so your Realtime Database rules need to allow those paths (same as storyboard).";
+    if(/permission/i.test(m)) return "Firebase refused access (" + m + "). Your Google account is probably not on the Realtime Database's allowed list (Firebase console → Realtime Database → Data → allowed: add your email with dots written as commas, set to true), or it isn't a member of this script's project.";
     if(/popup/i.test(m)) return "The Google sign-in popup was blocked or closed. Allow popups for this site, or open the Treatment from the editor after signing in, then reload.";
     if(/operation-not-allowed|admin-restricted|anonymous/i.test(m)) return "Anonymous sign-in isn't turned on in Firebase (Authentication → Sign-in method → Anonymous → Enable). (" + m + ")";
     return m;

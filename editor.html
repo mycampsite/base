@@ -14623,7 +14623,7 @@ ${TP.join("\n")}
       __LIVE.active = false;
       const m = String((e && (e.code || e.message)) || e);
       let why = "Firebase said: " + m;
-      if(/permission/i.test(m)) why = "Firebase refused access (" + m + "). Check the Realtime Database rules were pasted and Published.";
+      if(/permission/i.test(m)) why = "Firebase refused access (" + m + "). Your Google account is probably not on the Realtime Database's allowed list (Firebase console → Realtime Database → Data → allowed: add your email with dots written as commas, set to true), or it isn't a member of this script's project. Otherwise check the Realtime Database rules were pasted and Published.";
       else if(/operation-not-allowed|admin-restricted|anonymous/i.test(m)) why = "Anonymous sign-in isn't turned on in Firebase (Authentication → Sign-in method → Anonymous → Enable). (" + m + ")";
       else if(/load|network|fetch/i.test(m)) why = "couldn't reach Firebase (" + m + "). Check your internet connection and that databaseURL in config.json is right.";
       else if(/popup/i.test(m)) why = "the Google sign-in popup was blocked or closed. Click “Live off” in the top bar to try again.";
