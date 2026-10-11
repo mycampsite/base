@@ -320,7 +320,7 @@ function drawBody(p){
     const sum = done ? `<span class="bdGS done">✓ ${esc(done.title)}</span>` : `<span class="bdGS">${g.cards.length ? g.cards.length + " option" + (g.cards.length === 1 ? "" : "s") : "no options yet"}</span>`;
     return `<section class="bdGroup${shut ? " shut" : ""}"><button class="bdGH" type="button" data-bg="${esc(key)}" aria-expanded="${!shut}">${ICON.chev}<span class="bdGN">${esc(g.name)}</span>${g.type ? `<span class="bdGT">${esc(g.type)}</span>` : ""}${sum}</button>
       ${briefHtml(g)}
-      ${g.cards.length ? `<div class="bdGrid ${S.tab}">${g.cards.map((c) => cardHtml(c, S.tab, { can })).join("")}${addBtn(g, false)}</div>` : `<div class="bdNone">No ${noun} options yet.${can ? addBtn(g, true) : ""}${sheetLink ? ` ${can ? "Or add" : "Add"} one in <a href="${sheetLink}" target="_blank" rel="noopener">the Sheet</a>.` : ""}</div>`}</section>`;
+      ${g.cards.length ? `<div class="bdGrid ${S.tab}">${g.cards.map((c) => cardHtml(c, S.tab, { can })).join("")}${addBtn(g, false)}</div>` : `<div class="bdNone">${can ? addBtn(g, true) : ""}${sheetLink ? ` ${can ? "Or add" : "Add"} one in <a href="${sheetLink}" target="_blank" rel="noopener">the Sheet</a>.` : ""}</div>`}</section>`;
   }).join("");
   box.scrollTop = top;
 }
