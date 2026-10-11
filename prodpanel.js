@@ -101,6 +101,11 @@ const css = `
 .cap i{ display:block; height:100%; background:#8fe3a6; }
 .col.over .cap i{ background:#ff8b83; }
 .colCall{ display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11.5px; color:var(--uiMuted); }
+.ctlTime{ display:flex; gap:6px; align-items:center; }
+.ctlTime select{ flex:1; }
+.h24{ height:32px; text-transform:none; letter-spacing:0; }
+.h24.on{ background:#ececf0; color:#111; border-color:#ececf0; }
+.colCall select{ height:24px; border-radius:6px; border:1px solid var(--uiBorder); background:#111; padding:0 4px; font-size:12px; color:inherit; }
 .colCall input{ height:24px; border-radius:6px; border:1px solid var(--uiBorder); background:#111; padding:0 5px; font-size:12px; }
 .strips{ padding:7px; display:flex; flex-direction:column; gap:6px; overflow-y:auto; min-height:46px; }
 .strip{ text-align:left; width:100%; border:1px solid rgba(255,255,255,.08); border-left:5px solid var(--sc, #ddd); border-radius:8px; padding:6px 8px; background:color-mix(in srgb, var(--sc, #ddd) 9%, #202020); cursor:grab; font-size:12px; line-height:1.35; }
@@ -250,6 +255,19 @@ function fmtDate(iso){
   return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 }
 const H = () => window.__CampHub;
+// Call times: a dropdown in 15-minute steps, shown in 12- or 24-hour time (a per-device choice)
+const H24_KEY = "Camp_PROD_24H_V1";
+const is24 = () => lsGet(H24_KEY) === "1";
+function fmtTime(hm){
+  const m = /^(\d{2}):(\d{2})$/.exec(hm || ""); if(!m) return hm || "";
+  if(is24()) return hm;
+  const h = +m[1]; return (h % 12 || 12) + ":" + m[2] + (h < 12 ? " am" : " pm");
+}
+function timeSelect(val, attr, dis){
+  const opts = []; for(let i = 0; i < 96; i++){ const h = Math.floor(i / 4), mm = (i % 4) * 15; opts.push(String(h).padStart(2, "0") + ":" + String(mm).padStart(2, "0")); }
+  if(val && opts.indexOf(val) < 0){ opts.push(val); opts.sort(); }
+  return `<select class="tSel" ${attr}${dis}>${opts.map((t) => `<option value="${t}"${t === val ? " selected" : ""}>${fmtTime(t)}</option>`).join("")}</select>`;
+}
 
 /* ---------- script loading (the source of truth) ---------- */
 async function loadScript(id, force){
@@ -329,6 +347,7 @@ function render(pid){
 }
 function draw(pid){
   S.pid = pid;
+  try{ const h = H(); if(h && h.syncState) h.syncState(); }catch(_e){}
   const hub = H(), box = document.getElementById("ctl"); if(!box || !hub) return;
   const p = hub.project(pid); if(!p){ box.innerHTML = ""; return; }
   if(S.drag) return;                                   // don't rebuild the board under a drag
@@ -395,11 +414,10 @@ function draw(pid){
     ${badOrder ? `<span class="ctlChip warn" title="A pinned date is on or before the day ahead of it">⚠ Days out of date order</span>` : ""}
     ${sc.state === "loading" ? `<span class="ctlChip">Updating from script…</span>` : ""}
     ${!canEdit ? `<span class="ctlChip">View only</span>` : ""}
-    ${P.callsheetsStale(raw) ? `<span class="ctlChip warn" title="Flags, locations, cast types or days changed since the Sheets were last built. The budget, schedule and call sheets catch up on the next Sync.">⟳ Sheets behind the plan${hub.isOwner(p) ? "" : " (owner Syncs)"}</span>` : ""}`;
+    ${P.callsheetsStale(raw) ? `<span class="ctlChip warn" title="Flags, locations, cast types or days changed since the Sheets were last built. The budget, schedule and call sheets catch up on the next Sync.">⟳ Sheets behind the plan${hub.isOwner(p) ? ": Sync" : " (owner Syncs)"}</span>` : ""}`;
   const hh = HIST[pid] || { undo: [], redo: [] };
   const acts = `<div class="ctlActs">
       ${canEdit ? `<span class="ctlUR"><button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
-      ${hub.isOwner(p) ? `<button class="btn sm primary" type="button" data-a="sync" title="Rebuild the Schedule (with Day Out of Days), the Budget and the call sheets from this plan">Sync to Sheets</button>` : ""}
       <span class="ctlMore"><button class="btn sm" type="button" data-a="menu" aria-haspopup="menu" aria-expanded="${S.menu}" title="More">⋯</button>${S.menu ? `<div class="ctlMenu" role="menu">
         <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room</small></button>
         <button type="button" data-a="reauto"${canEdit ? "" : " disabled"}>Re-plan all<small>Lay out every scene again from scratch</small></button>
@@ -419,7 +437,7 @@ function draw(pid){
       <label>First shoot day<input type="date" value="${esc(st.start)}" data-s="start"${dis}></label>
       <label>Shooting week<select data-s="perWeek"${dis}>${[[5, "5 days (Mon–Fri)"], [6, "6 days (Mon–Sat)"], [7, "7 days"]].map(([v, n]) => `<option value="${v}"${v === st.perWeek ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <label>Pages per day (limit)<select data-s="maxEighths"${dis}>${pageOpts.map((e) => `<option value="${e}"${e === st.maxEighths ? " selected" : ""}>${P.fmtEighths(e)}</option>`).join("")}</select></label>
-      <label>Default call<input type="time" value="${esc(st.call)}" data-s="call"${dis}></label>
+      <label>Default call<span class="ctlTime">${timeSelect(st.call, 'data-s="call"', dis)}<button type="button" class="btn sm h24${is24() ? " on" : ""}" data-a="h24" aria-pressed="${is24()}" title="Show times as 24-hour (this device)">24h</button></span></label>
     </div></details>`;
 
   const hasDocs = hub.hasSheets(pid);
@@ -457,7 +475,7 @@ function draw(pid){
         <div class="colHead"><b>Day ${i + 1}</b><label class="dtPick${d.date ? " pinned" : ""}" title="${d.date ? "Set to this date. Click to change it" : "Click to choose this day's date. The days after it follow on"}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(fmtDate(dates[i]) || "Set date")}</span><input type="date" value="${esc(dates[i] || "")}" data-date="${i}"${dis}></label>${d.date && canEdit ? `<button type="button" class="unpin" data-a="unpin" data-day="${i}" title="Unpin: follow on from the day before">✕</button>` : ""}
           <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc${shotsOn ? " · " + P.dayShots(d, shotMap).total + " shots" : ""} · ${x.cast.length} cast</span></div>
           <div class="cap"><i style="width:${pct}%"></i></div>
-          <div class="colCall">Call <input type="time" value="${esc(d.call || st.call)}" data-call="${i}"${dis}>${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
+          <div class="colCall">Call ${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
         <div class="strips">${d.scenes.length ? d.scenes.map(strip).join("") : `<div class="colEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`}</div></div>`;
     })).join("");
   const dayTabs = `<div class="dayTabs" role="tablist" aria-label="Shoot days">
@@ -497,8 +515,7 @@ function draw(pid){
   const offs = (st.off || []);
   const cal = offs.length ? `<div class="offRow"><b>Days off</b>${offs.map((iso) => `<button type="button" class="offChip" data-a="cal" data-iso="${esc(iso)}" title="Shoot on this date again"${canEdit ? "" : " disabled"}>${esc(fmtDate(iso))} ✕</button>`).join("")}</div>` : "";
   const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit), castSec = castView(pl, bd, canEdit);
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${castSec}${locSec}
-    <div class="ctlRO">${matchMedia("(hover:none)").matches ? "Tap a scene to move it" : "Drag scenes between days, or click one to move it"}. Saves for everyone as you go.</div></div>`;
+  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${castSec}${locSec}</div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
 }
 
@@ -613,6 +630,7 @@ function wire(box, pid, ctx){
       if(k === "menu"){ S.menu = !S.menu; render(pid); return; }
       if(k === "dtab"){ S.dayTab[pid] = Number(a.dataset.i); render(pid); return; }
       if(k === "undo" || k === "redo"){ stepHist(pid, k === "undo"); return; }
+      if(k === "h24"){ lsSet(H24_KEY, is24() ? "0" : "1"); render(pid); return; }
       if(k === "warns"){ S.warnOpen = !S.warnOpen; render(pid); return; }
       if(k === "create"){ hub.createDocs(a); return; }
       if(k === "fx" && canEdit){
@@ -803,5 +821,14 @@ function castTypes(pid, scriptId){
   const out = {}; (planOf(pid).castType || []).forEach((c) => { out[c.name] = c.t; });
   return out;
 }
-window.CampProdPanel = { render, setMode, csError, reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
+// Sync to Sheets, from the hub's bar (next to + Docs)
+function syncNow(pid, btn){
+  const hub = H(), p = hub.project(pid); if(!p || S.busy[pid]) return;
+  const ids = hub.scriptIds(p), plan = planOf(pid), scriptId = (plan.scriptId && ids.indexOf(plan.scriptId) >= 0) ? plan.scriptId : ids[0];
+  if(!scriptId){ hub.toast("Add a script to this project first.", "err"); return; }
+  flush(); S.busy[pid] = "sync"; rerender();
+  Promise.resolve(hub.syncSheets(pid, scriptId, btn)).finally(() => { delete S.busy[pid]; rerender(); });
+}
+const isStale = (pid) => { const p = H().project(pid); return !!(p && P.callsheetsStale(p.production)); };
+window.CampProdPanel = { syncNow, isStale, render, setMode, csError, reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
 })();

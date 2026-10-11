@@ -8,7 +8,7 @@
 (function (root) {
 "use strict";
 
-const DEFAULTS = { start: "", days: 5, perWeek: 5, maxEighths: 40, call: "07:00" };
+const DEFAULTS = { start: "", days: 5, perWeek: 7, maxEighths: 40, call: "07:00" };
 const MAX_DAYS = 120;
 
 // ---------- small helpers ----------

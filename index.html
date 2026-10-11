@@ -416,7 +416,6 @@
         <h2 id="pName"></h2>
         <span class="badge" id="pRole"></span>
         <button id="members" class="btn hidden" type="button" title="Members and invites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span class="lbl" id="membersLbl">Members</span></button>
-        <button id="linkBtn" class="btn hidden" type="button" title="Add a script from your library to this project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span class="lbl">Link script</span></button>
         <a id="folder" class="btn" target="_blank" rel="noopener" title="Open the project's Drive folder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="lbl">Drive folder</span></a>
       </div>
       <div class="mtabs" role="tablist" aria-label="Project sections">
@@ -435,6 +434,7 @@
         <div class="bar">
           <div class="tabs" id="tabs" role="tablist" aria-label="Sheets"></div>
           <div class="actions">
+            <button id="syncBtn" class="btn hidden" type="button" title="Rebuild the Schedule (with Day Out of Days), the Budget and the call sheets from the plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="lbl">Sync to Sheets</span></button>
             <button id="createDocs" class="btn hidden" type="button" title="Build a budget, schedule, shot list or crew docs from the script"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Create</span></button>
             <a id="open" class="btn hidden" target="_blank" rel="noopener" title="Open in Google Sheets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><span class="lbl">Open in Sheets</span></a>
             <button id="sheetMenu" class="btn primary" type="button" aria-haspopup="menu" aria-label="Sheet options" title="Sheet options: toolbar, dark view, downloads, shortcuts"><span class="lbl">Sheet</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg></button>
@@ -980,7 +980,6 @@ function renderBody() {
   $("pName").textContent = p.name;
   $("pRole").className = "badge " + role; $("pRole").textContent = role;
   $("members").classList.toggle("hidden", !owner);
-  $("linkBtn").classList.toggle("hidden", !owner);
   if (owner) {
     const n = Object.keys(p.members || {}).length, pend = Object.keys(p.pending || {}).length;
     $("membersLbl").textContent = "Members · " + n + (pend ? " (+" + pend + ")" : "");
@@ -1018,11 +1017,12 @@ function renderList(p) {
   const NOUN = { scripts: "script", storyboard: "storyboard", treatment: "treatment" }[tab];
   // Storyboards need a Shot List export (owner only); treatments can be started by editors too
   const canNew = tab === "storyboard" ? owner : tab === "treatment" ? canEdit : owner;
+  const linkB = (tab === "scripts" && owner) ? `<button class="btn" type="button" data-act="link" title="Add a script from your library to this project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span class="lbl">Link script</span></button>` : "";
   const newBtn = cls => `<button class="btn ${cls}" type="button" data-act="blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">New ${NOUN}</span></button>`;
   if (!ids.length) {
     pane.innerHTML = `<div class="emptyBox"><b>No ${NOUN} in this project yet</b><p>${owner
-      ? (tab === "scripts" ? "Start a blank script, or use Link script at the top to add one from your library." : "Start a blank " + NOUN + " (it makes a blank script to go with it), or use Link script at the top to add a script you've already written.")
-      : "The owner hasn't added one yet."}</p>${owner ? newBtn("primary") : ""}</div>`;
+      ? (tab === "scripts" ? "Start a blank script, or link one from your library." : "Start a blank " + NOUN + " (it makes a blank script to go with it), or link a script you've already written on the Scripts tab.")
+      : "The owner hasn't added one yet."}</p>${owner ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${newBtn("primary")}${linkB}</div>` : ""}</div>`;
     wireList(pane); return;
   }
   if (RIP.state === "locked") {
@@ -1041,7 +1041,7 @@ function renderList(p) {
     wireList(pane); return;
   }
   const count = shownIds.length + " " + NOUN + (shownIds.length === 1 ? "" : "s");
-  const head = `<div class="listHead"><span class="muted">${esc(count)}</span>` + (canNew ? newBtn("") : "") + `</div>`;
+  const head = `<div class="listHead"><span class="muted">${esc(count)}</span>` + linkB + (canNew ? newBtn("") : "") + `</div>`;
   let note = "";
   if (RIP.state === "loading" && !RIP.files) note = `<div class="muted" style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span class="spin"></span>Loading script details…</div>`;
   if (RIP.state === "error") note = `<div class="muted" style="margin-bottom:10px">Couldn't load script details: ${esc(RIP.err)} <button class="btn sm" type="button" data-act="retry">Try again</button></div>`;
@@ -1067,6 +1067,7 @@ function wireList(pane) {
   pane.querySelectorAll("[data-act=blank]").forEach(b => b.addEventListener("click", e => current.tab === "scripts" ? startBlank("scripts", e.currentTarget) : newPart(current.tab, e.currentTarget)));
   pane.querySelectorAll("[data-row]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); if (pMenu) { closeMenu(); return; } openRowMenu(b.dataset.row, b); }));
   pane.querySelector("[data-act=unlock]")?.addEventListener("click", unlockCamp);
+  pane.querySelectorAll("[data-act=link]").forEach(b => b.addEventListener("click", e => linkScript(e.currentTarget)));
   pane.querySelector("[data-act=retry]")?.addEventListener("click", () => { RIP.state = "idle"; loadCamp(); });
   pane.querySelector("[data-act=create]")?.addEventListener("click", e => createDocsFlow(e.currentTarget));
   pane.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); openDraft(b.dataset.view, b.dataset.label, false); }));
@@ -1124,6 +1125,16 @@ function renderTabs() {
   const on = box.querySelector(".tab.on");
   if (on) { const l = on.offsetLeft - box.offsetLeft, r = l + on.offsetWidth; if (l < box.scrollLeft) box.scrollLeft = l - 8; else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth + 8; }
 }
+// Sync to Sheets in the bar: owner only, once there's a plan; marked when the Sheets are behind the plan
+function syncState() {
+  const b = $("syncBtn"); if (!b) return;
+  const p = projects[current.pid], ok = !!(p && isOwner(p) && p.production);
+  b.classList.toggle("hidden", !ok);
+  const stale = ok && window.CampProdPanel && window.CampProdPanel.isStale(current.pid);
+  b.classList.toggle("primary", !!stale);
+  b.title = stale ? "The plan changed since the Sheets were built: Sync to update the Schedule, Budget and call sheets" : "Rebuild the Schedule (with Day Out of Days), the Budget and the call sheets from the plan";
+}
+$("syncBtn").onclick = e => { if (window.CampProdPanel) window.CampProdPanel.syncNow(current.pid, e.currentTarget); };
 function setEmpty(title, text, btns, why) {
   const e = $("empty");
   e.innerHTML = title === null ? `<span class="spin"></span>` : `<b>${esc(title)}</b>${text ? `<p>${esc(text)}</p>` : ""}`;
@@ -1138,6 +1149,7 @@ function showFrame() {
   $("prodPane").classList.toggle("pseudo", pseudo);
   try { window.CampProdPanel && window.CampProdPanel.setMode(current.key === "@plan" ? "plan" : current.key === "@cs" ? "cs" : "off"); } catch (e) { console.error(e); }
   $("createDocs").classList.toggle("hidden", !(p && isOwner(p)));
+  syncState();
   { const hasDocs = !!(sheetsByProject[current.pid] && (sheetsByProject[current.pid].list || []).length), l = $("createDocs").querySelector(".lbl");
     if (l) l.textContent = hasDocs ? "Docs" : "Create"; $("createDocs").title = hasDocs ? "Add or update production docs (keeps what you've typed)" : "Build a budget, schedule, shot list or crew docs from the script"; }
   $("open").classList.toggle("hidden", !s);
@@ -1455,7 +1467,7 @@ function linkScript(btn) {
     toast("Linked “" + scriptTitle(id) + "” to " + p.name + " (" + r.rooms + " room key" + (r.rooms === 1 ? "" : "s") + ").", "ok");
   });
 }
-$("linkBtn").onclick = e => linkScript(e.currentTarget);
+// Link script now sits in the Scripts list (next to New script) instead of the project header
 
 // ---------- create production docs (built by Camp's script cloud into this project's Drive folder) ----------
 const DOCS = { budget: "Budget", schedule: "Schedule", shotlist: "Shot list", productiondocs: "Crew, cast & locations" };
@@ -1864,6 +1876,7 @@ window.__CampHub = {
   confirm: (title, text, ok, danger) => confirmDlg(title, text, ok, !!danger),
   prompt: (title, label, value) => dialog({ title, fields: [{ name: "v", label, value: value || "" }], ok: "OK" }).then(v => v ? String(v.v || "").trim() : ""),
   layoutChanged: () => {},
+  syncState: () => syncState(),
   isOwner: p => isOwner(p),
   // Rebuild the schedule (with Day Out of Days) and the budget from the plan, then show them
   hasSheets: pid => { const c = sheetsByProject[pid]; return c ? (c.state === "loading" && !c.list.length ? null : c.list.length > 0) : null; },
