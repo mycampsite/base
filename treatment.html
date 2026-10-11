@@ -5015,6 +5015,76 @@
     if(driveDirty){ saveLocal(); scheduleDrive(1200); }
   }
 
+  /* ---------------- Cut, copy and paste ---------------- */
+  // Ctrl/Cmd+X / C / V (and the right-click menu) work on the selected text, photo frame, shape or line, within a page and
+  // across pages. A copy also sits on the system clipboard, so a paste from another Treatment tab works; text copied
+  // elsewhere pastes as a text box, and an image on the clipboard is uploaded and placed as a photo.
+  const CLIP_MIME = "application/x-camp-treatment";
+  let CLIP = null;                       // the last element copied here: { els, text, fileId, page, n }
+  function copyEl(el, cd, verb){
+    CLIP = { els:[clone(el)], text: el.t === "text" ? (el.text || "") : "", fileId:T.fileId, page:curPage(), n:0 };
+    if(cd){ cd.setData("text/plain", CLIP.text); cd.setData(CLIP_MIME, JSON.stringify({ v:1, fileId:T.fileId, els:CLIP.els })); }
+    else if(navigator.clipboard && navigator.clipboard.writeText){ try{ navigator.clipboard.writeText(CLIP.text).catch(() => {}); }catch(_e){} }
+    notify(verb || "Copied");
+  }
+  function cutEl(el, cd){
+    copyEl(el, cd, "Cut");
+    commit(() => { const pg = curPage(); pg.els = pg.els.filter((e) => e.id !== el.id); }, "Cut");
+    SEL = null; renderStage(); refreshCurThumb(); renderRight();
+  }
+  function pasteEls(src, sameFile){
+    const pg = curPage(); if(RO || !pg || !src || !src.length) return;
+    const nth = CLIP ? CLIP.n : 0, off = (CLIP && CLIP.page === pg) ? (nth + 1) * 6 : nth * 6;     // a paste on the same page steps aside
+    let z = topZ();
+    const made = src.map((o) => {
+      const c = clone(o); c.id = uid(); delete c.role; c.own = 1; c.z = z++; c.x = rd(c.x + off); c.y = rd(c.y + off);
+      if(!sameFile && c.img){ c.img = ""; delete c.ar; }                                           // another script's photo isn't ours: keep the empty frame
+      return c;
+    });
+    commit(() => made.forEach((c) => pg.els.push(c)), "Paste");
+    if(CLIP) CLIP.n++;
+    SEL = made[0].id; CROPPING = null; renderStage(); refreshCurThumb(); renderRight();
+  }
+  function pasteText(text){
+    const pg = curPage(); if(RO || !pg) return;
+    const off = (pg.els.length % 5) * 4, el = { id:uid(), t:"text", x:98.5 + off, y:90 + off, w:100, h:30, z:topZ(), own:1, s:"body", text:String(text).slice(0, 5000), ph:"Text" };
+    commit(() => pg.els.push(el), "Paste text");
+    SEL = el.id; CROPPING = null; renderStage(); if(autoGrow(el)){ markDirty(); renderStage(); } refreshCurThumb(); renderRight();
+  }
+  async function pasteImages(files){
+    const ids = await uploadFiles(files); if(!ids.length) return;
+    const tgt = SEL && findEl(SEL);
+    if(tgt && tgt.t === "image" && !tgt.img) setImage(tgt, ids.shift());                              // an empty selected frame takes the first one
+    for(let i = 0; i < ids.length; i++) await placeFreeImage(ids[i], null, i);
+  }
+  const pasteFromClip = () => { if(CLIP) pasteEls(CLIP.els, CLIP.fileId === T.fileId); };
+  // these events leave typing, panels, dialogs and the slideshow to the browser
+  const clipFree = (e) => {
+    if(document.querySelector(".modalShade, .fontMenu, .dropVeil") || document.getElementById("preview").classList.contains("show")) return false;
+    const t = e.target, tag = (t && t.tagName || "").toLowerCase();
+    return !(tag === "input" || tag === "textarea" || tag === "select" || (t && t.isContentEditable));
+  };
+  const hasTextSel = () => { const s = window.getSelection && window.getSelection(); return !!(s && !s.isCollapsed && String(s).trim()); };
+  document.addEventListener("copy", (e) => {
+    if(!clipFree(e) || hasTextSel()) return;
+    const el = SEL && findEl(SEL); if(!el) return;
+    e.preventDefault(); copyEl(el, e.clipboardData);
+  });
+  document.addEventListener("cut", (e) => {
+    if(RO || !clipFree(e) || hasTextSel()) return;
+    const el = SEL && findEl(SEL); if(!el) return;
+    e.preventDefault(); cutEl(el, e.clipboardData);
+  });
+  document.addEventListener("paste", (e) => {
+    if(RO || !clipFree(e)) return;
+    const cd = e.clipboardData; if(!cd) return;
+    const raw = cd.getData(CLIP_MIME), text = cd.getData("text/plain") || "", files = Array.from(cd.files || []).filter((f) => /^image\//.test(f.type));
+    if(raw){ try{ const p = JSON.parse(raw); if(p && Array.isArray(p.els)){ e.preventDefault(); pasteEls(p.els, p.fileId === T.fileId); return; } }catch(_e){} }
+    if(files.length){ e.preventDefault(); pasteImages(files); return; }
+    if(CLIP && text === CLIP.text){ e.preventDefault(); pasteFromClip(); return; }                       // the browser kept only the text of what we copied
+    if(text.trim()){ e.preventDefault(); pasteText(text); }
+  });
+
   let __rsT = 0;
   window.addEventListener("resize", () => { clearTimeout(__rsT); __rsT = setTimeout(() => { if(!isPhone() && SHEET) setSheet(false); if(!isPhone() && VIEW.z !== 1){ VIEW.z = 1; VIEW_PREV = null; } if(UI_READY) renderNav(); renderStage(); if(document.getElementById("preview").classList.contains("show")) renderPreview(); }, 120); });
 
@@ -5115,6 +5185,7 @@
         if(el.img) a.push([CROPPING === el.id ? "Done repositioning" : "Reposition", () => { CROPPING = CROPPING === el.id ? null : el.id; if(CROPPING) focusOn(el, true); else unfocus(); renderStage(); renderRight(); }]);
         a.push(null);
       }
+      a.push(["Cut", () => cutEl(el)], ["Copy", () => copyEl(el)]); if(CLIP) a.push(["Paste", () => pasteFromClip()]);
       a.push(["Duplicate", () => dupEl(el)], ["Bring forward", () => arrange(el, "up")], ["Send back", () => arrange(el, "down")], null, ["Delete", () => delEl(el), "danger"]);
       return a;
     };
