@@ -57,6 +57,9 @@ let BASE = "";
   await page(browser, "storyboard opens", "/storyboard.html?fileId=f1");
   await page(browser, "treatment builds its pages, and Export shows the preview first", "/treatment.html?fileId=f1", async (p) => {
     await expect(p, () => document.querySelectorAll(".navItem").length > 2 && !!document.querySelector("#stage .tpage"), "pages on the stage");
+    await p.click("#stage"); await p.keyboard.press("Control+a"); await p.waitForTimeout(200);
+    await expect(p, () => /SELECTED/.test((document.querySelector("#rightRail .section-title") || {}).textContent || ""), "Ctrl/Cmd+A to select several");
+    await p.keyboard.press("Escape");
     await p.click("#exportBtn"); await p.waitForTimeout(300);
     await expect(p, () => document.getElementById("preview").classList.contains("exporting"), "the export preview");
   });

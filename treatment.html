@@ -345,6 +345,15 @@
   #selBox.line .h-n, #selBox.line .h-s, #selBox.line .h-ne, #selBox.line .h-nw, #selBox.line .h-se, #selBox.line .h-sw{ display:none; }
   #selBox.crop .h{ display:none; }
   #selBox.typing{ outline-style:dashed; }
+  #selBox .h-rot{ left:50%; top:-22px; border-radius:50%; cursor:grab; }
+  #selBox .h-rot::after{ content:""; position:absolute; left:50%; top:9px; width:1px; height:13px; background:var(--sel); }
+  #selBox.multi .h, #selBox.typing .h-rot, #selBox.crop .h-rot, #selBox.line .h-rot{ display:none; }
+  #selBox.multi{ outline-style:dashed; }
+  #multiSel{ position:absolute; inset:0; pointer-events:none; z-index:9; }
+  #multiSel i{ position:absolute; outline:1px solid var(--sel); }
+  #marquee{ position:absolute; z-index:11; pointer-events:none; border:1px dashed var(--sel); background:rgba(80,140,255,.08); }
+  .rotRow{ display:flex; gap:8px; align-items:center; }
+  .rotRow .stepper{ flex:1; }
   #selBox.short .h-n, #selBox.short .h-s, #selBox.narrow .h-e, #selBox.narrow .h-w{ display:none; }
   #stage .guide{ position:absolute; background:#e0457b; pointer-events:none; z-index:11; }
   #stage .guide.gv{ top:0; bottom:0; width:1px; }
@@ -1883,7 +1892,8 @@
     ctx = ctx || { th:THEMES.deck, V:THEMES.deck.v[0] };
     const th = ctx.th, V = ctx.V, d = document.createElement("div");
     d.className = "el el-" + el.t; d.dataset.id = el.id;
-    d.style.cssText = `left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;z-index:${el.z || 1};` + (el.op != null && el.op < 1 ? `opacity:${el.op};` : "");
+    d.style.cssText = `left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;z-index:${el.z || 1};` + (el.op != null && el.op < 1 ? `opacity:${el.op};` : "")
+      + (el.rot ? `rotate:${el.rot}deg;` : "") + (el.fh || el.fv ? `scale:${el.fh ? -1 : 1} ${el.fv ? -1 : 1};` : "");
     if(el.t === "text"){
       const L = textLook(el, th), st = d.style;
       if(el.font) ensureFont(el.font);
@@ -2227,6 +2237,17 @@
   let SEL = null, EDITING = null, SCALE = 1, CROPPING = null, BUSY = 0, RO = false, UI_READY = false;
   const rd = (v) => Math.round(v * 10) / 10;
   const findEl = (id) => curPage() && curPage().els.find((e) => e.id === id);
+  // More than one selected: Shift-click adds / removes, Shift-drag on the page draws a box, Ctrl/Cmd+A takes the whole page.
+  // SEL stays the "main" one; MULTI holds the rest (only while MULTI_FOR === SEL, so any other change of SEL drops it).
+  let MULTI = [], MULTI_FOR = null;
+  const selIds = () => { const pg = curPage(); if(!SEL || !pg) return []; const ids = [SEL].concat(MULTI_FOR === SEL ? MULTI.filter((i) => i !== SEL) : []); return ids.filter((id) => pg.els.some((e) => e.id === id)); };
+  const multiOn = () => selIds().length > 1;
+  const selEls = () => selIds().map(findEl).filter(Boolean);
+  function setMulti(ids){ ids = ids.filter((v, i) => v && ids.indexOf(v) === i); SEL = ids[0] || null; MULTI = ids.slice(1); MULTI_FOR = SEL; }
+  function boundsOf(els){
+    const x = Math.min(...els.map((e) => e.x)), y = Math.min(...els.map((e) => e.y));
+    return { x, y, w:Math.max(...els.map((e) => e.x + e.w)) - x, h:Math.max(...els.map((e) => e.y + e.h)) - y };
+  }
   const stagePage = () => document.querySelector("#stage > .tpage");
   const elNode = (id) => { const p = stagePage(); return p && p.querySelector(`.el[data-id="${id}"]`); };
   const pxPerMm = () => PX_MM * SCALE;
@@ -2240,11 +2261,18 @@
     if(!el || (EDITING && !typing)){ if(box) box.remove(); return; }
     if(!box){
       box = document.createElement("div"); box.id = "selBox";
-      box.innerHTML = ["nw","n","ne","e","se","s","sw","w"].map((d) => `<div class="h h-${d}" data-dir="${d}"></div>`).join("");
+      box.innerHTML = ["nw","n","ne","e","se","s","sw","w","rot"].map((d) => `<div class="h h-${d}" data-dir="${d}"${d === "rot" ? ' title="Rotate (Shift: 15° steps)"' : ""}></div>`).join("");
       stage.appendChild(box);
     }
-    const k = pxPerMm();
-    box.style.cssText = `left:${el.x * k}px;top:${el.y * k}px;width:${el.w * k}px;height:${el.h * k}px;`;
+    const k = pxPerMm(), multi = multiOn(), g = multi ? boundsOf(selEls()) : el;
+    let mo = document.getElementById("multiSel");
+    if(multi){
+      if(!mo){ mo = document.createElement("div"); mo.id = "multiSel"; stage.appendChild(mo); }
+      mo.style.translate = "";
+      mo.innerHTML = selEls().map((e) => `<i style="left:${e.x * k}px;top:${e.y * k}px;width:${e.w * k}px;height:${e.h * k}px;${e.rot ? "rotate:" + e.rot + "deg;" : ""}"></i>`).join("");
+    }else if(mo) mo.remove();
+    box.style.cssText = `left:${g.x * k}px;top:${g.y * k}px;width:${g.w * k}px;height:${g.h * k}px;` + (!multi && el.rot ? `rotate:${el.rot}deg;` : "");
+    box.classList.toggle("multi", multi);
     box.classList.toggle("line", el.t === "divider");
     box.classList.toggle("short", el.h * k < 34); box.classList.toggle("narrow", el.w * k < 34);
     box.classList.toggle("crop", CROPPING === el.id);
@@ -2252,11 +2280,11 @@
   }
   let __rrRaf = 0;
   function selectEl(id, soon){
-    if(EDITING && EDITING !== id) finishEdit(); if(SEL !== id) CROPPING = null; SEL = id; drawSel(); presenceTouch();
+    if(EDITING && EDITING !== id) finishEdit(); if(SEL !== id) CROPPING = null; SEL = id; MULTI = []; MULTI_FOR = null; drawSel(); presenceTouch();
     if(!soon){ renderRight(); return; }
     if(!__rrRaf) __rrRaf = requestAnimationFrame(() => { __rrRaf = 0; renderRight(); });
   }
-  function deselect(){ if(EDITING) finishEdit(); if(!SEL) return; SEL = null; if(CROPPING){ CROPPING = null; unfocus(); } drawSel(); renderRight(); presenceTouch(); }
+  function deselect(){ if(EDITING) finishEdit(); MULTI = []; MULTI_FOR = null; if(!SEL) return; SEL = null; if(CROPPING){ CROPPING = null; unfocus(); } drawSel(); renderRight(); presenceTouch(); }
 
   // Snapping: page edges, margins, centre lines and every other element's edges/centre
   function snapTargets(skipId){
@@ -2282,7 +2310,7 @@
   function placeLive(node, r){
     if(node){ node.style.left = r.x + "mm"; node.style.top = r.y + "mm"; node.style.width = r.w + "mm"; node.style.height = r.h + "mm"; }
     const box = document.getElementById("selBox"), k = pxPerMm();
-    if(box) box.style.cssText = `left:${r.x * k}px;top:${r.y * k}px;width:${r.w * k}px;height:${r.h * k}px;`;
+    if(box){ const se = SEL && findEl(SEL); box.style.cssText = `left:${r.x * k}px;top:${r.y * k}px;width:${r.w * k}px;height:${r.h * k}px;` + (se && se.rot ? `rotate:${se.rot}deg;` : ""); }
   }
 
   function wireStage(){
@@ -2343,11 +2371,13 @@
       finishEdit();
     }
     const h = e.target.closest("#selBox .h");
-    if(h && SEL){ e.preventDefault(); dragResize(e, findEl(SEL), h.dataset.dir); return; }
+    if(h && SEL && !multiOn()){ e.preventDefault(); if(h.dataset.dir === "rot") dragRotate(e, findEl(SEL)); else dragResize(e, findEl(SEL), h.dataset.dir); return; }
     const n = e.target.closest(".tpage .el");
-    if(!n){ deselect(); dragPan(e); return; }
+    if(!n){ if(e.shiftKey){ e.preventDefault(); marquee(e); return; } deselect(); dragPan(e); return; }
     let el = findEl(n.dataset.id); if(!el) return;
     e.preventDefault();
+    if(e.shiftKey && !e.altKey){ toggleSel(el.id); return; }                       // Shift-click: add to / take out of the selection
+    if(multiOn() && selIds().includes(el.id) && !e.altKey){ dragMoveMulti(e); return; }
     // touch: a quick second tap does what a double-click does (type into text, reposition a photo)
     if(e.pointerType && e.pointerType !== "mouse"){
       const now = Date.now();
@@ -2401,7 +2431,7 @@
     let raf = 0, lastEv = null, lastG = [null, null];
     const paintMove = () => {
       raf = 0;
-      if(node){ node.style.willChange = "transform"; node.style.transform = `translate(${(r.x - el.x) * PX_MM}px,${(r.y - el.y) * PX_MM}px)`; }
+      if(node){ node.style.willChange = "translate"; node.style.translate = `${(r.x - el.x) * PX_MM}px ${(r.y - el.y) * PX_MM}px`; }
       const box = document.getElementById("selBox"); if(box){ box.style.left = r.x * k + "px"; box.style.top = r.y * k + "px"; }
       showGuides(lastG[0], lastG[1]);
       if(lastEv) tip(lastEv, "X " + f1(r.x) + "   Y " + f1(r.y) + " mm");
@@ -2409,7 +2439,7 @@
     const up = () => {
       window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
       if(raf){ cancelAnimationFrame(raf); raf = 0; }
-      if(node){ node.style.transform = ""; node.style.willChange = ""; if(moved) placeLive(node, r); }
+      if(node){ node.style.translate = ""; node.style.willChange = ""; if(moved) placeLive(node, r); }
       showGuides(null, null); tip(null);
       if(moved){ commit(() => { el.x = r.x; el.y = r.y; }, "Move"); refreshCurThumb(); }
       if(dup){ txEnd("Duplicate"); refreshCurThumb(); }
@@ -2418,6 +2448,140 @@
       BUSY = Math.max(0, BUSY - 1); flushRemote();
     };
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  }
+  function toggleSel(id){
+    if(EDITING) finishEdit();
+    const ids = selIds(), i = ids.indexOf(id);
+    if(i >= 0) ids.splice(i, 1); else ids.push(id);
+    CROPPING = null; setMulti(ids); drawSel(); renderRight(); presenceTouch();
+  }
+  // Shift-drag on the page: a box that selects everything fully inside it
+  function marquee(e){
+    const stage = document.getElementById("stage"); if(!stagePage()) return;
+    BUSY++;
+    const sr = stage.getBoundingClientRect(), k = pxPerMm(), at = (ev) => ({ x:(ev.clientX - sr.left) / k, y:(ev.clientY - sr.top) / k });
+    const a = at(e), base = selIds(), mq = document.createElement("div"); mq.id = "marquee"; stage.appendChild(mq);
+    let b = null;
+    const mv = (ev) => { const c = at(ev); b = { x:Math.min(a.x, c.x), y:Math.min(a.y, c.y), w:Math.abs(c.x - a.x), h:Math.abs(c.y - a.y) }; mq.style.cssText = `left:${b.x * k}px;top:${b.y * k}px;width:${b.w * k}px;height:${b.h * k}px;`; };
+    const up = () => {
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); mq.remove();
+      if(b && (b.w > 1 || b.h > 1)){
+        const hits = curPage().els.filter((x) => x.x >= b.x && x.y >= b.y && x.x + x.w <= b.x + b.w && x.y + x.h <= b.y + b.h).sort((p, q) => (q.z || 0) - (p.z || 0)).map((x) => x.id);
+        if(EDITING) finishEdit(); CROPPING = null;
+        setMulti(base.concat(hits.filter((id) => base.indexOf(id) < 0))); drawSel(); renderRight();
+      }
+      BUSY = Math.max(0, BUSY - 1); flushRemote();
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  }
+  // Move everything selected together; the group snaps by its outer edges and centre
+  function dragMoveMulti(e){
+    BUSY++;
+    const els = selEls(), nodes = els.map((x) => elNode(x.id)), k = pxPerMm(), sx = e.clientX, sy = e.clientY, B0 = boundsOf(els), tol = 6 / k;
+    const ids = new Set(els.map((x) => x.id)), xs = [0, M, PAGE_W / 2, PAGE_W - M, PAGE_W], ys = [0, M, PAGE_H / 2, PAGE_H - M, PAGE_H];
+    curPage().els.forEach((o) => { if(ids.has(o.id)) return; xs.push(o.x, o.x + o.w / 2, o.x + o.w); ys.push(o.y, o.y + o.h / 2, o.y + o.h); });
+    let moved = false, dx = 0, dy = 0;
+    const mv = (ev) => {
+      if(PINCH) return;
+      if(!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < (ev.pointerType === "mouse" ? 3 : 8)) return;
+      moved = true;
+      dx = (ev.clientX - sx) / k; dy = (ev.clientY - sy) / k;
+      if(ev.shiftKey){ if(Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+      let gx = null, gy = null;
+      if(!(ev.ctrlKey || ev.metaKey)){
+        const bx = snap1([B0.x + dx, B0.x + dx + B0.w / 2, B0.x + dx + B0.w], xs, tol); if(bx){ dx += bx.d; gx = bx.t; }
+        const by = snap1([B0.y + dy, B0.y + dy + B0.h / 2, B0.y + dy + B0.h], ys, tol); if(by){ dy += by.d; gy = by.t; }
+      }
+      nodes.forEach((nd) => { if(nd) nd.style.translate = `${dx * PX_MM}px ${dy * PX_MM}px`; });
+      const box = document.getElementById("selBox"); if(box){ box.style.left = (B0.x + dx) * k + "px"; box.style.top = (B0.y + dy) * k + "px"; }
+      const mo = document.getElementById("multiSel"); if(mo) mo.style.translate = `${dx * k}px ${dy * k}px`;
+      showGuides(gx, gy); tip(ev, "X " + f1(B0.x + dx) + "   Y " + f1(B0.y + dy) + " mm");
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+      nodes.forEach((nd) => { if(nd) nd.style.translate = ""; });
+      showGuides(null, null); tip(null);
+      if(moved){ commit(() => els.forEach((x) => { x.x = rd(x.x + dx); x.y = rd(x.y + dy); }), "Move"); renderStage(); refreshCurThumb(); }
+      else{ const n = e.target.closest(".tpage .el"); if(n) selectEl(n.dataset.id); }   // a plain click on one of them selects just that one
+      BUSY = Math.max(0, BUSY - 1); flushRemote();
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  }
+  // Rotate around the centre with the knob above the box (Shift: 15° steps; it settles on 0 / 90 / 180 when close)
+  function dragRotate(e, el){
+    if(!el) return;
+    BUSY++;
+    const node = elNode(el.id), box = document.getElementById("selBox"), sr = document.getElementById("stage").getBoundingClientRect(), k = pxPerMm();
+    const cx = sr.left + (el.x + el.w / 2) * k, cy = sr.top + (el.y + el.h / 2) * k, a0 = Math.atan2(e.clientY - cy, e.clientX - cx), r0 = el.rot || 0;
+    let rot = r0, moved = false;
+    const mv = (ev) => {
+      moved = true;
+      let a = r0 + (Math.atan2(ev.clientY - cy, ev.clientX - cx) - a0) * 180 / Math.PI;
+      a = ((a + 180) % 360 + 360) % 360 - 180;
+      if(ev.shiftKey) a = Math.round(a / 15) * 15;
+      else{ const near = [-180, -90, 0, 90, 180].find((t) => Math.abs(a - t) < 3); if(near != null) a = near; }
+      rot = Math.round(a * 10) / 10; if(rot === -180) rot = 180;
+      if(node) node.style.rotate = rot + "deg"; if(box) box.style.rotate = rot + "deg";
+      tip(ev, rot + "°");
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); tip(null);
+      if(moved){ commit(() => { if(rot) el.rot = rot; else delete el.rot; }, "Rotate"); refreshCurThumb(); if(RTAB === "edit") renderRight(); }
+      BUSY = Math.max(0, BUSY - 1); flushRemote();
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  }
+  // Line up / space out everything selected, inside the selection's own outline
+  function alignSel(how){
+    const els = selEls(); if(els.length < 2) return;
+    const B = boundsOf(els);
+    commit(() => els.forEach((x) => {
+      if(how === "l") x.x = rd(B.x); else if(how === "c") x.x = rd(B.x + (B.w - x.w) / 2); else if(how === "r") x.x = rd(B.x + B.w - x.w);
+      else if(how === "t") x.y = rd(B.y); else if(how === "m") x.y = rd(B.y + (B.h - x.h) / 2); else if(how === "b") x.y = rd(B.y + B.h - x.h);
+    }), "Align");
+    renderStage(); refreshCurThumb();
+  }
+  function distributeSel(axis){
+    const els = selEls(); if(els.length < 3) return;
+    const P = axis === "h" ? "x" : "y", S = axis === "h" ? "w" : "h", B = boundsOf(els);
+    const list = els.slice().sort((a, b) => (a[P] + a[S] / 2) - (b[P] + b[S] / 2));
+    const gap = ((axis === "h" ? B.w : B.h) - list.reduce((t, x) => t + x[S], 0)) / (list.length - 1);
+    commit(() => { let at = B[P]; list.forEach((x) => { x[P] = rd(at); at += x[S] + gap; }); }, "Distribute");
+    renderStage(); refreshCurThumb();
+  }
+  function delSel(){
+    const ids = new Set(selIds()); if(!ids.size) return;
+    commit(() => { const pg = curPage(); pg.els = pg.els.filter((x) => !ids.has(x.id)); }, "Delete");
+    SEL = null; MULTI = []; renderStage(); refreshCurThumb(); renderRight();
+  }
+  function dupSel(){
+    const els = selEls(); if(!els.length) return;
+    const copies = els.map((x) => { const c = clone(x); c.id = uid(); c.x = rd(x.x + 6); c.y = rd(x.y + 6); c.z = topZ(); delete c.role; c.own = 1; return c; });
+    commit(() => copies.forEach((c) => curPage().els.push(c)), "Duplicate");
+    setMulti(copies.map((c) => c.id)); renderStage(); refreshCurThumb(); renderRight();
+  }
+  function nudgeSel(dx, dy){
+    txBegin("Nudge"); selEls().forEach((x) => { x.x = rd(x.x + dx); x.y = rd(x.y + dy); }); markDirty();
+    clearTimeout(__nudgeT); __nudgeT = setTimeout(() => { __nudgeT = 0; txEnd("Nudge"); refreshCurThumb(); }, 700);
+    renderStage();
+  }
+  function multiPanel(){
+    const n = selIds().length;
+    const A = (k, label, title) => `<button type="button" data-al="${k}" title="${title}">${label}</button>`;
+    return `<div><div class="pHead"><div class="section-title">${n} SELECTED</div><button type="button" class="iconBtn sm" id="mpDone" title="Deselect (Esc)">${ICON.x}</button></div>
+      <label>Align</label><div class="seg" id="mpAlign">${A("l", "Left", "Align left edges")}${A("c", "Centre", "Align centres")}${A("r", "Right", "Align right edges")}</div>
+      <div class="seg" id="mpAlign2" style="margin-top:6px">${A("t", "Top", "Align top edges")}${A("m", "Middle", "Align middles")}${A("b", "Bottom", "Align bottom edges")}</div>
+      <label>Distribute</label><div class="seg" id="mpDist"><button type="button" data-di="h"${n < 3 ? " disabled" : ""}>Across</button><button type="button" data-di="v"${n < 3 ? " disabled" : ""}>Down</button></div>
+      <div class="row2" style="margin-top:10px"><button class="btn sm" type="button" id="mpDup" title="Ctrl/Cmd+D">Duplicate</button><button class="btn sm" type="button" id="mpDel" title="Delete">Delete</button></div>
+      <div class="hint" style="margin-top:10px">Shift-click adds or removes · Shift-drag selects an area · Ctrl/Cmd+A selects all</div></div>`;
+  }
+  function wireMultiPanel(){
+    const rail = document.getElementById("rightRail");
+    rail.querySelectorAll("[data-al]").forEach((b) => { b.onclick = () => alignSel(b.dataset.al); });
+    rail.querySelectorAll("[data-di]").forEach((b) => { b.onclick = () => distributeSel(b.dataset.di); });
+    document.getElementById("mpDone").onclick = deselect;
+    document.getElementById("mpDup").onclick = dupSel;
+    document.getElementById("mpDel").onclick = delSel;
   }
   function dragCrop(e, el){
     const node = elNode(el.id), im = node && node.querySelector("img"); if(!im) return;
@@ -2463,7 +2627,8 @@
     const mv = (ev) => {
       if(PINCH) return;
       moved = true;
-      const m = ev.altKey ? 2 : 1, dx = (ev.clientX - sx) / k * m, dy = (ev.clientY - sy) / k * m;
+      const m = ev.altKey ? 2 : 1; let dx = (ev.clientX - sx) / k * m, dy = (ev.clientY - sy) / k * m;
+      if(el.rot){ const a = -el.rot * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a); const x2 = dx * c - dy * sn; dy = dx * sn + dy * c; dx = x2; }
       let w = r0.w, h = r0.h, gx = null, gy = null;
       if(hasE) w = r0.w + dx; if(hasW) w = r0.w - dx;
       if(hasS) h = r0.h + dy; if(hasN) h = r0.h - dy;
@@ -3981,6 +4146,8 @@
         <div style="margin-top:10px">${swatchRow("epBc", el.bc, el.bc ? "" : (el.bk || "hi"), V, INK, false)}</div>` : ""}`;
     }
     const op = el.op != null ? el.op : 1;
+    if(el.t !== "divider") h += `<label>Rotate</label><div class="rotRow"><div class="stepper rotStep"><button type="button" data-r="-90" aria-label="Rotate left 90°" title="90° left">↺</button><input type="number" id="epRot" min="-180" max="180" step="1" value="${el.rot || 0}"><button type="button" data-r="90" aria-label="Rotate right 90°" title="90° right">↻</button></div>`
+      + (el.t === "image" || el.t === "shape" ? `<div class="seg" id="epFlip"><button type="button" data-f="fh" class="${el.fh ? "on" : ""}" title="Flip horizontally">⇆</button><button type="button" data-f="fv" class="${el.fv ? "on" : ""}" title="Flip vertically">⇅</button></div>` : "") + `</div>`;
     h += `${slider("epOp", "Opacity", 0.05, 1, 0.05, op, (v) => Math.round(v * 100) + "%")}
       <label>Arrange</label><div class="seg" id="epArrange">
         <button type="button" data-z="front" title="Bring to front (Ctrl/Cmd+Shift+])">Front</button>
@@ -3988,7 +4155,7 @@
         <button type="button" data-z="down" title="Send backward (Ctrl/Cmd+[)">Back</button>
         <button type="button" data-z="back" title="Send to back (Ctrl/Cmd+Shift+[)">Bottom</button></div>
       <div class="row2" style="margin-top:10px"><button class="btn sm" type="button" id="epDup" title="Ctrl/Cmd+D">Duplicate</button><button class="btn sm" type="button" id="epDel" title="Delete">Delete</button></div>
-      <details class="tips"><summary>Shortcuts</summary><div>Shift: stretch from a corner<br>Alt/Option: resize from centre, or drag to copy<br>Ctrl/Cmd: no snapping · Arrows: nudge</div></details></div>`;
+      <details class="tips"><summary>Shortcuts</summary><div>Shift: stretch from a corner, or Shift-click to select more<br>Alt/Option: resize from centre, or drag to copy<br>Ctrl/Cmd: no snapping · Arrows: nudge · Ctrl/Cmd+A: select all</div></details></div>`;
     return h;
   }
   function addPanel(){
@@ -4096,7 +4263,7 @@
       const sz = $("epSize");
       sz.onchange = () => { const v = parseFloat(sz.value); if(!isFinite(v)) return; set(() => { el.size = Math.max(4, Math.min(400, v)); }, "Text size"); };
       sz.onkeydown = (e) => { e.stopPropagation(); if(e.key === "Enter") sz.blur(); };
-      rail.querySelectorAll(".stepper button").forEach((b) => { b.onclick = () => { const v = Math.max(4, Math.min(400, (parseFloat(sz.value) || 12) + Number(b.dataset.d) * (parseFloat(sz.value) >= 40 ? 4 : 1))); sz.value = v; set(() => { el.size = v; }, "Text size"); }; });
+      rail.querySelectorAll(".stepper:not(.rotStep) button").forEach((b) => { b.onclick = () => { const v = Math.max(4, Math.min(400, (parseFloat(sz.value) || 12) + Number(b.dataset.d) * (parseFloat(sz.value) >= 40 ? 4 : 1))); sz.value = v; set(() => { el.size = v; }, "Text size"); }; });
       $("epFmt").querySelectorAll("button").forEach((b) => { b.onclick = () => toggleFormat(el, b.dataset.v); });
       $("epCase").querySelectorAll("button").forEach((b) => { b.onclick = () => set(() => {
         const v = b.dataset.v; delete el.tcase;
@@ -4189,6 +4356,15 @@
       inp.onchange = () => { const v = parseFloat(inp.value); if(!isFinite(v)) return; const k = inp.dataset.g; set(() => { el[k] = rd((k === "w" || k === "h") ? Math.max(el.t === "divider" && k === "h" ? 0.5 : 2, v) : v); }, "Position"); drawSel(); };
     });
     $("epArrange").querySelectorAll("button").forEach((b) => { b.onclick = () => arrange(el, b.dataset.z); });
+    const normRot = (v) => { v = ((v + 180) % 360 + 360) % 360 - 180; return v === -180 ? 180 : Math.round(v * 10) / 10; };
+    const setRot = (v) => set(() => { v = normRot(v); if(v) el.rot = v; else delete el.rot; }, "Rotate", true);
+    const rIn = $("epRot");
+    if(rIn){
+      rIn.onkeydown = (e) => { e.stopPropagation(); if(e.key === "Enter") rIn.blur(); };
+      rIn.onchange = () => { const v = parseFloat(rIn.value); if(isFinite(v)) setRot(v); };
+      rail.querySelectorAll(".rotStep button").forEach((b) => { b.onclick = () => setRot((el.rot || 0) + Number(b.dataset.r)); });
+    }
+    const fl = $("epFlip"); if(fl) fl.querySelectorAll("button").forEach((b) => { b.onclick = () => set(() => { const f = b.dataset.f; if(el[f]) delete el[f]; else el[f] = 1; }, "Flip", true); });
     $("epDup").onclick = () => dupEl(el);
     $("epDel").onclick = () => delEl(el);
   }
@@ -4297,9 +4473,9 @@
     renderTabs();
     if(!pg){ rail.innerHTML = ""; return; }
     if(RO){ rail.innerHTML = '<div class="hint">View only. You can still preview and export a PDF.</div>'; return; }
-    rail.innerHTML = RTAB === "edit" ? elementPanel(el, pg) : RTAB === "add" ? addPanel() : RTAB === "page" ? pagePanel(pg) : RTAB === "photos" ? libPanel() : lookPanel(pg);
+    rail.innerHTML = RTAB === "edit" ? (multiOn() ? multiPanel() : elementPanel(el, pg)) : RTAB === "add" ? addPanel() : RTAB === "page" ? pagePanel(pg) : RTAB === "photos" ? libPanel() : lookPanel(pg);
     rail.dataset.tab = RTAB; rail.dataset.sel = String(selId);
-    if(RTAB === "edit") wireElementPanel(el);
+    if(RTAB === "edit"){ if(multiOn()) wireMultiPanel(); else wireElementPanel(el); }
     else if(RTAB === "add") wireAddPanel();
     else if(RTAB === "page") wirePagePanel(pg);
     else if(RTAB === "photos") wireLib(rail);
@@ -5183,6 +5359,14 @@
     if(mod && k === "z" && !e.shiftKey){ e.preventDefault(); undo(); return; }
     if(mod && ((k === "z" && e.shiftKey) || k === "y")){ e.preventDefault(); redo(); return; }
     if(mod && k === "p"){ e.preventDefault(); exportPdf(); return; }
+    if(mod && k === "a" && curPage()){ e.preventDefault(); if(EDITING) finishEdit(); setMulti(curPage().els.slice().sort((a, b) => (b.z || 0) - (a.z || 0)).map((x) => x.id)); drawSel(); renderRight(); return; }
+    if(multiOn()){
+      if(e.key === "Escape"){ deselect(); return; }
+      if(e.key === "Delete" || e.key === "Backspace"){ e.preventDefault(); delSel(); return; }
+      if(mod && k === "d"){ e.preventDefault(); dupSel(); return; }
+      const st2 = e.shiftKey ? 5 : 1, A2 = { arrowleft:[-st2, 0], arrowright:[st2, 0], arrowup:[0, -st2], arrowdown:[0, st2] }[k];
+      if(A2){ e.preventDefault(); nudgeSel(A2[0], A2[1]); return; }
+    }
     const sel = SEL && findEl(SEL);
     if(sel){
       if(e.key === "Escape"){ if(CROPPING){ CROPPING = null; unfocus(); renderStage(); renderRight(); return; } deselect(); return; }
