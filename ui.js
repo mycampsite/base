@@ -45,6 +45,16 @@
   };
   window.alert = function (msg) { window.CampUI.alert(msg); };
 
+  // Phone menu on the Script, Treatment and Storyboard pages: always a way back to the hub and the project list
+  (function () {
+    var menu = d.getElementById("navMenu");
+    if (!menu || menu.querySelector("#mnHub")) return;
+    var cloud = ""; try { var c = new URLSearchParams(location.search).get("cloud"); if (c) cloud = "cloud=" + encodeURIComponent(c); } catch (_e) {}
+    var hub = d.createElement("a"); hub.id = "mnHub"; hub.textContent = "Hub"; hub.href = "index.html" + (cloud ? "?" + cloud : "");
+    var pr = d.createElement("a"); pr.id = "mnProjects"; pr.textContent = "Projects"; pr.href = "index.html?projects=1" + (cloud ? "&" + cloud : "");
+    menu.insertBefore(pr, menu.firstChild); menu.insertBefore(hub, pr);
+  })();
+
   // The little hand-drawn tent that stands for each person working live (Treatment, Script editor). Each person gets a colour.
   window.CampTent = {
     colors: ["#7d8f4e", "#d4932a", "#5a86b8", "#84707c", "#c9633d", "#3f9a8c", "#9a5c8f", "#a98a5a"],
