@@ -1051,7 +1051,7 @@ function renderList(p) {
     let meta = "";
     if (!f) meta = RIP.files ? "Not found in your library (deleted, or not shared with you)" : "";
     else if (tab === "scripts") meta = [f.pages ? f.pages + " page" + (f.pages === 1 ? "" : "s") : "", fmtWhen(f.modified)].filter(Boolean).join(" · ");
-    else meta = (tab === "storyboard" ? "Storyboard" : "Treatment deck") + " · " + fmtWhen(f.modified).replace(/^edited/, "script edited");
+    else meta = tab === "storyboard" ? "Storyboard" : "Treatment deck";   // f.modified is the script's time, not the deck's, so it isn't shown here
     const href = toolHref(TOOL[tab].page, id);
     const main = !f && RIP.files ? "" : `<a class="btn sm primary" href="${esc(href)}">${TOOL[tab].verb}</a>`;
     const more = canEdit && (f || owner) ? `<button class="pbtn" type="button" data-row="${esc(id)}" aria-label="More for ${esc(scriptTitle(id))}" title="More">${DOTS}</button>` : "";

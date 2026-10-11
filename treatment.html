@@ -2043,6 +2043,14 @@
     if(need > el.h + 0.3){ el.h = rd(need + 0.5); return true; }
     return false;
   }
+  // While typing, any text box (fitted ones too) grows downwards to hold its text, up to the page's bottom edge
+  function growToText(el, n){
+    if(!el || el.t !== "text" || !n || n.dataset.fit === "w") return false;
+    if(n.dataset.fit && n.dataset.fs && !n.classList.contains("editing")) n.style.fontSize = n.dataset.fs + "mm";
+    const need = n.scrollHeight / PX_MM, h = rd(Math.min(PAGE_H - (el.y || 0), need + 0.5));
+    if(need <= el.h + 0.3 || h <= el.h) return false;
+    el.h = h; n.style.height = h + "mm"; return true;
+  }
   function mountScaled(host, page, widthPx, full){
     const s = widthPx / PAGE_WPX;
     host.innerHTML = "";
@@ -2503,7 +2511,7 @@
     n.classList.add("editing");
     try{ n.contentEditable = "plaintext-only"; }catch(_e){ n.contentEditable = "true"; }
     if(n.contentEditable !== "plaintext-only") n.contentEditable = "true";
-    n.oninput = () => { el.text = plainText(n); if(autoGrow(el)) n.style.height = el.h + "mm"; clearTimeout(__typeT); __typeT = setTimeout(typingCheckpoint, 900); };
+    n.oninput = () => { el.text = plainText(n); if(growToText(el, n)) drawSel(); clearTimeout(__typeT); __typeT = setTimeout(typingCheckpoint, 900); };
     n.onpaste = (ev) => {
       if(n.contentEditable !== "true") return;
       ev.preventDefault(); document.execCommand("insertText", false, (ev.clipboardData || window.clipboardData).getData("text/plain"));
@@ -2545,7 +2553,7 @@
     const show = () => {
       const n = elNode(id); if(!n) return;
       const e2 = findEl(id); if(!e2) return;
-      n.textContent = e2.text || ""; if(autoGrow(e2)) n.style.height = e2.h + "mm";
+      n.textContent = e2.text || ""; growToText(e2, n);
       fitText(stagePage()); drawSel();
     };
     const sizeTa = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight + 2, innerHeight * 0.32) + "px"; };
@@ -3972,6 +3980,7 @@
       <label>Divider lines</label>${seg("bgLines", [["theme","As designed"],["on","Show"],["off","Hide"]], (v) => (pg.lines == null ? "theme" : pg.lines ? "on" : "off") === v)}
 </div>
       ${logoPanel(pg)}
+      ${chromePanel()}
       <div class="divider"><div class="section-title">START AGAIN</div><button class="btn sm" type="button" id="rpRebuild" style="width:100%">Rebuild from the script…</button></div>`;
   }
   // Optional 4U. watermark on every page (deck-wide), in any corner, size and colour
@@ -3985,6 +3994,14 @@
         ${slider("lgOp", "Opacity", 0.1, 1, 0.05, mk.op != null ? mk.op : .85, (v) => Math.round(v * 100) + "%")}
         <label>Colour</label>${swatchRow("lgCol", mk.c, mk.c ? "" : (mk.ck || "hi"), V, INK, false)}
         <label class="chk"><input type="checkbox" id="lgCover"${mk.noCover ? " checked" : ""}> Hide on the cover</label>` : ""}</div>`;
+  }
+  // Header & page number for the whole deck: as each layout was designed (covers stay clean), on every page, or off
+  function chromePanel(){
+    const ps = T.pages.filter((p) => p.sec), st = (p) => p.chrome == null ? "theme" : p.chrome ? "on" : "off";
+    const cur = ps.length && ps.every((p) => st(p) === st(ps[0])) ? st(ps[0]) : "";
+    return `<div class="divider"><div class="section-title">HEADER &amp; PAGE NUMBER</div>
+      ${seg("chAll", [["theme","As designed"],["on","Every page"],["off","Off"]], (v) => cur === v)}
+      ${cur ? "" : `<div class="hint" style="margin-top:6px">Pages differ. Pick one to set every page.</div>`}</div>`;
   }
   function wireLogo(){
     const $ = (id) => document.getElementById(id), mk = () => (T.mark = T.mark || { on:1, pos:"br", size:9, op:.85 });
@@ -4010,9 +4027,7 @@
       <div class="section-title">PAGE ${T.cur + 1} OF ${T.pages.length}</div>
       <label style="margin-top:0">Name</label><input type="text" id="rpName" value="${esc(pg.name)}" maxlength="40">
       <label>Section</label><select id="rpSec">${pg.sec ? "" : `<option value="" selected>Older layout</option>`}${SECTIONS.map(([k, n]) => `<option value="${k}"${k === pg.sec ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>
-      ${pg.sec ? `<label>Layout</label><div class="varGrid">${vars.map((v) => `<button type="button" class="varOpt${v.id === pg.layout ? " on" : ""}" data-vid="${v.id}" title="${esc(v.name)}"><div class="navThumb"></div><span>${esc(v.name)}</span></button>`).join("")}</div>
-
-        <label class="chk"><input type="checkbox" id="rpChrome"${showChrome(pg) ? " checked" : ""}> Header &amp; page number</label>`
+      ${pg.sec ? `<label>Layout</label><div class="varGrid">${vars.map((v) => `<button type="button" class="varOpt${v.id === pg.layout ? " on" : ""}" data-vid="${v.id}" title="${esc(v.name)}"><div class="navThumb"></div><span>${esc(v.name)}</span></button>`).join("")}</div>`
         : `<div class="hint" style="margin-top:8px">An older page. Pick a section to update it.</div>`}
       ${pg.layout === "pa-swatch" ? `<button class="btn primary palStudioBtn" type="button" id="rpPalStudio" style="width:100%;margin-top:12px">${ICON.palette || "🎨"} Palette Studio</button><div class="hint" style="margin-top:6px">Pick colours from your photos, lock favourites, change the layout, shape and size.</div><label>Swatches</label><div class="seg" id="rpPal">${[3, 4, 5, 6, 8, 10, 12].map((n) => `<button type="button" data-n="${n}" class="${pg.els.filter((e) => e.pal != null).length === n ? "on" : ""}">${n}</button>`).join("")}</div>` : ""}
       ${pg.els.some((e) => e.t === "shape" && e.pal != null) ? `<button class="btn sm" type="button" id="rpPalPull" style="width:100%;margin-top:10px">Pull palette from images</button>` : ""}
@@ -4174,6 +4189,7 @@
     const bp = document.getElementById("bgPick");
     bp.onclick = () => colorEdit(bp, (pg.bg && pg.bg.custom && pg.bg.color) || firstColor(vOf(pg).bg) || "#222222", (c) => scoped().forEach((p) => { p.bg = Object.assign({}, p.bg, { color:c, custom:1 }); if(typeof p.bg.v !== "number") p.bg.v = 0; }), "Background", () => { if(LOOK_SCOPE !== "page") renderNav(); });
     wireLogo();
+    rail.querySelectorAll("#chAll button").forEach((b) => { b.onclick = () => { commit(() => T.pages.forEach((p) => { if(b.dataset.v === "theme") p.chrome = null; else p.chrome = b.dataset.v === "on"; }), "Header"); renderAll(); }; });
     document.getElementById("rpRestyle").onclick = () => openTemplatePicker("restyle");
     document.getElementById("rpRebuild").onclick = () => openTemplatePicker("fresh");
   }
@@ -4192,7 +4208,6 @@
       const host = b.querySelector(".navThumb");
       mount(host, () => gen === __railGen ? previewPage(pg, b.dataset.vid) : null);
     });
-    const ch = $("rpChrome"); if(ch) ch.onchange = () => { commit(() => { pg.chrome = ch.checked; }, "Header"); renderStage(); refreshCurThumb(); };
     const rpp = $("rpPal"); if(rpp) rpp.querySelectorAll("button").forEach((b) => { b.onclick = () => { if(Number(b.dataset.n) !== pg.els.filter((e) => e.pal != null).length) repalette(Number(b.dataset.n)); }; });
     const rpx = $("rpPalPull"); if(rpx) rpx.onclick = pullPalette;
     const rpStudio = $("rpPalStudio"); if(rpStudio) rpStudio.onclick = () => openPaletteStudio();
