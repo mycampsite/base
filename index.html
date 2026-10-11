@@ -888,7 +888,7 @@ function dropProject(pid) {
 async function loadSheets(pid) {
   const old = sheetsByProject[pid];
   try {
-    const list = await api("listSheets", { pid });
+    const list = withKnownDocs(pid, await api("listSheets", { pid }));
     sheetsByProject[pid] = { list: applyOrder(pid, list), state: "ok" };
     sheetCache[pid] = list; lsSet(SHEETS_CACHE, JSON.stringify(sheetCache));
   } catch (e) {
@@ -897,6 +897,22 @@ async function loadSheets(pid) {
   }
   if (me) render();
 }
+// Docs Camp made for a project are remembered in the project itself, so they stay as tabs even when
+// Drive's listing doesn't include them (e.g. they were saved outside the project folder) or lags behind.
+function withKnownDocs(pid, list) {
+  const known = (projects[pid] && projects[pid].prodDocs) || {}, have = {};
+  list.forEach(x => { have[x.id] = 1; });
+  Object.keys(known).forEach(id => { if (!have[id] && known[id]) list = list.concat([{ id, name: known[id].name || "Sheet", url: known[id].url || "" }]); });
+  return list;
+}
+function rememberDocs(pid, docs) {
+  docs.forEach(d => {
+    if (!d || !d.id || !/^[A-Za-z0-9_-]{10,100}$/.test(d.id)) return;
+    set(ref(db, "projects/" + pid + "/prodDocs/" + d.id), { name: String(d.name || "").slice(0, 120), url: d.url || "", at: Date.now() }).catch(() => {});
+  });
+}
+const docsFrom = (r, name) => (r && r.spreadsheetId ? [r] : r && r.sheet && r.sheet.spreadsheetId ? [r.sheet] : (r && Array.isArray(r.docs) ? r.docs : []))
+  .filter(d => d && d.spreadsheetId).map(d => ({ id: d.spreadsheetId, name: d.name || name, url: d.url || "" }));
 function refreshSheets() {
   const pid = current.pid; if (!pid) return;
   const old = sheetsByProject[pid];
@@ -1476,8 +1492,9 @@ function createDocsFlow(btn) {
     for (let i = 0; i < kinds.length; i++) {
       toast("Building " + DOCS[kinds[i]].toLowerCase() + " (" + (i + 1) + "/" + kinds.length + ")… this can take a minute.", "ok", 240000);
       const r = await exportDoc(kinds[i], id);
-      (r && r.spreadsheetId ? [r] : r && r.sheet && r.sheet.spreadsheetId ? [r.sheet] : (r && Array.isArray(r.docs) ? r.docs : [])).forEach(d => { if (d && d.spreadsheetId) made.push({ id: d.spreadsheetId, name: d.name || DOCS[kinds[i]], url: d.url || "" }); });
+      docsFrom(r, DOCS[kinds[i]]).forEach(d => made.push(d));
     }
+    rememberDocs(current.pid, made);
     toast("Done. Saved in the project's Drive folder.", "ok");
     current.tab = "production"; saveLast();
     // Drive can take a few seconds to list new files: look again until they show up
@@ -1862,6 +1879,7 @@ window.__CampHub = {
       try { res = await exportDoc(steps[i][0], fileId); }
       catch (e) { if (steps[i][0] === "callsheets" && window.CampProdPanel) window.CampProdPanel.csError(pid, e.message || String(e)); throw e; }
       if (steps[i][0] === "callsheets" && window.CampProdPanel) window.CampProdPanel.csError(pid, "");
+      rememberDocs(pid, docsFrom(res, steps[i][1]));
       // remember where the call sheets are, so everyone can open them from the panel
       if (steps[i][0] === "callsheets" && res && res.days) {
         await set(ref(db, "projects/" + pid + "/production/callsheets"), { folderUrl: res.folderUrl || "", at: Date.now(), days: res.days.map(d => ({ day: d.day, url: d.url })) });
