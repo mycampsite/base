@@ -344,6 +344,7 @@
   .h-se{ left:100%; top:100%; cursor:nwse-resize; } .h-s{ left:50%; top:100%; cursor:ns-resize; } .h-sw{ left:0; top:100%; cursor:nesw-resize; } .h-w{ left:0; top:50%; cursor:ew-resize; }
   #selBox.line .h-n, #selBox.line .h-s, #selBox.line .h-ne, #selBox.line .h-nw, #selBox.line .h-se, #selBox.line .h-sw{ display:none; }
   #selBox.crop .h{ display:none; }
+  #selBox.typing{ outline-style:dashed; }
   #selBox.short .h-n, #selBox.short .h-s, #selBox.narrow .h-e, #selBox.narrow .h-w{ display:none; }
   #stage .guide{ position:absolute; background:#e0457b; pointer-events:none; z-index:11; }
   #stage .guide.gv{ top:0; bottom:0; width:1px; }
@@ -1947,18 +1948,34 @@
   const isLayoutLine = (e) => e.t === "shape" && e.fk === "line" && !e.role && !e.own && !e.fill;
   const showChrome = (pg) => !!(pg && pg.sec) && (pg.chrome != null ? !!pg.chrome : (VARS[pg.layout] || {}).chrome !== false);
   // Header / footer drawn by the theme (title, page number, brackets…). It follows the deck automatically.
-  function chromeHtml(th, V, idx, tot, lines){
+  // The logo is only ever white or black: "auto" picks whichever reads on the page
+  const logoInk = (mk, V) => mk.ink === "w" ? "#ffffff" : mk.ink === "b" ? "#000000" : (V.light ? "#000000" : "#ffffff");
+  function logoRect(page){
+    const mk = T.mark; if(!(mk && mk.on && !(mk.noCover && page.sec === "cover"))) return null;
+    const h = mk.size || 9, w = h * LOGO_AR, m = 9, pos = mk.pos || "br";
+    return { x:pos[1] === "l" ? m : pos[1] === "c" ? (PAGE_W - w) / 2 : PAGE_W - m - w, y:pos[0] === "t" ? m : PAGE_H - m - h, w, h, pos };
+  }
+  // avoid = the logo's box: header / page-number text that would sit under it moves beside it, on the logo's centre line
+  function chromeHtml(th, V, idx, tot, lines, avoid){
     const mt = tokOf(th, "meta"), title = String(DATA.title || T.title || "").toUpperCase(), wr = DATA.writer || "";
     const n = pad2(idx + 1), tt = pad2(tot), ln = colOf(V, "line"), R = "text-align:right;";
-    const box = (x, y, w, h, txt, css) => `<div style="left:${rd2(x * KX)}mm;top:${rd2(y * KY)}mm;width:${rd2(w * KX)}mm;height:${rd2(h * KY)}mm;${css || ""}">${esc(txt)}</div>`;
-    const line = (x, y, w, h) => `<i style="left:${rd2(x * KX)}mm;top:${rd2(y * KY)}mm;width:${Math.max(.25, rd2(w * KX))}mm;height:${Math.max(.25, rd2(h * KY))}mm;background:${ln}"></i>`;
+    const hits = (L, T2, W, H2) => avoid && L < avoid.x + avoid.w + 2 && L + W > avoid.x - 2 && T2 < avoid.y + avoid.h + 2 && T2 + H2 > avoid.y - 2;
+    const box = (x, y, w, h, txt, css) => {
+      let L = x * KX, T2 = y * KY; const W = w * KX, H2 = h * KY;
+      if(hits(L, T2, W, H2)){
+        L = avoid.x + avoid.w / 2 > PAGE_W / 2 ? avoid.x - 3 - W : avoid.x + avoid.w + 3;
+        T2 = avoid.y + (avoid.h - H2) / 2; css = (css || "") + "display:flex;align-items:center;" + (L < avoid.x ? "justify-content:flex-end;" : "");
+      }
+      return `<div style="left:${rd2(L)}mm;top:${rd2(T2)}mm;width:${rd2(W)}mm;height:${rd2(H2)}mm;${css || ""}">${esc(txt)}</div>`;
+    };
+    const line = (x, y, w, h) => hits(x * KX, y * KY, w * KX, h * KY) ? "" : `<i style="left:${rd2(x * KX)}mm;top:${rd2(y * KY)}mm;width:${Math.max(.25, rd2(w * KX))}mm;height:${Math.max(.25, rd2(h * KY))}mm;background:${ln}"></i>`;
     let h = "", col = V.hi;
     switch(th.chrome){
       case "deck": col = colOf(V, "mute"); h = box(172, 1000, 1100, 30, (DATA.title || T.title) + " · Director's treatment") + box(1390, 1000, 360, 30, n + " / " + tt, R); break;
       case "pg": col = colOf(V, "mute"); h = box(1500, 992, 300, 30, n + " / " + tt, R); break;
       case "corner": h = box(150, 70, 900, 30, title) + box(1520, 992, 250, 30, n, R); break;
       case "rule": h = box(160, 50, 1150, 30, title + " — Director's treatment") + box(1380, 50, 400, 30, n + " / " + tt, R) + (lines ? line(160, 100, 1620, 2) : ""); break;
-      case "brackets": h = line(70, 74, 82, 1) + line(70, 74, 1, 86) + box(172, 62, 1000, 28, title + " — Treatment") + box(42, 182, 46, 520, "Treatment", "writing-mode:vertical-rl;transform:rotate(180deg);") + box(1680, 990, 70, 28, String(idx + 1), R) + line(1768, 1008, 80, 1) + line(1848, 928, 1, 81); break;
+      case "brackets": h = line(70, 74, 82, 1) + line(70, 74, 1, 86) + box(172, 62, 1000, 28, title + " — Treatment") + box(1680, 990, 70, 28, String(idx + 1), R) + line(1768, 1008, 80, 1) + line(1848, 928, 1, 81); break;
       case "deadair": h = box(160, 58, 900, 30, wr ? "A film by " + wr : title) + box(1160, 58, 600, 30, YEAR, R) + box(160, 992, 1000, 30, "Director's treatment") + box(1460, 992, 300, 30, n + " / " + tt, R); break;
       case "lowtide": h = box(67, 38, 200, 30, n) + box(1653, 38, 200, 30, tt, R) + box(560, 24, 800, 90, title + "\nDirector's\nTreatment", "text-align:center;white-space:pre-line;line-height:1.15;letter-spacing:0;"); break;
     }
@@ -1985,13 +2002,11 @@
       const sw = page.els.find((e) => e.pal === Number(nd.dataset.hex) && e.t === "shape");
       if(sw){ const f = shapeFill(sw, th, V); if(/^#/.test(f)) nd.textContent = f.toUpperCase(); }
     });
-    if(showChrome(page)) p.insertAdjacentHTML("beforeend", chromeHtml(th, V, idx < 0 ? 0 : idx, Math.max(1, tot), lines));
-    const mk = T.mark;
-    if(mk && mk.on && !(mk.noCover && page.sec === "cover")){
-      const h = mk.size || 9, w = h * LOGO_AR, m = 9, pos = mk.pos || "br";
-      const x = pos[1] === "l" ? m : pos[1] === "c" ? (PAGE_W - w) / 2 : PAGE_W - m - w, y = pos[0] === "t" ? m : PAGE_H - m - h;
+    const lr = logoRect(page), mk = T.mark;
+    if(showChrome(page)) p.insertAdjacentHTML("beforeend", chromeHtml(th, V, idx < 0 ? 0 : idx, Math.max(1, tot), lines, lr));
+    if(lr){
       const d = document.createElement("div"); d.className = "wmark";
-      d.style.cssText = `left:${rd2(x)}mm;top:${rd2(y)}mm;width:${rd2(w)}mm;height:${rd2(h)}mm;color:${mk.c || colOf(V, mk.ck || "hi")};opacity:${mk.op != null ? mk.op : .85};`;
+      d.style.cssText = `left:${rd2(lr.x)}mm;top:${rd2(lr.y)}mm;width:${rd2(lr.w)}mm;height:${rd2(lr.h)}mm;color:${logoInk(mk, V)};opacity:${mk.op != null ? mk.op : .85};`;
       d.innerHTML = LOGO_SVG; p.appendChild(d);
     }
     return p;
@@ -2215,7 +2230,9 @@
     const stage = document.getElementById("stage");
     let box = document.getElementById("selBox");
     const el = SEL && findEl(SEL);
-    if(!el || EDITING){ if(box) box.remove(); return; }
+    // while typing, a text box keeps its frame: drag a handle and the text reflows (and re-fits) live, like Photoshop
+    const typing = EDITING && el && el.t === "text" && EDITING === el.id && !document.body.classList.contains("typing");
+    if(!el || (EDITING && !typing)){ if(box) box.remove(); return; }
     if(!box){
       box = document.createElement("div"); box.id = "selBox";
       box.innerHTML = ["nw","n","ne","e","se","s","sw","w"].map((d) => `<div class="h h-${d}" data-dir="${d}"></div>`).join("");
@@ -2226,6 +2243,7 @@
     box.classList.toggle("line", el.t === "divider");
     box.classList.toggle("short", el.h * k < 34); box.classList.toggle("narrow", el.w * k < 34);
     box.classList.toggle("crop", CROPPING === el.id);
+    box.classList.toggle("typing", !!typing);
   }
   let __rrRaf = 0;
   function selectEl(id, soon){
@@ -2313,7 +2331,12 @@
   let __wheelT = 0, __tap = {};
   function onStageDown(e){
     if(RO || e.button !== 0 || PINCH) return;
-    if(EDITING){ const n = elNode(EDITING); if(n && n.contains(e.target)) return; finishEdit(); }
+    if(EDITING){
+      const n = elNode(EDITING); if(n && n.contains(e.target)) return;
+      const hh = e.target.closest("#selBox .h");
+      if(hh && SEL === EDITING){ e.preventDefault(); dragResize(e, findEl(SEL), hh.dataset.dir, true); return; }
+      finishEdit();
+    }
     const h = e.target.closest("#selBox .h");
     if(h && SEL){ e.preventDefault(); dragResize(e, findEl(SEL), h.dataset.dir); return; }
     const n = e.target.closest(".tpage .el");
@@ -2418,9 +2441,10 @@
   // Resizing works like Photoshop's transform: corners keep proportions (Shift frees them), Alt/Option resizes
   // from the centre, Ctrl/Cmd turns snapping off. Photos scale from the corners and crop from the sides;
   // text scales its type from the corners and reflows from the sides.
-  function dragResize(e, el, dir){
+  function dragResize(e, el, dir, typing){
     if(!el) return;
     BUSY++;
+    if(typing){ typingCheckpoint(); __holdEdit = true; }
     const k = pxPerMm(), sx = e.clientX, sy = e.clientY, r0 = { x:el.x, y:el.y, w:el.w, h:el.h }, tg = snapTargets(el.id), tol = 6 / k;
     const MIN = 2, ratio = r0.w / r0.h, node = elNode(el.id), corner = dir.length === 2, cx0 = r0.x + r0.w / 2, cy0 = r0.y + r0.h / 2;
     const hasE = dir.includes("e"), hasW = dir.includes("w"), hasS = dir.includes("s"), hasN = dir.includes("n");
@@ -2438,7 +2462,7 @@
       let w = r0.w, h = r0.h, gx = null, gy = null;
       if(hasE) w = r0.w + dx; if(hasW) w = r0.w - dx;
       if(hasS) h = r0.h + dy; if(hasN) h = r0.h - dy;
-      prop = corner && el.t !== "divider" && !ev.shiftKey;
+      prop = corner && el.t !== "divider" && !ev.shiftKey && !typing;   // while typing every handle moves the frame; the type re-fits
       if(prop){
         // Like Photoshop: project the pointer onto the box's diagonal, so the corner tracks the cursor
         // smoothly instead of jumping between "width wins" and "height wins".
@@ -2473,7 +2497,7 @@
       if(isText && mm0){
         scaleT = prop ? r.w / r0.w : 1;
         node.style.fontSize = (mm0 * scaleT) + "mm";
-        if(!prop && node.dataset.fit){ placeLive(node, r); fitText(stagePage()); }
+        if(!prop && node.dataset.fit){ placeLive(node, r); const ed = node.classList.contains("editing"); if(ed) node.classList.remove("editing"); fitText(stagePage()); if(ed) node.classList.add("editing"); }
       }
       placeLive(node, r); showGuides(gx, gy);
       tip(ev, f1(r.w) + " × " + f1(r.h) + " mm" + (prop ? "  ·  " + Math.round(r.w / r0.w * 100) + "%" : "") + (isText && prop && mm0 ? "  ·  " + (Math.round(mm0 * scaleT * 2.835 * 2) / 2) + " pt" : ""));
@@ -2487,17 +2511,20 @@
           if(crop){ el.fx = rd(crop.fx); el.fy = rd(crop.fy); if(Math.abs(crop.zoom - 1) > 0.004) el.zoom = Math.round(crop.zoom * 1000) / 1000; else delete el.zoom; }
           if(isText && mm0 && Math.abs(scaleT - 1) > 0.005) el.size = Math.max(4, Math.min(400, Math.round(mm0 * scaleT * 2.835 * 2) / 2));
         }, isText && Math.abs(scaleT - 1) > 0.005 ? "Scale" : "Resize");
-        if(isText){ renderStage(); if(autoGrow(el)){ markDirty(); renderStage(); } }
+        if(typing){ __preEdit = snap(); if(growToText(el, node)) markDirty(); drawSel(); }
+        else if(isText){ renderStage(); if(autoGrow(el)){ markDirty(); renderStage(); } }
         refreshCurThumb(); if(RTAB === "edit") renderRight();
       }
-      BUSY = Math.max(0, BUSY - 1); flushRemote();
+      BUSY = Math.max(0, BUSY - 1);
+      if(typing){ __holdEdit = false; if(node && EDITING === el.id){ node.focus({ preventScroll: true }); } }
+      flushRemote();
     };
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
   }
 
   // Click straight into text: double-click (or Enter on a selected text box). Typing is saved in bursts:
   // every pause is its own undo step, so Undo walks back a sentence at a time instead of the whole edit.
-  let __preEdit = null, __preText = "", __typeT = 0;
+  let __preEdit = null, __preText = "", __typeT = 0, __holdEdit = false;
   function startEdit(id){
     if(RO) return;
     let el = findEl(id), n = elNode(id);
@@ -2523,7 +2550,7 @@
       if(mod && (k === "b" || k === "i" || k === "u")){ ev.preventDefault(); typingCheckpoint(); const e2 = findEl(id); if(e2){ finishEdit(); toggleFormat(e2, k); startEdit(id); } }
       if(ev.key === " " || ev.key === "Enter") { clearTimeout(__typeT); __typeT = setTimeout(typingCheckpoint, 400); }
     };
-    n.onblur = () => { if(EDITING === id) finishEdit(); };
+    n.onblur = () => { if(EDITING === id && !__holdEdit) finishEdit(); };
     n.focus();
     const rg = document.createRange(); rg.selectNodeContents(n); rg.collapse(false);
     const s = getSelection(); s.removeAllRanges(); s.addRange(rg);
@@ -3987,12 +4014,12 @@
   function logoPanel(pg){
     const mk = T.mark || {}, on = !!mk.on, V = vOf(pg);
     const POS = [["tl","↖"],["tc","↑"],["tr","↗"],["bl","↙"],["bc","↓"],["br","↘"]];
-    return `<div class="divider"><div class="section-title logoHead"><span>LOGO</span><span class="logoPrev" style="color:${esc(mk.c || colOf(V, mk.ck || "hi"))}">${LOGO_SVG}</span></div>
+    return `<div class="divider"><div class="section-title logoHead"><span>LOGO</span><span class="logoPrev" style="color:${logoInk(mk, V)}">${LOGO_SVG}</span></div>
       ${seg("lgOn", [["0","Off"],["1","On every page"]], (v) => (on ? "1" : "0") === v)}
       ${on ? `<label>Position</label><div class="posGrid" id="lgPos">${POS.map(([k, a]) => `<button type="button" data-v="${k}" class="${(mk.pos || "br") === k ? "on" : ""}" title="${k}">${a}</button>`).join("")}</div>
         ${slider("lgSize", "Size", 5, 30, 0.5, mk.size || 9, (v) => v + " mm")}
         ${slider("lgOp", "Opacity", 0.1, 1, 0.05, mk.op != null ? mk.op : .85, (v) => Math.round(v * 100) + "%")}
-        <label>Colour</label>${swatchRow("lgCol", mk.c, mk.c ? "" : (mk.ck || "hi"), V, INK, false)}
+        <label>Colour</label>${seg("lgInk", [["auto","Auto"],["w","White"],["b","Black"]], (v) => (mk.ink || "auto") === v)}
         <label class="chk"><input type="checkbox" id="lgCover"${mk.noCover ? " checked" : ""}> Hide on the cover</label>` : ""}</div>`;
   }
   // Header & page number for the whole deck: as each layout was designed (covers stay clean), on every page, or off
@@ -4014,10 +4041,7 @@
       inp.oninput = () => { txBegin(label); mk()[key] = parseFloat(inp.value); markDirty(); $(id + "V").textContent = fmt(parseFloat(inp.value)); renderStage(); };
       inp.onchange = () => { txEnd(label); renderNav(); };
     });
-    $("lgCol").querySelectorAll(".swatch").forEach((b) => { b.onclick = () => {
-      if(b.dataset.pick){ colorEdit(b, mk().c || "#ffffff", (c) => { delete mk().ck; mk().c = c; }, "Logo colour", () => renderNav()); return; }
-      commit(() => { delete mk().ck; delete mk().c; if(b.dataset.k) mk().ck = b.dataset.k; else if(b.dataset.c) mk().c = b.dataset.c; }, "Logo colour"); done();
-    }; });
+    $("lgInk").querySelectorAll("button").forEach((b) => { b.onclick = () => { commit(() => { delete mk().ck; delete mk().c; if(b.dataset.v === "auto") delete mk().ink; else mk().ink = b.dataset.v; }, "Logo colour"); done(); }; });
     $("lgCover").onchange = (e) => { commit(() => { if(e.target.checked) mk().noCover = 1; else delete mk().noCover; }, "Logo"); done(); };
   }
   function pagePanel(pg){
