@@ -45,6 +45,19 @@
   };
   window.alert = function (msg) { window.CampUI.alert(msg); };
 
+  // The little hand-drawn tent that stands for each person working live (Treatment, Script editor). Each person gets a colour.
+  window.CampTent = {
+    colors: ["#7d8f4e", "#d4932a", "#5a86b8", "#84707c", "#c9633d", "#3f9a8c", "#9a5c8f", "#a98a5a"],
+    svg: function (color) {
+      var c = /^#[0-9a-f]{6}$/i.test(color || "") ? color : "#7d8f4e";
+      return '<svg viewBox="0 0 40 44" aria-hidden="true" focusable="false"><circle cx="20" cy="5" r="3.1" fill="' + c + '"/>' +
+        '<path d="M20.4 12.2 L36.3 38.4 L3.9 38.9 Z" fill="' + c + '" stroke="#fff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+        '<path d="M20.6 14 C20 16 16 20 11.5 27 M26 25.5 C28 29 30.5 33.5 32.6 36.5" stroke="#fff" stroke-opacity=".28" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+        '<path d="M19.1 21.6 L25.3 38.4 L14.6 38.5 Z" fill="#141414" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M1.8 40.6 Q20 41.7 38.4 40.4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>';
+    }
+  };
+
   // Offline notice. Pages that already show this in their own save status opt out with <body data-own-offline>.
   if (d.body && d.body.hasAttribute("data-own-offline")) return;
   var el = null, hideT = 0;

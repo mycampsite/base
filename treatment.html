@@ -4435,7 +4435,7 @@
   // the same element = last edit wins. Library, page order and page settings are separate values.
   const LIVE_SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
   const LV = { on:false, ready:false, fb:null, room:null, root:null, pres:null, me:null, uid:"", name:"Someone", offset:0, synced:{}, lastVal:null, inflight:0, sendT:0, pending:false, leader:true, presence:{}, offReason:"", leaving:false, presT:0 };
-  const LV_COLORS = ["#e5484d", "#0091ff", "#30a46c", "#f76b15", "#8e4ec6", "#d6409f", "#12a594", "#ad7f58"];
+  const LV_COLORS = ["#7d8f4e", "#d4932a", "#5a86b8", "#84707c", "#c9633d", "#3f9a8c", "#9a5c8f", "#a98a5a"];
   const sj = (o) => JSON.stringify(o, (k, v) => (v && typeof v === "object" && !Array.isArray(v)) ? Object.keys(v).sort().reduce((a, k2) => (a[k2] = v[k2], a), {}) : v);
   const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg || "Live connection timed out.")), ms))]);
 
@@ -4583,7 +4583,7 @@
       return;
     }
     const others = alivePeers(), cols = liveColors();
-    const faces = others.slice(0, 4).map((k) => { const n = (LV.presence[k] || {}).n || "Someone"; return `<button type="button" class="liveFace" data-uid="${esc(k)}" title="${esc(n)}: click to jump to their page" style="background:${cols[k] || "#666"}">${esc(initials(n))}</button>`; }).join("");
+    const faces = others.slice(0, 4).map((k) => { const n = (LV.presence[k] || {}).n || "Someone"; const col = cols[k] || "#7d8f4e"; return `<button type="button" class="liveFace tent" data-uid="${esc(k)}" data-name="${esc(n)}" aria-label="${esc(n)}: click to jump to their page" style="--tc:${col}">${window.CampTent ? window.CampTent.svg(col) : esc(initials(n))}</button>`; }).join("");
     const names = others.map((k) => (LV.presence[k] || {}).n || "Someone");
     w.innerHTML = `<span class="liveFaces">${faces}${others.length > 4 ? `<span class="liveFace more">+${others.length - 4}</span>` : ""}</span><span class="livePill" title="${esc(others.length ? "Editing together: " + names.join(", ") : "Live: changes appear for your team straight away")}"><span class="liveDot"></span>${others.length ? "Live · " + (others.length + 1) : "Live"}</span>`;
     w.querySelectorAll(".liveFace[data-uid]").forEach((b) => {

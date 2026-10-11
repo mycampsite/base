@@ -14373,7 +14373,7 @@ ${TP.join("\n")}
     try{ __lcFaces(pill); __lcRender(); }catch(_e){}
   }
   // ----- live cursors & faces -----
-  const __LC_COLORS = ["#e5484d", "#0091ff", "#30a46c", "#f76b15", "#8e4ec6", "#d6409f", "#12a594", "#ad7f58"];
+  const __LC_COLORS = ["#7d8f4e", "#d4932a", "#5a86b8", "#84707c", "#c9633d", "#3f9a8c", "#9a5c8f", "#a98a5a"];
   const __LC = { data:{}, ref:null, last:"", sendT:0, drawRaf:0, iv:0, moved:{}, prev:{} };
   const __lcHash = (s) => { let h = 2166136261; for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
   // Everyone gets their own colour (same on every screen): by join order, first free slot from their hash
@@ -14478,7 +14478,7 @@ ${TP.join("\n")}
     const colors = __lcColors();
     const esc = (t) => String(t).replace(/[&<>"]/g, (m) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[m]);
     const shown = others.slice(0, 4);
-    box.innerHTML = shown.map(k => { const n = (__LIVE.presence[k] && __LIVE.presence[k].n) || "Someone"; return `<button type="button" class="liveFace" data-uid="${k}" title="${esc(n)}: click to jump to where they are" style="background:${colors[k] || "#666"}">${esc(__lcInitials(n))}</button>`; }).join("") +
+    box.innerHTML = shown.map(k => { const n = (__LIVE.presence[k] && __LIVE.presence[k].n) || "Someone"; const col = colors[k] || "#7d8f4e"; return `<button type="button" class="liveFace tent" data-uid="${k}" data-name="${esc(n)}" aria-label="${esc(n)}: click to jump to where they are" style="--tc:${col}">${window.CampTent ? window.CampTent.svg(col) : esc(__lcInitials(n))}</button>`; }).join("") +
       (others.length > shown.length ? `<span class="liveFace more" title="${esc(others.slice(4).map(k => (__LIVE.presence[k] && __LIVE.presence[k].n) || "Someone").join(", "))}">+${others.length - shown.length}</span>` : "");
     box.onclick = (e) => {
       const b = e.target.closest(".liveFace[data-uid]"); if(!b) return;

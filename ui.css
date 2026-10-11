@@ -42,3 +42,10 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 .campLoad .spin{ display:inline-block; width:40px; height:40px; color:#ececf0; border:0 !important; animation:none !important; }
 .campLoad .campBar{ width:180px; height:3px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; }
 .campLoad .campBar i{ display:block; height:100%; width:0; background:#ececf0; border-radius:3px; transition:width .2s linear; }
+
+/* Live collaborators: a hand-drawn tent in their colour, with their name in a bubble on hover */
+.liveFace.tent{ position:relative; width:32px; height:36px; padding:0; margin-left:0 !important; border:0 !important; border-radius:11px; background:transparent !important; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s; }
+.liveFace.tent svg{ width:27px; height:30px; display:block; overflow:visible; }
+.liveFace.tent:hover, .liveFace.tent:focus-visible{ background:color-mix(in srgb, var(--tc, #d4932a) 18%, transparent) !important; transform:none; }
+.liveFace.tent::after{ content:attr(data-name); position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%); z-index:400; padding:7px 13px; border-radius:999px; background:#1d1e22; border:1px solid rgba(255,255,255,.18); box-shadow:0 6px 18px rgba(0,0,0,.4); color:#f2f0ec; font:600 12px/1 Inter, system-ui, sans-serif; white-space:nowrap; pointer-events:none; opacity:0; visibility:hidden; transition:opacity .12s; }
+.liveFace.tent:hover::after, .liveFace.tent:focus-visible::after{ opacity:1; visibility:visible; }
