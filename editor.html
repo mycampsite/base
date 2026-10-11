@@ -10761,6 +10761,9 @@ let AUTOSAVE_ENABLED = true;
       // Never create a new file on unload; only update an existing Drive file.
       if(!__cloud.fileId) return false;
       if(__cloudPaused || __cloudBlocked) return false;
+      if(Date.now() - (window.__campBeaconAt || 0) < 3000) return false;   // beforeunload + pagehide: send once
+      // Live session: only the person who saves for everyone may write to Drive
+      try{ if(window.__scriptyLive && window.__scriptyLive.isActive() && !window.__scriptyLive.isLeader()) return false; }catch(_e){}
 
       const d = doc || syncDOCFromDOM({ force:true });
       if(!d) return false;
@@ -10787,6 +10790,7 @@ let AUTOSAVE_ENABLED = true;
 
       if(navigator.sendBeacon){
         const blob = new Blob([bodyStr], { type: "application/x-www-form-urlencoded;charset=UTF-8" });
+        window.__campBeaconAt = Date.now();
         return navigator.sendBeacon(__cloud.endpoint, blob);
       }
 
@@ -11363,6 +11367,21 @@ function markDirty(){
       const el = document.getElementById(id);
       if(el) el.addEventListener("input", markDirty, true);
     }
+    // Switching tab/app, locking a phone or closing a laptop: save straight away instead of waiting
+    // for the 2.5s timer (phones often never fire beforeunload, so this is the reliable moment).
+    const flushNow = () => {
+      if(!__autosaveDirty || __cloudBlocked || window.__scriptyReadOnly) return;
+      try{
+        clearTimeout(__autosaveTimer);
+        persistDocToStorage({ quiet:true, source:"hidden" });
+        if(__cloud && __cloud.endpoint && __cloud.fileId && !__cloudPaused) persistDocToCloud({ source:"autosave" });
+      }catch(_e){}
+    };
+    document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") flushNow(); });
+    window.addEventListener("pagehide", () => {
+      if(!__autosaveDirty || __cloudBlocked) return;
+      try{ const d = syncDOCFromDOM({ force:true }); persistDocToStorage({ state:d, quiet:true, source:"pagehide" }); tryBeaconCloudSave_(d, "pagehide"); }catch(_e){}
+    });
     window.addEventListener("beforeunload", (ev) => {
       const unsaved = __autosaveDirty || __cloudPending > 0;
       // Warn before leaving if something hasn't reached Drive yet.

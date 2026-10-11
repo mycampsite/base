@@ -4425,6 +4425,8 @@
   }
   window.addEventListener("online", () => { DR.offline = false; DR.err = ""; scheduleDrive(0); updateSaveState(); });
   window.addEventListener("pagehide", () => { saveLocal(); try{ liveSend(); }catch(_e){} });
+  // Switching tab/app or locking the phone: keep it on this device, send it live, and save to Drive now
+  document.addEventListener("visibilitychange", () => { if(document.visibilityState !== "hidden") return; try{ saveLocal(); liveSend(); if(driveDirty) scheduleDrive(0); }catch(_e){} });
   window.addEventListener("beforeunload", (e) => {
     saveLocal(); try{ liveSend(); }catch(_e){}
     if(!RO && !DR.unsupported && driveDirty && amSaver()){ e.preventDefault(); e.returnValue = ""; }
