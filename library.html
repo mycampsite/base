@@ -831,6 +831,8 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
     return null;
   }
   const titleOf = (f) => (tpOf(f) && tpOf(f).title) || baseName(f.name);
+  // Copies are named Name_01, Name_02… (the next number not already used)
+  const nextCopyName = (name, taken) => { const base = String(name || "Untitled").replace(/_\d{2,}$/, "").trim() || "Untitled"; const re = new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "_(\\d{2,})$", "i"); let n = 0; (taken || []).forEach((t) => { const m = re.exec(String(t || "").replace(/\.json$/i, "").trim()); if(m) n = Math.max(n, Number(m[1])); }); return base + "_" + String(n + 1).padStart(2, "0"); };
   const pagesOf = (f) => {
     const t = f.tp || {};
     const n = Number(t.pages || f.pages || 0);
@@ -1465,9 +1467,9 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
   async function duplicateScript(f){
     toast("Duplicating…", null, 20000);
     try{
-      const cur = titleOf(f);
-      const res = await withAuth(() => apiPost({ action: "duplicate", fileId: f.id, name: cur + " Copy" }));
-      const nf = { id: res.fileId || (res.file && res.file.id), name: (res.file && res.file.name) || (cur + " Copy.json"), modified: (res.file && res.file.modified) || new Date().toISOString(), tp: (res.file && res.file.tp) || null };
+      const cur = titleOf(f), copyName = nextCopyName(cur, files.map((x) => titleOf(x)).concat(files.map((x) => baseName(x.name))));
+      const res = await withAuth(() => apiPost({ action: "duplicate", fileId: f.id, name: copyName }));
+      const nf = { id: res.fileId || (res.file && res.file.id), name: (res.file && res.file.name) || (copyName + ".json"), modified: (res.file && res.file.modified) || new Date().toISOString(), tp: (res.file && res.file.tp) || null };
       if(nf.id){
         files.unshift(nf); lsSet(LIST_KEY, JSON.stringify(files));
         // keep the copy in the same folder

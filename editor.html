@@ -11103,9 +11103,11 @@ async function __handleConflict(source, d, name){
     setStatus("Save cancelled (newer version in Drive).");
     return false;
   }
+  const nextCopyName = (name, taken) => { const base = String(name || "Untitled").replace(/_\d{2,}$/, "").trim() || "Untitled"; const re = new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "_(\\d{2,})$", "i"); let n = 0; (taken || []).forEach((t) => { const m = re.exec(String(t || "").replace(/\.json$/i, "").trim()); if(m) n = Math.max(n, Number(m[1])); }); return base + "_" + String(n + 1).padStart(2, "0"); };
   const newPid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("p" + Date.now() + "_" + Math.random().toString(16).slice(2));
   const stamp = new Date().toLocaleString("en-AU", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }).replace(/[\/:,]/g, "-").replace(/\s+/g, " ");
-  const copyName = name + " (my version " + stamp + ")";
+  let taken = []; try{ taken = JSON.parse(localStorage.getItem("SCRIPTY_LAST_LIST_V1") || "[]").map((f) => f && String(f.name || "").replace(/\.json$/i, "")); }catch(_e){}
+  const copyName = nextCopyName(name, taken); void stamp;
   d.meta.rev = 1; d.meta.pid = newPid; d.meta.fileId = "";
   const res = await driveSaveDoc_(__cloud.endpoint, { action:"save", fileId:"", pid:newPid, name:copyName, doc:d });
   if(!res || res.ok !== true) throw new Error((res && res.error) || "Couldn't save the copy.");
@@ -16514,7 +16516,8 @@ if(document.readyState === "loading"){
   const buildIndex = (skipLine) => {
     const ed = getEditor();
     if(!ed) return [];
-    const els = ed.querySelectorAll('.line[data-type="character"]');
+    // dual-dialogue speakers count too
+    const els = ed.querySelectorAll('.line[data-type="character"], .line[data-type="dual"] .dualField[data-part$="_CHAR"]');
     const freq = new Map();
     for(const el of els){
       if(skipLine && el === skipLine) continue;

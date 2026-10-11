@@ -685,16 +685,33 @@ function dialog({ title, text = "", fields = [], ok = "OK", danger = false, vali
 const confirmDlg = (title, text, ok, danger = true) => dialog({ title, text, ok, danger }).then(v => !!v);
 
 // ---------- hub backend ----------
-async function api(action, args = {}) {
+// Safe to send twice: reads, and writes that end in the same state however often they run
+const RETRY_ACTIONS = ["listSheets", "claimInvites", "linkScript"];
+// Apps Script answers with an HTML page (not JSON) when it crashes, times out or is busy: pull out its message
+function appsScriptError(html) {
+  const t = String(html || "");
+  const m = t.match(/<div[^>]*style="[^"]*font-family[^"]*"[^>]*>([\s\S]*?)<\/div>/i) || t.match(/<title>([\s\S]*?)<\/title>/i);
+  const msg = m ? m[1].replace(/<[^>]+>/g, " ").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/\s+/g, " ").trim() : "";
+  return msg && !/^(Error|Google Drive|Page Not Found)$/i.test(msg) ? msg.slice(0, 220) : "";
+}
+async function api(action, args = {}, tries = 0) {
   const u = auth.currentUser || await authReady;
   if (!u) throw new Error(ERRORS.UNAUTHENTICATED);
   const idToken = await u.getIdToken();
   let res;
   try {
     res = await fetch(APPS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ idToken, action, ...args }) });
-  } catch (_e) { throw new Error("Couldn't reach the server. Check your connection."); }
-  let out;
-  try { out = await res.json(); } catch (_e) { throw new Error("The server's reply couldn't be read. Try again."); }
+  } catch (_e) {
+    if (!tries && RETRY_ACTIONS.indexOf(action) >= 0) { await new Promise(r => setTimeout(r, 1500)); return api(action, args, 1); }
+    throw new Error("Couldn't reach the server. Check your connection.");
+  }
+  let out, txt = "";
+  try { txt = await res.text(); out = JSON.parse(txt); } catch (_e) {
+    if (!tries && RETRY_ACTIONS.indexOf(action) >= 0) { await new Promise(r => setTimeout(r, 2000)); return api(action, args, 1); }
+    const why = appsScriptError(txt);
+    console.warn("Hub backend sent a non-JSON reply for " + action + " (HTTP " + res.status + "):", txt.slice(0, 800));
+    throw new Error("The hub server hit an error" + (why ? ": " + why : " (HTTP " + res.status + ")") + ". Try again.");
+  }
   if (!out.ok) {
     if (out.error === "BAD_REQUEST" && NEW_ACTIONS.indexOf(action) >= 0) throw new Error("Update the hub backend first (new hub Code.gs).");
     throw new Error(ERRORS[out.error] || out.error || "Request failed");
@@ -1096,6 +1113,8 @@ function showFrame() {
   $("prodPane").classList.toggle("pseudo", pseudo);
   try { window.CampProdPanel && window.CampProdPanel.setMode(current.key === "@plan" ? "plan" : current.key === "@cs" ? "cs" : "off"); } catch (e) { console.error(e); }
   $("createDocs").classList.toggle("hidden", !(p && isOwner(p)));
+  { const hasDocs = !!(sheetsByProject[current.pid] && (sheetsByProject[current.pid].list || []).length), l = $("createDocs").querySelector(".lbl");
+    if (l) l.textContent = hasDocs ? "Docs" : "Create"; $("createDocs").title = hasDocs ? "Add or update production docs (keeps what you've typed)" : "Build a budget, schedule, shot list or crew docs from the script"; }
   $("open").classList.toggle("hidden", !s);
   $("sheetMenu").classList.toggle("hidden", !s);
   $("budgetHint").classList.toggle("hidden", !s || !/budget/i.test(s.name || "") || lsGet(HINT_KEY) === "1");
@@ -1459,7 +1478,15 @@ function createDocsFlow(btn) {
     }
     toast("Done. Saved in the project's Drive folder.", "ok");
     current.tab = "production"; saveLast();
-    await loadSheets(current.pid);
+    // Drive can take a few seconds to list new files: look again until they show up
+    const want = kinds.length, before = ((sheetsByProject[current.pid] || {}).list || []).length;
+    for (let i = 0; i < 4; i++) {
+      await loadSheets(current.pid);
+      const c = sheetsByProject[current.pid] || {};
+      if (c.err) { toast("Docs are made, but listing them failed: " + c.err, "err", 9000); break; }
+      if ((c.list || []).length >= Math.min(before + want, before + 1)) break;
+      await new Promise(r => setTimeout(r, 2500));
+    }
   });
 }
 async function setupStoryboard(id, btn) {

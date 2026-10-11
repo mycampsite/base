@@ -1566,6 +1566,7 @@
   function defaultTreatment(d){ const ks = Object.keys(TEMPLATES); return buildTemplate(ks[Math.floor(Math.random() * ks.length)], d); }
 
   /* ---------------- Screenplay → data (read-only, one way) ---------------- */
+  const nextCopyName = (name, taken) => { const base = String(name || "Untitled").replace(/_\d{2,}$/, "").trim() || "Untitled"; const re = new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "_(\\d{2,})$", "i"); let n = 0; (taken || []).forEach((t) => { const m = re.exec(String(t || "").replace(/\.json$/i, "").trim()); if(m) n = Math.max(n, Number(m[1])); }); return base + "_" + String(n + 1).padStart(2, "0"); };
   function runText(l){
     const r = l && l.runs; if(!Array.isArray(r)) return String((l && l.text) || "");
     return r.map((x) => typeof x === "string" ? x : (x && (x.text != null ? x.text : x.t)) || "").join("");
@@ -1611,8 +1612,10 @@
         if(e.last !== scene){ e.scenes++; e.last = scene; }
         return;
       }
-      if(l.type !== "character") return;
-      cueNames(runText(l)).forEach((n) => {
+      // dual dialogue: both speakers are characters in the scene
+      const cues = l.type === "character" ? [runText(l)] : l.type === "dual" && l.dual ? [l.dual.left, l.dual.right].map((s) => runText({ runs: (s && s.characterRuns) || [] })) : [];
+      if(!cues.length) return;
+      cues.flatMap((c) => cueNames(c)).forEach((n) => {
         const c = cm[n] || (cm[n] = { name:titleCase(n), lines:0, sc:new Set(), order:Object.keys(cm).length });
         c.lines++; c.sc.add(scene);
       });
@@ -2752,7 +2755,7 @@
   }
   function duplicatePage(i){
     commit(() => {
-      const c = clone(T.pages[i]); c.id = uid(); c.name = T.pages[i].name + " copy";
+      const c = clone(T.pages[i]); c.id = uid(); c.name = nextCopyName(T.pages[i].name, T.pages.map((p) => p.name));
       c.els.forEach((el) => { el.id = uid(); });
       T.pages.splice(i + 1, 0, c); T.cur = i + 1;
     }, "Duplicate page");
