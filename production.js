@@ -96,6 +96,43 @@ function normalize(plan){
 }
 
 // The plan's choices in the shape breakdown.js takes: analyze(doc, analyzeOpts(plan))
+// ---------- locations: script locations grouped into one real place (with areas) ----------
+// plan.locMerge = [{ from, to }]. Chains (KITCHEN → HOUSE → PROPERTY) and loops from older saves are followed safely.
+function locRoot(map, n){ const seen = {}; while(map[n] && map[n] !== n && !seen[n]){ seen[n] = 1; n = map[n]; } return n; }
+function locMapOf(plan){ const m = {}; ((plan && plan.locMerge) || []).forEach((x) => { m[x.from] = x.to; }); return m; }
+function locSave(plan, m){
+  Object.keys(m).forEach((k) => { m[k] = locRoot(m, k); });               // flat: every location points straight at its place
+  plan.locMerge = Object.keys(m).filter((k) => m[k] && m[k] !== k).sort().map((k) => ({ from: k, to: m[k] }));
+  return plan;
+}
+const placeName = (s) => String(s || "").replace(/\s+/g, " ").trim().toUpperCase();
+// Put these locations (and anything already grouped under them) into a place. Naming a location that is already in a place joins that place.
+function groupLocs(plan, names, to){
+  to = placeName(to); if(!to) return plan;
+  const m = locMapOf(plan), root = locRoot(m, to);
+  delete m[root];
+  names.map(placeName).filter(Boolean).forEach((n) => {
+    if(n === root) return;
+    Object.keys(m).forEach((k) => { if(locRoot(m, k) === n) m[k] = root; });
+    m[n] = root;
+  });
+  return locSave(plan, m);
+}
+// Take one location out of its place (it becomes its own location again)
+function ungroupLoc(plan, name){ const m = locMapOf(plan); delete m[name]; return locSave(plan, m); }
+// Split a whole place back into its locations
+function splitPlace(plan, place){ const m = locMapOf(plan); Object.keys(m).forEach((k) => { if(locRoot(m, k) === place) delete m[k]; }); return locSave(plan, m); }
+// Rename a place. isLoc: the old name is itself a location in the script (its scenes move under the new name as an area)
+function renamePlace(plan, from, to, isLoc){
+  to = placeName(to); if(!to || to === from) return plan;
+  const m = locMapOf(plan), root = locRoot(m, to);
+  if(root === from) return plan;
+  Object.keys(m).forEach((k) => { if(locRoot(m, k) === from) m[k] = root; });
+  if(isLoc) m[from] = root;
+  delete m[root];
+  return locSave(plan, m);
+}
+
 const CAST_TYPES = ["Lead", "Supporting", "Day player", "Featured (non-speaking)", "Voice only"];
 function analyzeOpts(plan){
   const locs = {}, flags = {}, types = {};
@@ -356,7 +393,7 @@ function dayShots(day, shotMap){
   return { scenes, total: scenes.reduce((a, s) => a + s.shots.length, 0) };
 }
 
-const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate,
+const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate,
   moveSceneIn, placeScenes, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);

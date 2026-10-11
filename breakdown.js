@@ -573,7 +573,9 @@ function budgetAnalyze_(doc, opts) {
   // Locations you've said are one place ("KITCHEN" is in the "HOUSE"): the room becomes a set of it
   scenes.forEach(function (s) {
     s.oloc = s.loc;
-    const to = LOCMERGE[s.loc]; if (!to || to === s.loc) return;
+    let to = s.loc; const seen = {};
+    while (LOCMERGE[to] && LOCMERGE[to] !== to && !seen[to]) { seen[to] = true; to = LOCMERGE[to]; }   // KITCHEN → HOUSE → PROPERTY
+    if (to === s.loc) return;
     const sub = s.set && s.set !== s.loc ? s.set : s.loc;
     s.loc = to; s.set = sub.indexOf(to + " - ") === 0 ? sub : to + " - " + sub;
   });

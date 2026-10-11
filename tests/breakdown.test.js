@@ -219,5 +219,16 @@ test("a cast type chosen in the plan wins over the automatic one, and the automa
   assert.strictEqual(member(r, "ANA").type, member(r, "ANA").autoType);
 });
 
+test("grouped locations follow a chain to the real place, as sets of it", () => {
+  const r = B.analyze(doc([
+    ["scene", "INT. KITCHEN - DAY"], ["action", "Toast."],
+    ["scene", "INT. HOUSE - DAY"], ["action", "Hall."],
+    ["scene", "EXT. STREET - DAY"], ["action", "Cars."]
+  ], 1), { locs: { KITCHEN: "HOUSE", HOUSE: "PROPERTY", LOOP1: "LOOP2", LOOP2: "LOOP1" } });
+  assert.strictEqual(r.scenes[0].loc, "PROPERTY"); assert.strictEqual(r.scenes[0].set, "PROPERTY - KITCHEN");
+  assert.strictEqual(r.scenes[1].loc, "PROPERTY");
+  assert.strictEqual(r.locs.length, 2);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

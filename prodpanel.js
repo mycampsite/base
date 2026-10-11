@@ -150,6 +150,19 @@ const css = `
 .fxSeg button.on{ background:rgba(255,255,255,.14); color:#fff; }
 .fxRow.ign .fxSeg button.on{ background:rgba(255,139,131,.25); color:#ffb4ae; }
 .fxRow.wat .fxSeg button.on{ background:rgba(241,199,107,.22); color:#f1c76b; }
+.lcAreas{ display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
+.lcChip{ display:inline-flex; align-items:center; gap:4px; border:1px solid var(--uiBorder); border-radius:999px; padding:1px 4px 1px 9px; font-size:11.5px; color:var(--uiText); background:rgba(255,255,255,.04); }
+.lcChip.main{ padding-right:9px; border-style:dashed; color:var(--uiMuted); }
+.lcChip button{ border:0; background:none; color:var(--uiMuted); cursor:pointer; font-size:11px; width:18px; height:18px; border-radius:50%; padding:0; }
+.lcChip button:hover{ color:var(--uiText); background:rgba(255,255,255,.1); }
+.lcActs{ display:flex; gap:6px; flex-wrap:wrap; }
+.lcForm{ margin:0 12px 10px; padding:10px 12px; border:1px solid var(--uiBorder); border-radius:10px; background:rgba(255,255,255,.03); display:grid; gap:8px; font-size:12.5px; }
+.lcName{ display:flex; gap:8px; align-items:center; color:var(--uiMuted); }
+.lcName input{ height:30px; border-radius:8px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); padding:0 8px; text-transform:uppercase; flex:1; max-width:260px; }
+.lcPick{ display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:4px 12px; max-height:240px; overflow:auto; }
+.lcPick label{ display:flex; gap:6px; align-items:center; cursor:pointer; }
+.lcPick i{ font-style:normal; color:var(--uiMuted); font-size:11px; }
+.lcBtns{ display:flex; gap:6px; }
 .fxIn{ display:flex; gap:8px; align-items:center; font-size:12px; color:var(--uiMuted); }
 .fxIn select{ height:30px; border-radius:8px; border:1px solid var(--uiBorder); background:#111; padding:0 8px; }
 .dood summary{ cursor:pointer; padding:9px 12px; font-weight:700; font-size:13px; }
@@ -533,14 +546,30 @@ const ROOM_RE = /^(KITCHEN|LOUNGE|LOUNGE ROOM|LIVING ROOM|SITTING ROOM|DINING RO
 function locsView(pl, bd, canEdit){
   const orig = {}; bd.scenes.forEach((s) => { const o = s.oloc || s.loc; if(!o) return; (orig[o] = orig[o] || { n: 0, e: 0 }).n++; orig[o].e += s.eighths; });
   const names = Object.keys(orig); if(names.length < 2 && !(pl.locMerge || []).length) return "";
-  const to = {}; (pl.locMerge || []).forEach((m) => { to[m.from] = m.to; });
-  const groups = Array.from(new Set(names.map((n) => to[n] || n)));
-  const rooms = names.filter((n) => ROOM_RE.test(n) && !to[n]);
-  return `<details class="dood fx" data-sec="locs"${lsGet(LOCS_KEY) === "1" ? " open" : ""}><summary>Locations · ${groups.length} place${groups.length === 1 ? "" : "s"}${names.length !== groups.length ? " (" + names.length + " in the script)" : ""}</summary>
-    <div class="fxNote">Rooms written as their own location (INT. KITCHEN) count as separate places. If they're in one house, group them.
+  const map = {}; (pl.locMerge || []).forEach((m) => { map[m.from] = m.to; });
+  // place -> the script locations in it
+  const places = {};
+  names.forEach((n) => { const r = P.locRoot(map, n); (places[r] = places[r] || { name: r, areas: [], n: 0, e: 0 }).areas.push(n); places[r].n += orig[n].n; places[r].e += orig[n].e; });
+  const list = Object.values(places).sort((a, b) => b.e - a.e);
+  const rooms = names.filter((n) => ROOM_RE.test(n) && P.locRoot(map, n) === n && places[n] && places[n].areas.length === 1);
+  const f = S.locForm, inForm = f && canEdit;
+  const pickable = inForm ? list.filter((x) => x.name !== f.place) : [];
+  const form = inForm ? `<div class="lcForm">
+      ${f.place ? `<b>Add areas to ${esc(f.place)}</b>` : `<label class="lcName">New place <input id="lcName" type="text" maxlength="60" placeholder="e.g. HOUSE" value="${esc(f.name || "")}"></label>`}
+      <div class="lcPick">${pickable.map((x) => `<label><input type="checkbox" value="${esc(x.name)}"${f.picked && f.picked[x.name] ? " checked" : ""}> ${esc(x.name)}${x.areas.length > 1 || x.areas[0] !== x.name ? ` <i>+ ${x.areas.length} area${x.areas.length === 1 ? "" : "s"}</i>` : ""} <i>${x.n} sc</i></label>`).join("") || `<span>No other locations to add.</span>`}</div>
+      <div class="lcBtns"><button type="button" class="btn sm primary" data-a="lcok">${f.place ? "Add" : "Make place"}</button><button type="button" class="btn sm" data-a="lccancel">Cancel</button></div></div>` : "";
+  const grouped = list.filter((x) => x.areas.length > 1 || x.areas[0] !== x.name).length;
+  return `<details class="dood fx" data-sec="locs"${lsGet(LOCS_KEY) === "1" || inForm ? " open" : ""}><summary>Locations · ${list.length} place${list.length === 1 ? "" : "s"}${names.length !== list.length ? " (" + names.length + " in the script)" : ""}</summary>
+    <div class="fxNote">A place is one real location you shoot at. Its areas (kitchen, yard, garage…) are sets within it: one address, one location fee, moves between areas aren't company moves.
+      ${canEdit ? `<button type="button" class="btn sm" data-a="lcnew">New place…</button>` : ""}
       ${rooms.length > 1 && canEdit ? `<button type="button" class="btn sm" data-a="rooms" data-rooms="${esc(rooms.join("|"))}">Put ${rooms.length} rooms in one place…</button>` : ""}</div>
-    ${names.sort((a, b) => orig[b].e - orig[a].e).map((n) => `<div class="fxRow"><div class="fxName"><b>${esc(n)}</b><span>${orig[n].n} scene${orig[n].n === 1 ? "" : "s"} · ${P.fmtEighths(orig[n].e)} pg</span></div>
-      <label class="fxIn">Part of <select data-loc="${esc(n)}"${canEdit ? "" : " disabled"}><option value="">Its own location</option>${groups.filter((g) => g !== n).map((g) => `<option value="${esc(g)}"${to[n] === g ? " selected" : ""}>${esc(g)}</option>`).join("")}<option value="__new">New place…</option></select></label></div>`).join("")}
+    ${form}
+    ${list.map((x) => {
+      const areas = x.areas.filter((a) => a !== x.name), own = !!orig[x.name];
+      return `<div class="fxRow"><div class="fxName"><b>${esc(x.name)}</b><span>${x.n} scene${x.n === 1 ? "" : "s"} · ${P.fmtEighths(x.e)} pg${areas.length ? " · " + (areas.length + (own ? 1 : 0)) + " areas" : ""}</span>
+        ${areas.length ? `<div class="lcAreas">${own ? `<span class="lcChip main" title="Scenes written as ${esc(x.name)} itself">${esc(x.name)}</span>` : ""}${areas.map((a) => `<span class="lcChip">${esc(a)}${canEdit ? `<button type="button" data-a="lcout" data-loc="${esc(a)}" aria-label="Take ${esc(a)} out of ${esc(x.name)}" title="Take out: its own location again">✕</button>` : ""}</span>`).join("")}</div>` : ""}</div>
+        ${canEdit ? `<div class="lcActs"><button type="button" class="btn sm" data-a="lcadd" data-place="${esc(x.name)}">Add areas…</button>${areas.length ? `<button type="button" class="btn sm" data-a="lcren" data-place="${esc(x.name)}" data-own="${own ? 1 : 0}">Rename…</button><button type="button" class="btn sm" data-a="lcsplit" data-place="${esc(x.name)}" title="Every area becomes its own location again">Split</button>` : ""}</div>` : ""}</div>`;
+    }).join("")}
   </details>`;
 }
 
@@ -605,8 +634,38 @@ function wire(box, pid, ctx){
         const rooms = (a.dataset.rooms || "").split("|").filter(Boolean);
         H().prompt("One location for " + rooms.length + " rooms", "Location name (" + rooms.join(", ") + " become its sets)", "HOUSE").then((v) => {
           const name = String(v || "").trim().toUpperCase(); if(!name) return;
-          update((plan) => { plan.locMerge = (plan.locMerge || []).filter((m) => rooms.indexOf(m.from) < 0).concat(rooms.filter((r) => r !== name).map((r) => ({ from: r, to: name }))); });
+          update((plan) => { P.groupLocs(plan, rooms, name); });
           H().toast(rooms.length + " rooms are now sets of " + name + ".", "ok", 2200);
+        });
+        return;
+      }
+      // locations: places and their areas
+      if(k === "lcnew" && canEdit){ S.locForm = { place: "", picked: {} }; rerender(); return; }
+      if(k === "lcadd" && canEdit){ S.locForm = { place: a.dataset.place, picked: {} }; rerender(); return; }
+      if(k === "lccancel"){ S.locForm = null; rerender(); return; }
+      if(k === "lcok" && canEdit){
+        const f = S.locForm; if(!f) return;
+        const picked = Array.from(box.querySelectorAll(".lcPick input:checked")).map((i) => i.value);
+        const nameIn = box.querySelector("#lcName"), name = f.place || String(nameIn ? nameIn.value : "").trim().toUpperCase();
+        if(!name){ H().toast("Give the place a name.", "err", 2000); if(nameIn) nameIn.focus(); return; }
+        if(!picked.length && (f.place || !name)){ H().toast("Tick at least one location.", "err", 2000); return; }
+        S.locForm = null;
+        update((plan) => { P.groupLocs(plan, picked, name); });
+        H().toast(picked.length + " location" + (picked.length === 1 ? "" : "s") + " now part of " + name + ".", "ok", 2200);
+        return;
+      }
+      if(k === "lcout" && canEdit){ update((plan) => { P.ungroupLoc(plan, a.dataset.loc); }); return; }
+      if(k === "lcsplit" && canEdit){
+        const pl2 = a.dataset.place;
+        H().confirm("Split " + pl2 + "?", "Every area becomes its own location again. Undo puts it back.", "Split", false).then((ok) => { if(ok) update((plan) => { P.splitPlace(plan, pl2); }); });
+        return;
+      }
+      if(k === "lcren" && canEdit){
+        const from = a.dataset.place, own = a.dataset.own === "1";
+        H().prompt("Rename " + from, "Place name", from).then((v) => {
+          const n = String(v || "").trim().toUpperCase(); if(!n || n === from) return;
+          update((plan) => { P.renamePlace(plan, from, n, own); });
+          H().toast(own ? "Renamed. Scenes written as " + from + " are now an area of " + n + "." : "Renamed to " + n + ".", "ok", 2600);
         });
         return;
       }
@@ -657,17 +716,11 @@ function wire(box, pid, ctx){
   box.onchange = (e) => {
     const t = e.target; if(!canEdit) return;
     if(t.dataset.move){ moveScene(pid, t.dataset.move, Number(t.value), -1); S.pick = null; return; }
+    if(S.locForm && t.closest(".lcPick")){ (S.locForm.picked = S.locForm.picked || {})[t.value] = t.checked; return; }
     if(t.dataset.ctype != null){
       const c = (ctx.bd && ctx.bd.cast || []).find((x) => x.name === t.dataset.ctype);
       setCastType(pid, t.dataset.ctype, t.value, c && c.autoType);
       H().toast(t.dataset.ctype + " is now " + t.value + ". Sheets follow on the next Sync.", "ok", 2200);
-      return;
-    }
-    if(t.dataset.loc != null){
-      const from = t.dataset.loc; let to = t.value;
-      const apply = (to2) => update((plan) => { plan.locMerge = (plan.locMerge || []).filter((m) => m.from !== from); if(to2 && to2 !== from) plan.locMerge.push({ from, to: to2 }); });
-      if(to === "__new"){ H().prompt("New place", "What is " + from + " part of? (e.g. HOUSE)", "").then((v) => { const n = String(v || "").trim().toUpperCase(); if(n) apply(n); else rerender(); }); return; }
-      apply(to);
       return;
     }
     if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }
@@ -677,6 +730,7 @@ function wire(box, pid, ctx){
     if(k === "script"){ update((plan) => { plan.scriptId = t.value; }); return; }
     update((plan) => { plan.settings[k] = (k === "start" || k === "call") ? t.value : Number(t.value); });
   };
+  const lcName = box.querySelector("#lcName"); if(lcName){ lcName.oninput = () => { if(S.locForm) S.locForm.name = lcName.value; }; lcName.onkeydown = (e) => { e.stopPropagation(); if(e.key === "Enter"){ e.preventDefault(); const ok = box.querySelector("[data-a=lcok]"); if(ok) ok.click(); } }; if(!lcName.value) lcName.focus({ preventScroll: true }); }
   const det = box.querySelector("details.dood:not(.fx)"); if(det) det.ontoggle = () => { S.doodOpen = det.open; lsSet(DOOD_KEY, det.open ? "1" : "0"); };
   box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : d.dataset.sec === "shots" ? SHOTS_KEY : d.dataset.sec === "cast" ? CAST_KEY : LOCS_KEY, d.open ? "1" : "0"); });
   if(!canEdit) return;

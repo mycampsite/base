@@ -151,5 +151,27 @@ test("cast types survive the database and reach the breakdown options", () => {
   assert.strictEqual(P.analyzeOpts(P.normalize({})).types, undefined);
 });
 
+test("places: group, join, chain, rename, take out and split", () => {
+  const m = (pl) => Object.fromEntries(pl.locMerge.map((x) => [x.from, x.to]));
+  let pl = P.normalize({});
+  P.groupLocs(pl, ["KITCHEN", "BEDROOM"], "house");
+  assert.deepStrictEqual(m(pl), { BEDROOM: "HOUSE", KITCHEN: "HOUSE" });
+  // the place itself (a script location) goes into a bigger place: its areas come with it
+  P.groupLocs(pl, ["HOUSE", "BACKYARD"], "PROPERTY");
+  assert.deepStrictEqual(m(pl), { BACKYARD: "PROPERTY", BEDROOM: "PROPERTY", HOUSE: "PROPERTY", KITCHEN: "PROPERTY" });
+  // naming a location that's already in a place joins that place, never a loop
+  P.groupLocs(pl, ["GARAGE"], "KITCHEN");
+  assert.strictEqual(m(pl).GARAGE, "PROPERTY");
+  P.groupLocs(pl, ["PROPERTY"], "KITCHEN");
+  assert.ok(pl.locMerge.every((x) => P.locRoot(m(pl), x.from) === "PROPERTY"));
+  // rename a pure group name; then rename one that is itself a location
+  P.renamePlace(pl, "PROPERTY", "FARM", false);
+  assert.ok(Object.values(m(pl)).every((v) => v === "FARM") && !m(pl).PROPERTY);
+  P.ungroupLoc(pl, "GARAGE"); assert.strictEqual(m(pl).GARAGE, undefined);
+  P.splitPlace(pl, "FARM"); assert.deepStrictEqual(pl.locMerge, []);
+  // an old save with a loop doesn't hang
+  assert.ok(["A", "B"].indexOf(P.locRoot({ A: "B", B: "A" }, "A")) >= 0);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
