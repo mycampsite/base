@@ -685,16 +685,18 @@ function render(c,w,h,st){
     c.save();c.setTransform(1,0,0,1,0,0);c.filter='blur('+(q*qs).toFixed(1)+'px)';c.drawImage(o.canvas,0,0);c.restore()}
    i=j}};
  st.objs.forEach((o,k)=>{const T=TY[o.t];if(T&&T.k==='ceil'){if(isGhost(o,CP,ctr))ghostFlat(c,o,sc,o.id===st.so);else drawFlat(c,o,k,sc,o.id===st.so,TH.ceil,true)}});
- const bg=[];
- st.objs.forEach((o,k)=>{const T=TY[o.t];if(!T||(T.k!=='plane'&&T.k!=='roof'))return;const q=toC(Po(o,0,T.k==='roof'?0.4:1.2,0));
-  bg.push({d:-q.z,f:()=>T.k==='roof'?drawRoof(D,o,k,sc,o.id===st.so,isGhost(o,CP,ctr),Lv):drawPlane(D,o,k,sc,o.id===st.so,isGhost(o,CP,ctr))})});
- drawRuns(bg.sort((a,b)=>b.d-a.d));
  if(yH!==null&&yH>-ext&&yH<h+ext){c.strokeStyle=TH.hor;c.globalAlpha=0.25;c.lineWidth=0.7*sc;c.setLineDash([5*sc,6*sc]);c.beginPath();c.moveTo(-ext,yH);c.lineTo(w+ext,yH);c.stroke();c.setLineDash([]);c.globalAlpha=1}
+ // Walls, doors, windows and roofs share one depth-ordered pass with furniture and figures, so a
+ // figure behind a wall is drawn before it (see depthOrder).
  const list=[];
+ st.objs.forEach((o,k)=>{const T=TY[o.t];if(!T||(T.k!=='plane'&&T.k!=='roof'))return;const q=toC(Po(o,0,T.k==='roof'?0.4:1.2,0));
+  const b=T.k==='roof'?[-1.5,1.5,0,1,-1.5,1.5]:T.p[0],o0=Po(o,0,0,0);
+  const pl=T.k==='roof'?{p:o0,n:V(0,1,0)}:{p:o0,n:Po(o,0,0,1).sub(o0).normalize()};
+  list.push({d:-q.z,w:bx(o,b),pl,open:!!(T.door||T.glass),f:()=>T.k==='roof'?drawRoof(D,o,k,sc,o.id===st.so,isGhost(o,CP,ctr),Lv):drawPlane(D,o,k,sc,o.id===st.so,isGhost(o,CP,ctr))})});
  st.objs.forEach((o,k)=>{const T=TY[o.t];if(!T||T.k)return;T.p.forEach((b,j)=>{const P=bx(o,b),C=P.map(toC);if(C.some(q=>q.z>-NEAR))return;
-  list.push({d:C.reduce((s,q)=>s-q.z,0)/8,f:()=>drawBoxPart(D,P,C,k*97+j*13+1,sc,o.id===st.so,Lv)})})});
+  list.push({d:C.reduce((s,q)=>s-q.z,0)/8,w:P,f:()=>drawBoxPart(D,P,C,k*97+j*13+1,sc,o.id===st.so,Lv)})})});
  st.figs.forEach((f,i)=>figParts(D,f,i,FG[i],st,list,sc));
- drawRuns(list.sort((a,b)=>b.d-a.d));PX.t=c;
+ drawRuns(depthOrder(list));PX.t=c;
  // Nameplates: a small pill in each character's colour above their head (also on thumbnails and print).
  if(op.names)st.figs.forEach((f,i)=>{const q=pj(Lr(f,FG[i].G.Hc.clone().add(V(0,0.2,0))));if(q.d<=NEAR)return;
   const fs=clamp(0.085*q.k*f.h,5*sc,8.5*sc);c.font='600 '+fs+'px system-ui,sans-serif';const tw=c.measureText(f.n).width,pw=tw+fs*0.9,ph=fs*1.45;
@@ -712,6 +714,27 @@ function render(c,w,h,st){
  if(st.info){st.info(shotInfo(st,FG,fw))}
  else if(!st.thumb){const txt=shotInfo(st,FG,fw);c.font='500 '+(8.5*sc)+'px system-ui,sans-serif';const tw=c.measureText(txt).width;c.fillStyle=TH.ui;c.fillRect(4*sc,h-16*sc,tw+8*sc,12*sc);c.fillStyle=TH.uiText;c.fillText(txt,8*sc,h-7*sc)}
  c.restore()}
+// Painter's order with occlusion fixes: far-to-near by centre depth, except that anything wholly on the
+// camera's side of a wall/roof plane (and overlapping it on screen) is drawn after it, and anything wholly
+// behind is drawn before it. Doors and windows always go after the wall they sit in.
+function depthOrder(L){const n=L.length;if(n<2)return L;
+ const bb=L.map(it=>{if(!it.w)return null;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const v of it.w){const q=pj(v);if(q.d<=NEAR)return null;if(q.x<x0)x0=q.x;if(q.x>x1)x1=q.x;if(q.y<y0)y0=q.y;if(q.y>y1)y1=q.y}return [x0,y0,x1,y1]});
+ const ov=(a,b)=>!a||!b||(a[0]<=b[2]&&b[0]<=a[2]&&a[1]<=b[3]&&b[1]<=a[3]);
+ const after=L.map(()=>[]),indeg=new Array(n).fill(0),seen=new Set();
+ const edge=(a,b)=>{const key=a*n+b;if(a===b||seen.has(key)||seen.has(b*n+a))return;seen.add(key);after[a].push(b);indeg[b]++};
+ const E=0.04;
+ L.forEach((P,i)=>{if(!P.pl)return;const cs=P.pl.n.dot(cam.position.clone().sub(P.pl.p));if(Math.abs(cs)<1e-4)return;const sg=cs>0?1:-1;
+  L.forEach((X,j)=>{if(i===j||!X.w||!ov(bb[i],bb[j]))return;
+   if(X.pl&&X.open&&!P.open&&Math.abs(X.pl.n.dot(P.pl.n))>0.95&&Math.abs(P.pl.n.dot(X.pl.p.clone().sub(P.pl.p)))<0.15){edge(i,j);return}
+   if(P.open&&X.pl&&!X.open&&Math.abs(X.pl.n.dot(P.pl.n))>0.95&&Math.abs(X.pl.n.dot(P.pl.p.clone().sub(X.pl.p)))<0.15)return;
+   let front=true,back=true;for(const v of X.w){const s=sg*P.pl.n.dot(v.clone().sub(P.pl.p));if(s<-E)front=false;if(s>E)back=false;if(!front&&!back)break}
+   if(front&&!back)edge(i,j);else if(back&&!front)edge(j,i)})});
+ if(!seen.size)return L.slice().sort((a,b)=>b.d-a.d);
+ const out=[],done=new Array(n).fill(false);
+ for(let k=0;k<n;k++){let bi=-1;for(let i=0;i<n;i++)if(!done[i]&&indeg[i]===0&&(bi<0||L[i].d>L[bi].d))bi=i;
+  if(bi<0)for(let i=0;i<n;i++)if(!done[i]&&(bi<0||L[i].d>L[bi].d))bi=i;   // cycle: fall back to depth
+  done[bi]=true;out.push(L[bi]);after[bi].forEach(j=>indeg[j]--)}
+ return out}
 function groundGrid(c,sc){const S=2,N=16,L=N*S,piece=4,gx=Math.round(CP.x/S)*S,gz=Math.round(CP.z/S)*S,bands=[[],[],[],[]];
  for(let i=-N;i<=N;i++)for(let ax=0;ax<2;ax++){const u=(ax?gx:gz)+i*S;for(let v=-L;v<L;v+=piece){
   const a=ax?V(u,0,gz+v):V(gx+v,0,u),b=ax?V(u,0,gz+v+piece):V(gx+v+piece,0,u),m=v+piece/2;
@@ -799,7 +822,7 @@ function figParts(c,f,i,fg,st,list,sc){const B=fg.B,G=fg.G,bd=B.bd,K=bd.k*f.h,ni
   grp('shin',[capsule([[Kn,L.sh[0]],[lerp(Kn,A,0.3),L.sh[1]],[A,L.sh[2]]]),capsule([[A.clone().add(V(0,-0.05,0)).addScaledVector(fd,-0.035),0.032],[A.clone().add(V(0,-0.06,0)).addScaledVector(fd,0.095),0.035],[A.clone().add(V(0,-0.064,0)).addScaledVector(fd,0.15),0.022]])])});
  if(!groups.length)return;
  const cq=W(B.Ch);
- list.push({d:cq.d>NEAR?cq.d:groups.reduce((s,g)=>s+g.d,0)/groups.length,f:()=>{c.lineJoin='round';c.lineCap='round';
+ list.push({d:cq.d>NEAR?cq.d:groups.reduce((s,g)=>s+g.d,0)/groups.length,w:[B.P,G.Hc,B.Ch,B.lL.t,B.lR.t,B.aL.t,B.aR.t,B.aL.e,B.aR.e].map(v=>Lr(f,v)),f:()=>{c.lineJoin='round';c.lineCap='round';
   groups.sort((a,b)=>b.d-a.d).forEach(g=>{c.strokeStyle=col;c.lineWidth=lw*2;g.parts.forEach(p=>{lsmooth(c,p.pts);c.stroke()});c.fillStyle=fill;g.parts.forEach(p=>{lsmooth(c,p.pts);c.fill()});
    if(g.name==='torso')torsoMarks(c,X,col,thin);
    if(g.name==='head')headMarks(c,X,col,thin,back)})}})}
