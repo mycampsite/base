@@ -508,6 +508,11 @@
   #preview .pvStage > .tpage{ position:absolute; top:0; left:0; transform-origin:0 0; }
   #preview .pvBar{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:2; display:flex; align-items:center; gap:10px; background:rgba(27,27,27,.9); border:1px solid var(--uiBorder); border-radius:12px; padding:6px 10px; font-size:12px; color:var(--uiMuted); opacity:.25; transition:opacity .15s; }
   #preview .pvBar:hover{ opacity:1; }
+  #preview.exporting .pvBar{ opacity:1; }
+  #pvNote{ display:none; color:var(--uiText); }
+  #pvPos{ white-space:nowrap; }
+  #preview.exporting .pvBar{ flex-wrap:wrap; justify-content:center; max-width:min(720px, calc(100vw - 24px)); }
+  #preview.exporting #pvNote{ display:block; flex:1 1 100%; text-align:center; padding:2px 4px 4px; }
   #preview .pvHit{ position:fixed; top:0; bottom:70px; width:30%; z-index:1; cursor:pointer; }
   #preview:fullscreen{ background:#050505; }
   #preview .el-text:empty::before, #preview .el-image.empty::after{ content:none; }
@@ -666,7 +671,7 @@
   </div>
 </div>
 <div id="preview"><div class="pvStage" id="pvStage"></div>
-  <div class="pvBar"><button class="btn sm" id="pvPrev" type="button">&lsaquo;</button><span id="pvPos"></span><button class="btn sm" id="pvNext" type="button">&rsaquo;</button><button class="btn sm" id="pvFull" type="button" title="Full screen (F)">Full screen</button><button class="btn sm" id="pvPrint" type="button">Print</button><button class="btn sm primary" id="pvPdf" type="button">Export PDF</button><button class="btn sm" id="pvClose" type="button">Close (Esc)</button></div>
+  <div class="pvBar"><span id="pvNote"></span><button class="btn sm" id="pvPrev" type="button">&lsaquo;</button><span id="pvPos"></span><button class="btn sm" id="pvNext" type="button">&rsaquo;</button><button class="btn sm" id="pvFull" type="button" title="Full screen (F)">Full screen</button><button class="btn sm" id="pvPrint" type="button">Print</button><button class="btn sm primary" id="pvPdf" type="button">Export PDF</button><button class="btn sm" id="pvClose" type="button">Close (Esc)</button></div>
   <div class="pvHit" id="pvHitL" style="left:0"></div><div class="pvHit" id="pvHitR" style="right:0"></div>
 </div>
 <div id="textDock" hidden><textarea id="dockTa" rows="2" autocapitalize="sentences" aria-label="Text"></textarea><button type="button" class="btn primary" id="dockDone">Done</button></div>
@@ -4739,8 +4744,16 @@
 
   /* ---------------- Preview & PDF ---------------- */
   let __pv = 0;
-  function openPreview(){ if(EDITING) finishEdit(); __pv = T.cur; document.getElementById("preview").classList.add("show"); renderPreview(); }
-  function closePreview(){ if(document.fullscreenElement) document.exitFullscreen().catch(() => {}); document.getElementById("preview").classList.remove("show"); }
+  function openPreview(forExport){
+    if(EDITING) finishEdit(); __pv = forExport ? 0 : T.cur;
+    const pv = document.getElementById("preview"); pv.classList.add("show"); pv.classList.toggle("exporting", !!forExport);
+    const b = document.getElementById("pvPdf"); if(b) b.textContent = forExport ? "OK, export PDF" : "Export PDF";
+    const n = document.getElementById("pvNote");
+    if(n){ const br = blankReport(), left = []; if(br.frames) left.push(br.frames + " empty image frame" + (br.frames > 1 ? "s" : "")); if(br.texts) left.push(br.texts + " empty text box" + (br.texts > 1 ? "es" : ""));
+      n.textContent = forExport ? "Check every page (‹ › or arrow keys), then OK." + (left.length ? " Left out of the PDF: " + left.join(" and ") + "." : "") : ""; }
+    renderPreview();
+  }
+  function closePreview(){ if(document.fullscreenElement) document.exitFullscreen().catch(() => {}); const pv = document.getElementById("preview"); pv.classList.remove("show", "exporting"); }
   function togglePvFull(){ const pv = document.getElementById("preview"); if(document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if(pv.requestFullscreen) pv.requestFullscreen().catch(() => {}); }
   function renderPreview(){
     const st = document.getElementById("pvStage");
@@ -4849,6 +4862,9 @@
         notify("Making your PDF… page " + (i + 1) + " of " + pages.length, false, 60000);
         const node = pages[i].cloneNode(true);
         node.style.transform = "none"; node.style.position = "relative"; node.style.left = node.style.top = "0";
+        node.style.margin = "0"; node.style.borderRadius = "0"; node.style.boxShadow = "none";
+        const under = getComputedStyle(pages[i]).backgroundColor;
+        const bgFill = under && !/rgba\(\s*0,\s*0,\s*0,\s*0\s*\)|transparent/.test(under) ? under : ((String(pages[i].style.background || "").match(/#[0-9a-f]{3,8}|rgba?\([^)]*\)/i) || [])[0] || "#000");
         for(const im of Array.from(node.querySelectorAll("img"))){ const d = await toDataUrl(im.currentSrc || im.src); if(d) im.setAttribute("src", d); im.removeAttribute("srcset"); im.removeAttribute("loading"); }
         for(const el of [node, ...Array.from(node.querySelectorAll("[style*='url(']"))]){
           const st = el.getAttribute("style") || ""; let ns = st;
@@ -4856,13 +4872,13 @@
           if(ns !== st) el.setAttribute("style", ns);
         }
         const xml = new XMLSerializer().serializeToString(node);
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cw}" height="${ch}" viewBox="0 0 ${W} ${H}"><foreignObject x="0" y="0" width="${W}" height="${H}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${W}px;height:${H}px;overflow:hidden"><style>${css.replace(/<\/style/gi, "<\\/style")}
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cw}" height="${ch}" viewBox="0 0 ${PAGE_WPX} ${PAGE_HPX}" preserveAspectRatio="none"><foreignObject x="0" y="0" width="${PAGE_WPX}" height="${PAGE_HPX}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${PAGE_WPX}px;height:${PAGE_HPX}px;overflow:hidden;margin:0;padding:0"><style>${css.replace(/<\/style/gi, "<\\/style")}
 .el-text:empty::before{ content:none !important; } .el-image.empty::after{ content:none !important; } .el-image.empty{ background:transparent !important; border-color:transparent !important; outline:0 !important; } .el-image.loading{ animation:none !important; background:transparent !important; }</style>${xml}</div></foreignObject></svg>`;
         // a data: URL (not blob:) keeps the canvas exportable in Chrome
         const im = new Image(); im.decoding = "sync"; im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
         await im.decode();
         await new Promise((r) => setTimeout(r, 60));          // let embedded fonts settle before drawing
-        g.fillStyle = "#fff"; g.fillRect(0, 0, cw, ch); g.drawImage(im, 0, 0, cw, ch);
+        g.fillStyle = bgFill; g.fillRect(0, 0, cw, ch); g.drawImage(im, 0, 0, cw, ch);
         const jb = await new Promise((r) => cv.toBlob(r, "image/jpeg", 0.92));
         if(!jb) throw new Error("couldn't draw page " + (i + 1));
         out.push({ jpg:new Uint8Array(await jb.arrayBuffer()), w:cw, h:ch });
@@ -5026,8 +5042,8 @@
     document.getElementById("undoBtn").onclick = undo;
     document.getElementById("redoBtn").onclick = redo;
     document.getElementById("restyleBtn").onclick = () => openTemplatePicker("restyle");
-    document.getElementById("previewBtn").onclick = openPreview;
-    document.getElementById("exportBtn").onclick = exportPdfFile;
+    document.getElementById("previewBtn").onclick = () => openPreview(false);
+    document.getElementById("exportBtn").onclick = () => openPreview(true);
     document.getElementById("printBtn").onclick = exportPdf;
     document.getElementById("pvPrev").onclick = () => stepPreview(-1);
     document.getElementById("pvNext").onclick = () => stepPreview(1);
