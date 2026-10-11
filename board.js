@@ -64,6 +64,12 @@ function embedUrl(u){
   }
   return "";
 }
+// The embed address with the player trimmed down: the title, sound and quality controls stay, the extras (suggestions, branding, share, like, fullscreen) go.
+function playerUrl(u){
+  const e = embedUrl(u); if(!e) return "";
+  const q = /youtube/.test(e) ? "rel=0&modestbranding=1&iv_load_policy=3&fs=0&playsinline=1&cc_load_policy=0" : "title=1&byline=0&portrait=0&badge=0&like=0&watchlater=0&share=0&dnt=1";
+  return e + (e.indexOf("?") < 0 ? "?" : "&") + q;
+}
 function mapUrl(address){ address = clean(address); return address ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address) : ""; }
 function telUrl(phone){ phone = clean(phone); const d = phone.replace(/[^\d+]/g, ""); return d.replace(/\D/g, "").length >= 6 ? "tel:" + d : ""; }
 function mailUrl(email){ email = clean(email); return /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]{2,}$/.test(email) ? "mailto:" + email : ""; }
@@ -264,6 +270,6 @@ function neighbour(groups, id, dir){
   return flat[i + dir] || "";
 }
 
-const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, embedUrl, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, linesOf, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
+const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, embedUrl, playerUrl, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, linesOf, withOrder, withBrief, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampBoard = Object.assign(root.CampBoard || {}, { logic: api });
 })(typeof window !== "undefined" ? window : this);

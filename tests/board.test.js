@@ -266,5 +266,12 @@ test("embedUrl turns YouTube and Vimeo links into player addresses and nothing e
   assert.strictEqual(B.embedUrl("javascript:alert(1)"), "");
 });
 
+test("playerUrl keeps the embed address and adds the trimmed-player options", () => {
+  const y = B.playerUrl("https://youtu.be/dQw4w9WgXcQ"), v = B.playerUrl("https://vimeo.com/123456789/abcdef1234");
+  assert.ok(y.startsWith("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?") && y.includes("rel=0") && y.includes("fs=0"));
+  assert.ok(v.startsWith("https://player.vimeo.com/video/123456789?h=abcdef1234&") && v.includes("byline=0"));
+  assert.strictEqual(B.playerUrl("https://example.com/x"), "");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

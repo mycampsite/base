@@ -26,7 +26,7 @@ const S = {
   closed: {},          // "kind|group" -> true while collapsed
   bad: {},             // card id -> true when its photo didn't load
   open: null,          // card id shown in the detail view
-  viewer: null,        // { id, i } while the photo viewer is open
+  heroFor: null, heroI: 0,   // the card whose photo is showing in the detail view, and which one
   briefDraft: null,
   briefEdit: "",       // "kind|group" while its brief is being typed
   edit: null,          // the form being filled in: { kind, id, key, group, base, vals, busy, err, conflict }
@@ -92,7 +92,6 @@ const css = `
 .bdDlg.view > .bdDHead{ position:sticky; top:0; z-index:6; align-items:center; padding:12px 18px; background:#1a1b1f; border-bottom:1px solid var(--uiBorder); }
 .bdHero{ position:relative; display:grid; place-items:center; width:100%; height:min(62vh,640px); background:#0f1013; color:#5d5d5d; font-size:64px; font-weight:700; overflow:hidden; }
 .bdHero.empty{ height:140px; }
-.bdHero[data-bd=view]{ cursor:zoom-in; }
 .bdHero img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
 .bdDlg.view .bdDBody{ min-height:0; padding:16px 18px; }
 .bdGal{ padding:14px 18px 0; }
@@ -100,6 +99,12 @@ const css = `
 .bdGalI{ position:relative; aspect-ratio:1; padding:0; border:0; border-radius:10px; overflow:hidden; background:#242424; cursor:zoom-in; }
 .bdGalI img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transition:transform .15s; }
 .bdGalI:hover img{ transform:scale(1.04); }
+.bdGalI.on{ outline:2px solid var(--gold); outline-offset:-2px; }
+.bdHN{ position:absolute; top:50%; margin-top:-22px; width:44px; height:44px; border-radius:50%; border:0; background:rgba(0,0,0,.5); color:#fff; font-size:22px; line-height:1; cursor:pointer; z-index:2; }
+.bdHN:hover{ background:rgba(0,0,0,.75); } .bdHN.l{ left:12px; } .bdHN.r{ right:12px; }
+.bdHBar{ position:absolute; left:0; right:0; bottom:0; z-index:2; display:flex; gap:12px; align-items:center; justify-content:center; padding:8px 12px; font-size:12.5px; font-weight:400; color:#e6e6ea; background:linear-gradient(transparent,rgba(0,0,0,.65)); }
+.bdHBar a, .bdHBar button{ color:#fff; background:none; border:0; padding:0; font:inherit; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.bdHero .bdHint{ position:relative; z-index:1; max-width:80%; font-size:12.5px; font-weight:400; }
 .bdVids{ padding:0 18px 16px; gap:14px; }
 .bdVid{ display:grid; gap:6px; }
 .bdVidT{ font-size:12.5px; color:var(--uiMuted); font-weight:600; }
@@ -181,14 +186,6 @@ span.bdStar{ cursor:default; }
 .bdThumb:hover .mk, .bdThumb .mk:focus{ opacity:1; }
 @media (hover:none){ .bdThumb .mk{ opacity:1; } }
 .bdLinkAdd button{ height:34px; padding:0 12px; border:1px solid var(--uiBorder); border-radius:9px; text-decoration:none; }
-.bdView{ z-index:101; background:rgba(0,0,0,.9); flex-direction:column; gap:10px; }
-.bdView figure{ margin:0; flex:1; min-height:0; width:100%; display:grid; place-items:center; }
-.bdView img{ max-width:100%; max-height:100%; object-fit:contain; border-radius:6px; }
-.bdView .nav{ position:absolute; top:50%; margin-top:-22px; width:44px; height:44px; border-radius:50%; border:0; background:rgba(255,255,255,.14); color:#fff; font-size:20px; cursor:pointer; }
-.bdView .nav:hover{ background:rgba(255,255,255,.28); } .bdView .nav.l{ left:14px; } .bdView .nav.r{ right:14px; }
-.bdView .x{ position:absolute; top:12px; right:14px; }
-.bdVBar{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:center; font-size:13px; color:#d6d6dc; }
-.bdVBar a{ color:#fff; }
 @media (max-width:640px){ .bdForm .two{ grid-template-columns:1fr; } }
 @media (max-width:640px){
   .bdShade{ align-items:flex-end; padding:0; }
@@ -352,18 +349,12 @@ function findCard(id){
   return null;
 }
 function closeDetail(quiet){
-  closeViewer();
   const el = document.getElementById("bdShade"); if(el) el.remove();
   document.removeEventListener("keydown", detailKeys, true);
   if(!quiet && lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
   S.open = null; S.edit = null;
 }
 function detailKeys(e){
-  if(S.viewer){
-    if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); closeViewer(); }
-    else if(e.key === "ArrowRight" || e.key === "ArrowLeft"){ e.preventDefault(); stepViewer(e.key === "ArrowRight" ? 1 : -1); }
-    return;
-  }
   if(S.edit){
     if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); cancelEdit(); }
     else if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); saveEdit(false); }
@@ -382,6 +373,8 @@ function showDetail(id, keep){
   const rec = S.data[S.fileId], d = rec && rec.d, gid = d && (c.kind === "cast" ? d.castGid : d.locGid);
   if(!keep && !document.getElementById("bdShade")) lastFocus = document.activeElement;
   S.open = id;
+  if(S.heroFor !== id){ S.heroFor = id; S.heroI = 0; }
+  if(S.heroI >= c.photos.length) S.heroI = 0;
   const bad = S.bad[id];
   const rows = [];
   if(c.kind === "loc" && c.main) rows.push(["Address", esc(c.main)]);
@@ -395,13 +388,12 @@ function showDetail(id, keep){
     : (c.status ? `<span class="bdSt ${slug(c.status)}">${esc(c.status)}</span>` : `<span class="bdDMeta">No status</span>`);
   const sec = (label, body) => body ? `<div class="bdSec"><div class="bdLbl">${label}</div>${body}</div>` : "";
   const rowLink = d && d.url ? esc(d.url + (gid ? "#gid=" + gid + "&range=A" + c.row : "")) : "";
-  const heroSrc = c.photo && !bad ? (L.viewSrc(c.photos[0], true) || c.photo) : "";
-  const gal = c.photos.map((u, i) => [L.viewSrc(u), i]).slice(1).filter((p) => p[0]);
-  const hero = `<div class="bdHero${heroSrc ? "" : " empty"}"${c.photos.length ? ` data-bd="view" data-i="0" title="View ${c.photos.length > 1 ? "all " + c.photos.length + " photos" : "the photo"}"` : ""}>${esc(initial(c))}${heroSrc ? `<img referrerpolicy="no-referrer" src="${esc(heroSrc)}" alt="${esc(c.title)}" data-card="${esc(c.id)}">` : ""}${c.photos.length > 1 ? `<span class="bdCount">▣ ${c.photos.length}</span>` : ""}</div>`;
-  const galHtml = gal.length ? `<div class="bdSec bdGal"><div class="bdLbl">Photos</div><div class="bdGalGrid">${gal.map((p) => `<button class="bdGalI" type="button" data-bd="view" data-i="${p[1]}" aria-label="View photo ${p[1] + 1}"><img class="gal" loading="lazy" referrerpolicy="no-referrer" src="${esc(p[0])}" alt=""></button>`).join("")}</div></div>` : "";
+  const hero = `<div class="bdHero${c.photos.length ? "" : " empty"}" id="bdHero">${heroBody(c, S.heroI)}</div>`;
+  const gal = c.photos.map((u, i) => [L.viewSrc(u), i]).filter((p) => p[0]);
+  const galHtml = c.photos.length > 1 && gal.length ? `<div class="bdSec bdGal"><div class="bdLbl">Photos</div><div class="bdGalGrid">${gal.map((p) => `<button class="bdGalI${p[1] === S.heroI ? " on" : ""}" type="button" data-bd="hthumb" data-i="${p[1]}" aria-label="Show photo ${p[1] + 1}"><img class="gal" loading="lazy" referrerpolicy="no-referrer" src="${esc(p[0])}" alt=""></button>`).join("")}</div></div>` : "";
   const seenE = {}, vids = [];
-  c.links.forEach((l) => { const e = L.embedUrl(l.url); if(e && !seenE[e]){ seenE[e] = 1; vids.push({ label: l.label, e }); } });
-  const vidHtml = vids.length ? `<div class="bdSec bdVids"><div class="bdLbl">Videos</div>${vids.map((v) => `<div class="bdVid"><div class="bdVidT">${esc(v.label)}</div><div class="bdFrame"><iframe src="${esc(v.e)}" title="${esc(c.title + " – " + v.label)}" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div></div>`).join("")}</div>` : "";
+  c.links.forEach((l) => { const e = L.playerUrl(l.url); if(e && !seenE[e]){ seenE[e] = 1; vids.push({ label: l.label, e }); } });
+  const vidHtml = vids.length ? `<div class="bdSec bdVids"><div class="bdLbl">Videos</div>${vids.map((v) => `<div class="bdVid"><div class="bdVidT">${esc(v.label)}</div><div class="bdFrame"><iframe src="${esc(v.e)}" title="${esc(c.title + " – " + v.label)}" loading="lazy" allow="encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe></div></div>`).join("")}</div>` : "";
   const html = `<div class="bdShade" id="bdShade"><div class="bdDlg view ${c.kind}" role="dialog" aria-modal="true" aria-label="${esc(c.title)}">
     <div class="bdDHead"><div style="flex:1;min-width:0"><h2>${esc(c.title)}</h2><div class="bdDMeta">${esc(c.group)}${c.groupType ? " · " + esc(c.groupType) : ""}</div></div>${favT}<button class="iconBtn" type="button" data-bd="close" aria-label="Close" title="Close (Esc)">${ICON.close}</button></div>
     ${hero}${galHtml}
@@ -425,7 +417,10 @@ function showDetail(id, keep){
     const b = e.target.closest("[data-bd]"); if(!b) return;
     if(b.dataset.bd === "close") closeDetail();
     else if(b.dataset.bd === "edit") openEditor(c);
-    else if(b.dataset.bd === "view") openViewer(c.id, +b.dataset.i || 0);
+    else if(b.dataset.bd === "hprev") setHero(c, S.heroI - 1);
+    else if(b.dataset.bd === "hnext") setHero(c, S.heroI + 1);
+    else if(b.dataset.bd === "hthumb"){ setHero(c, +b.dataset.i || 0); const dl = shade.querySelector(".bdDlg"); if(dl) dl.scrollTo({ top: 0, behavior: "smooth" }); }
+    else if(b.dataset.bd === "hcover") makeDisplayPhoto(c, c.photos[S.heroI]);
     else if(b.dataset.bd === "fav") toggleFav(c);
     else if(b.dataset.bd === "delete") deleteCard(c);
   });
@@ -433,6 +428,11 @@ function showDetail(id, keep){
     if(e.target.dataset && e.target.dataset.bd === "status") quickStatus(c, e.target.value);
   });
   shade.addEventListener("error", onImgError, true);
+  const hd = document.getElementById("bdHero"); let x0 = null;
+  if(hd){
+    hd.addEventListener("touchstart", (ev) => { x0 = ev.touches[0].clientX; }, { passive: true });
+    hd.addEventListener("touchend", (ev) => { if(x0 == null) return; const dx = ev.changedTouches[0].clientX - x0; x0 = null; if(Math.abs(dx) > 50) setHero(c, S.heroI + (dx < 0 ? 1 : -1)); }, { passive: true });
+  }
   document.removeEventListener("keydown", detailKeys, true);
   document.addEventListener("keydown", detailKeys, true);
   const qs = shade.querySelector("[data-bd=status]"); if(qs) qs.value = c.raw.status;
@@ -518,37 +518,20 @@ async function deleteCard(c){
   }catch(err){ H().toast("Couldn't delete: " + ((err && err.message) || err), "err"); if(err && err.gone) afterSheetMoved(); }
   if(S.pid) render(S.pid);
 }
-/* ---------- the photo viewer ---------- */
-function closeViewer(){ const v = document.getElementById("bdView"); if(v) v.remove(); S.viewer = null; }
-function openViewer(id, i){
-  const c = findCard(id); if(!c || !c.photos.length) return;
-  S.viewer = { id, i: Math.max(0, Math.min(i || 0, c.photos.length - 1)) }; drawViewer();
+/* ---------- the photo area of the detail view: the cover, and every other photo cycled in the same place ---------- */
+function heroBody(c, i){
+  const n = c.photos.length, u = c.photos[i], src = u ? L.viewSrc(u, true) : "", can = canWrite(S.hubP);
+  if(!n) return esc(initial(c));
+  const img = src ? `<img class="hero" referrerpolicy="no-referrer" src="${esc(src)}" alt="${esc(c.title)}">` : `<div class="bdHint">This link can't be shown here. <a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open it</a></div>`;
+  const nav = n > 1 ? `<button class="bdHN l" type="button" data-bd="hprev" aria-label="Previous photo">‹</button><button class="bdHN r" type="button" data-bd="hnext" aria-label="Next photo">›</button>` : "";
+  const bar = `<div class="bdHBar">${n > 1 ? `<span>${i + 1} / ${n}</span>` : ""}${i === 0 ? (n > 1 ? `<span>Cover photo</span>` : "") : (can ? `<button type="button" data-bd="hcover">Set as cover</button>` : "")}${src ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open</a>` : ""}</div>`;
+  return esc(initial(c)) + img + nav + bar;
 }
-function stepViewer(d){
-  const v = S.viewer, c = v && findCard(v.id); if(!c) return;
-  v.i = (v.i + d + c.photos.length) % c.photos.length; drawViewer();
-}
-function drawViewer(){
-  const v = S.viewer, c = v && findCard(v.id); if(!c){ closeViewer(); return; }
-  const n = c.photos.length, u = c.photos[v.i], src = L.viewSrc(u, true), can = canWrite(S.hubP);
-  const old = document.getElementById("bdView"); if(old) old.remove();
-  const nav = n > 1 ? `<button class="nav l" type="button" data-vw="prev" aria-label="Previous photo">‹</button><button class="nav r" type="button" data-vw="next" aria-label="Next photo">›</button>` : "";
-  const fig = src ? `<img referrerpolicy="no-referrer" src="${esc(src)}" alt="${esc(c.title)}">` : `<div class="bdHint">This link can't be shown here. <a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open it</a></div>`;
-  document.body.insertAdjacentHTML("beforeend", `<div class="bdShade bdView" id="bdView" role="dialog" aria-modal="true" aria-label="Photos of ${esc(c.title)}">
-    <button class="iconBtn x" type="button" data-vw="close" aria-label="Close photos" title="Close (Esc)">${ICON.close}</button>${nav}<figure>${fig}</figure>
-    <div class="bdVBar"><span>${esc(c.title)} · ${v.i + 1} / ${n}</span>${v.i === 0 ? `<span>Cover photo</span>` : (can ? `<button class="btn sm" type="button" data-vw="main">Set as cover</button>` : "")}<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open original</a></div></div>`);
-  const el = document.getElementById("bdView"); let x0 = null;
-  el.addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-vw]");
-    if(!b){ if(ev.target === el || ev.target.tagName === "FIGURE") closeViewer(); return; }
-    const k = b.dataset.vw;
-    if(k === "close") closeViewer(); else if(k === "prev") stepViewer(-1); else if(k === "next") stepViewer(1); else if(k === "main") makeDisplayPhoto(c, u);
-  });
-  el.addEventListener("touchstart", (ev) => { x0 = ev.touches[0].clientX; }, { passive: true });
-  el.addEventListener("touchend", (ev) => { if(x0 == null) return; const dx = ev.changedTouches[0].clientX - x0; x0 = null; if(Math.abs(dx) > 50) stepViewer(dx < 0 ? 1 : -1); }, { passive: true });
-  el.addEventListener("error", (ev) => { if(ev.target.tagName === "IMG"){ const f = ev.target.parentNode; f.innerHTML = `<div class="bdHint">The photo didn't load. If it's on Drive, set sharing to “Anyone with the link”.</div>`; } }, true);
-  const close = el.querySelector("[data-vw=close]"); if(close) close.focus();
-  if(!S.edit){ document.removeEventListener("keydown", detailKeys, true); document.addEventListener("keydown", detailKeys, true); }
+function setHero(c, i){
+  const n = c.photos.length; if(!n) return;
+  S.heroI = ((i % n) + n) % n;
+  const h = document.getElementById("bdHero"); if(h) h.innerHTML = heroBody(c, S.heroI);
+  document.querySelectorAll("#bdShade .bdGalI").forEach((b) => b.classList.toggle("on", +b.dataset.i === S.heroI));
 }
 // Choose which photo is the card's display photo
 async function makeDisplayPhoto(c, url){
@@ -559,8 +542,8 @@ async function makeDisplayPhoto(c, url){
     setData((d) => L.withCandidate(d, c.kind, res.candidate));
   }catch(err){ H().toast("Couldn't save: " + ((err && err.message) || err), "err"); }
   if(S.pid) render(S.pid);
+  S.heroI = 0;
   if(S.open && findCard(S.open)) showDetail(S.open, true);
-  if(S.viewer){ S.viewer.i = 0; drawViewer(); }
 }
 async function saveBrief(group){
   const ta = document.getElementById("bdBriefTa"); if(!ta) return;
@@ -795,6 +778,7 @@ async function removeOption(){
 function onImgError(e){
   const img = e.target; if(!img || img.tagName !== "IMG") return;
   if(img.classList.contains("gal")){ const b = img.closest("button"); if(b) b.remove(); return; }
+  if(img.classList.contains("hero")){ const d = document.createElement("div"); d.className = "bdHint"; d.textContent = "The photo didn't load. If it's on Drive, set sharing to “Anyone with the link”."; img.replaceWith(d); return; }
   if(!img.dataset.card) return;
   S.bad[img.dataset.card] = true; img.remove();
   if(S.open === img.dataset.card) showDetail(S.open, true);
