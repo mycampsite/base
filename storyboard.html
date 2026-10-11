@@ -538,6 +538,31 @@ function ob(t,x,z,r,sz,w,y,d){return {id:uid++,t,x,z,r:r||0,sz:sz||1,w:w||1,y:y|
 function normObj(o){if(o.t==='slab')o.t='ceiling';o.r=o.r||0;o.sz=o.sz||1;o.w=o.w||1;o.y=o.y||0;o.d=o.d||1;return o}
 function Po(o,x,y,z){const c=Math.cos(o.r*R),s=Math.sin(o.r*R);x*=o.sz*o.w;y*=o.sz;z*=o.sz*o.d;return V(o.x+x*c+z*s,o.y+y,o.z-x*s+z*c)}
 function bx(o,b){const P=[];for(let a=0;a<8;a++)P.push(Po(o,a&1?b[1]:b[0],a&2?b[3]:b[2],a&4?b[5]:b[4]));return P}
+// ---- snapping: walls meet at ends, doors/windows seat into walls, floors/roofs butt edge to edge ----
+let snapMark=[];const SNAPD=0.35;
+function snapPiece(o){snapMark=[];const T=TY[o.t];if(!T)return;
+ const ends=q=>[-1.5,1.5].map(x=>Po(q,x,0,0));
+ if(T.k==='plane'&&!T.door&&!T.glass){let best=null;const mine=ends(o);
+  objs.forEach(q=>{if(q===o)return;const U=TY[q.t];if(!U||U.k!=='plane'||U.door||U.glass)return;
+   ends(q).forEach(e=>mine.forEach(m=>{const d=Math.hypot(e.x-m.x,e.z-m.z);if(d<SNAPD&&(!best||d<best.d))best={d,dx:e.x-m.x,dz:e.z-m.z,e}}))});
+  if(best){o.x+=best.dx;o.z+=best.dz;snapMark=[[best.e.x,0.02,best.e.z]]}return}
+ if(T.door||T.glass){let best=null;const hw=0.5*o.sz*o.w;
+  objs.forEach(q=>{const U=TY[q.t];if(q===o||!U||U.k!=='plane'||U.door||U.glass)return;
+   const L=toLocal(q,V(o.x,q.y,o.z)),lim=1.5-hw/(q.sz*q.w);if(Math.abs(L.z*q.sz*q.d)>0.7||Math.abs(L.x)>1.5+hw/(q.sz*q.w))return;
+   const d=Math.abs(L.z*q.sz*q.d);if(!best||d<best.d)best={d,q,lx:clamp(L.x,-Math.max(lim,0),Math.max(lim,0))}});
+  if(best){const w=Po(best.q,best.lx,0,0);o.x=w.x;o.z=w.z;o.r=best.q.r;snapMark=[[w.x,0.02,w.z]]}return}
+ if(T.k==='floor'||T.k==='ceil'||T.k==='roof'){const ext=q=>{const h=q.t==='roof'?1.5:3;return [h*q.sz*q.w,h*q.sz*q.d]};let best=null;
+  objs.forEach(q=>{const U=TY[q.t];if(q===o||!U||(U.k!==T.k&&!(T.k==='roof'&&U.k==='roof')))return;
+   const rel=((o.r-q.r)%180+180)%180,par=rel<4||rel>176,perp=Math.abs(rel-90)<4;if(!par&&!perp)return;
+   const c=Math.cos(q.r*R),sn=Math.sin(q.r*R),dx=o.x-q.x,dz=o.z-q.z;let ax=dx*c-dz*sn,az=dx*sn+dz*c;
+   const [qx,qz]=ext(q);let [ox,oz]=ext(o);if(perp)[ox,oz]=[oz,ox];
+   const nx=qx+ox,nz=qz+oz;let hit=null;
+   if(Math.abs(Math.abs(ax)-nx)<SNAPD&&Math.abs(az)<nz)hit={ax:Math.sign(ax||1)*nx,az:Math.abs(az)<SNAPD?0:(Math.abs(Math.abs(az)-Math.abs(qz-oz))<SNAPD?Math.sign(az)*(qz-oz):az)};
+   else if(Math.abs(Math.abs(az)-nz)<SNAPD&&Math.abs(ax)<nx)hit={az:Math.sign(az||1)*nz,ax:Math.abs(ax)<SNAPD?0:(Math.abs(Math.abs(ax)-Math.abs(qx-ox))<SNAPD?Math.sign(ax)*(qx-ox):ax)};
+   if(hit){const d=Math.hypot(hit.ax-ax,hit.az-az);if(!best||d<best.d)best={d,q,ax:hit.ax,az:hit.az,c,sn}}});
+  if(best){const nx=best.ax*best.c+best.az*best.sn,nz=-best.ax*best.sn+best.az*best.c;o.x=best.q.x+nx;o.z=best.q.z+nz;snapMark=[[o.x,0.02,o.z]]}
+  if(T.k==='roof'){let wy=null,bd=3;objs.forEach(q=>{const U=TY[q.t];if(!U||U.k!=='plane'||U.door||U.glass)return;const d=Math.hypot(q.x-o.x,q.z-o.z);if(d<bd){bd=d;wy=q.y+2.4*q.sz}});
+   if(wy!==null){o.y=wy;snapMark.push([o.x,wy,o.z])}}}}
 function toLocal(o,v){const c=Math.cos(o.r*R),s=Math.sin(o.r*R),dx=v.x-o.x,dz=v.z-o.z;return V((dx*c-dz*s)/(o.sz*o.w),(v.y-o.y)/o.sz,(dx*s+dz*c)/(o.sz*o.d))}
 function toLocalDir(o,v){const c=Math.cos(o.r*R),s=Math.sin(o.r*R);return V((v.x*c-v.z*s)/(o.sz*o.w),v.y/o.sz,(v.x*s+v.z*c)/(o.sz*o.d))}
 
@@ -698,6 +723,7 @@ function render(c,w,h,st){
  st.figs.forEach((f,i)=>figParts(D,f,i,FG[i],st,list,sc));
  drawRuns(depthOrder(list));PX.t=c;
  // Nameplates: a small pill in each character's colour above their head (also on thumbnails and print).
+ if(st.snap&&st.snap.length&&!st.thumb)st.snap.forEach(m=>{const q=pj(V(m[0],m[1]||0,m[2]));if(q.d<=NEAR)return;c.beginPath();c.arc(q.x,q.y,5*sc,0,6.2832);c.strokeStyle=BL;c.lineWidth=1.6*sc;c.stroke();c.beginPath();c.arc(q.x,q.y,2*sc,0,6.2832);c.fillStyle=BL;c.fill()});
  if(op.names)st.figs.forEach((f,i)=>{const q=pj(Lr(f,FG[i].G.Hc.clone().add(V(0,0.2,0))));if(q.d<=NEAR)return;
   const fs=clamp(0.085*q.k*f.h,5*sc,8.5*sc);c.font='600 '+fs+'px system-ui,sans-serif';const tw=c.measureText(f.n).width,pw=tw+fs*0.9,ph=fs*1.45;
   if(q.x<-CW*0.1||q.x>CW*1.1||q.y>CH*1.2)return;q.y=Math.max(q.y,ph+3*sc);   // keep it in frame on close shots
@@ -956,11 +982,11 @@ function wire(cv,sig){
    setupMain();dolly(Math.log(d/pinch.d)*1.2);camOp('move',(m[0]-pinch.m[0])*s,(m[1]-pinch.m[1])*s);pinch.d=d;pinch.m=m;pinch.moved=1;snapCam();kick();return}
   if(!drag)return;const q=pt(e),u=unroll(q);setupMain();
   if(drag.m==='cam'){const dx=u[0]-drag.last[0],dy=u[1]-drag.last[1];drag.last=u;drag.moved+=Math.abs(dx)+Math.abs(dy);camOp(drag.k,dx,dy);snapCam()}
-  else if(drag.m==='obj'){const h=onY(ray(q),drag.py);if(h){if(!drag.u){pushUndo();drag.u=1}drag.o.x=h.x+drag.dx;drag.o.z=h.z+drag.dz}}
+  else if(drag.m==='obj'){const h=onY(ray(q),drag.py);if(h){if(!drag.u){pushUndo();drag.u=1}drag.o.x=h.x+drag.dx;drag.o.z=h.z+drag.dz;if(e.altKey)snapMark=[];else snapPiece(drag.o)}}
   else if(drag.m==='fig'){if(!drag.u){pushUndo();drag.u=1}figDrag(drag,q)}
   kick()},{signal:sig});
  const endPtr=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2&&pinch){if(pinch.moved)camEnd();pinch=null}if(!drag||ptrs.size)return;
-  const wasCam=drag.m==='cam'&&drag.moved>=3;if(drag.m==='cam'&&mode==='set'&&drag.moved<3&&so!==-1)so=-1;drag=null;panel();kick();if(wasCam)camEnd()};
+  snapMark=[];const wasCam=drag.m==='cam'&&drag.moved>=3;if(drag.m==='cam'&&mode==='set'&&drag.moved<3&&so!==-1)so=-1;drag=null;panel();kick();if(wasCam)camEnd()};
  cv.addEventListener('pointerup',endPtr,{signal:sig});cv.addEventListener('pointercancel',endPtr,{signal:sig});
  let wheelT=0;
  // Scroll dollies the camera. A trackpad pinch arrives as a Ctrl+wheel (Chrome, Firefox, Edge) or as Safari's gesture events:
@@ -994,7 +1020,7 @@ const sl=(l,k,mn,mx,s,v,d,u)=>`<div class="row"><span>${l}</span><input type="ra
 const pills=(arr,k,act)=>'<div class="pills">'+arr.map(n=>{const v=Array.isArray(n)?n[0]:n,l=Array.isArray(n)?n[1]:n;return `<button type="button" data-${k}="${esc(v)}" class="${String(v)===String(act)?'on':''}">${l}</button>`}).join('')+'</div>';
 const chk=(k,l)=>`<label class="chk"><input type="checkbox" data-o="${k}"${OPT[k]?' checked':''}> ${l}</label>`;
 const ndeg=v=>{v=((v%360)+540)%360-180;return Math.round(v)};
-const HINT={cam:'Drag to orbit · scroll or pinch to dolly · right-drag pans · WASD + Q/E fly',set:'Tap a block to select it, then drag to slide it. Ctrl/Cmd+C, V and D copy, paste and duplicate — paste works in other shots too.',fig:'Drag the handles: head aims, hands and feet reach, the ring moves the body. Ctrl/Cmd+C, V and D copy, paste and duplicate.'};
+const HINT={cam:'Drag to orbit · scroll or pinch to dolly · right-drag pans · WASD + Q/E fly',set:'Tap a block to select it, then drag to slide it — walls, doors, windows, floors and roofs snap together (hold Alt to place freely). Ctrl/Cmd+C, V and D copy, paste and duplicate — paste works in other shots too.',fig:'Drag the handles: head aims, hands and feet reach, the ring moves the body. Ctrl/Cmd+C, V and D copy, paste and duplicate.'};
 const RATIOS=[[2.39,'2.39:1 · Scope'],[1.85,'1.85:1 · Widescreen'],[1.7778,'16:9'],[1.3333,'4:3'],[0.5625,'9:16 · Vertical']];
 const OPEN={};   // which collapsible sections are open, kept across panel redraws
 const selBox=(k,opts,cur,ph)=>`<select data-sel="${k}">${ph?`<option value="">${ph}</option>`:''}${opts.map(o=>{const v=Array.isArray(o)?o[0]:o,l=Array.isArray(o)?o[1]:o;return `<option value="${esc(v)}"${String(v)===String(cur)?' selected':''}>${esc(l)}</option>`}).join('')}</select>`;
@@ -1100,7 +1126,7 @@ function tick(ts){raf=0;if(!cvs||!BOUND)return;const dt=last?Math.min(0.05,(ts-l
  diff+=(Math.abs(ct.fov-cv_.fov)+Math.abs(ct.roll-cv_.roll))*0.02;cv_.fov+=(ct.fov-cv_.fov)*k;cv_.roll+=(ct.roll-cv_.roll)*k;
  if(diff<1e-4)cv_=cl(ct);else more=true;
  if(dirty||more){const fast=!!OPT.dof&&(more||!!drag||!!pinch||performance.now()-lastKickT<140);
-  render(ctx,cvs.width,cvs.height,{cam:cv_,figs,objs,sel,so:mode==='set'?so:-1,mode,opts:OPT,thumb:mode==='draw',fast,info:t=>{if(t!==lastInfo){lastInfo=t;if(HOOK.onInfo)HOOK.onInfo(t)}}});dirty=false;syncCam();
+  render(ctx,cvs.width,cvs.height,{cam:cv_,figs,objs,sel,so:mode==='set'?so:-1,mode,opts:OPT,thumb:mode==='draw',fast,snap:snapMark,info:t=>{if(t!==lastInfo){lastInfo=t;if(HOOK.onInfo)HOOK.onInfo(t)}}});dirty=false;syncCam();
   if(fast){clearTimeout(settleT);settleT=setTimeout(()=>{if(!cvs)return;dirty=true;if(!raf)raf=requestAnimationFrame(tick)},180)}}
  if(more)raf=requestAnimationFrame(tick);else last=0}
 function resize(){if(!cvs)return;const r=cvs.clientWidth,h=cvs.clientHeight;if(!r||!h)return;const w=Math.round(r*dpr),hh=Math.round(h*dpr);if(cvs.width!==w||cvs.height!==hh){cvs.width=w;cvs.height=hh}dirty=true;if(!raf)raf=requestAnimationFrame(tick)}
