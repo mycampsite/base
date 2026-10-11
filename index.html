@@ -582,7 +582,10 @@ const ICON = {};
 try { const s = JSON.parse(lsGet(LS_LAST) || "{}"); lastKey = s.keys || {}; current.pid = s.pid || null; if (TABS.includes(s.tab)) current.tab = s.tab; } catch (_e) {}
 { const q = new URLSearchParams(location.search); if (q.get("popout") === "1") document.body.classList.add("popout"); if (q.get("pid")) current.pid = q.get("pid"); if (TABS.includes(q.get("tab"))) current.tab = q.get("tab"); if (q.get("projects") === "1" && window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("sideOpen"); }
 
-const sheetUrl = (id, minimal) => `https://docs.google.com/spreadsheets/d/${id}/edit` + (minimal ? "?rm=minimal" : "");
+// authuser picks the Google account the hub is signed in with. Without it, a browser signed in to
+// several Google accounts opens the Sheet as the first one, which may have no access (Google's 400/401 page).
+const sheetAuthUser = () => { try { const e = (auth && auth.currentUser && auth.currentUser.email) || (JSON.parse(localStorage.getItem(SESSION_KEY) || "{}").email) || ""; return e ? "authuser=" + encodeURIComponent(e) : ""; } catch (_e) { return ""; } };
+const sheetUrl = (id, minimal) => { const q = [minimal ? "rm=minimal" : "", sheetAuthUser()].filter(Boolean).join("&"); return `https://docs.google.com/spreadsheets/d/${id}/edit` + (q ? "?" + q : ""); };
 const liveIds = () => Object.keys(projects).filter(pid => projects[pid] && projects[pid].folderId);
 const sortedIds = () => liveIds().sort((a, b) => (projects[a].name || "").localeCompare(projects[b].name || ""));
 // A project can have several owners: the role on your member entry decides (the "owner" field is just the original creator)
@@ -1121,7 +1124,7 @@ function showFrame() {
   }
   frames[fk].classList.remove("hidden");
   if (frames[fk]._loading) frames[fk]._loader.classList.remove("hidden");
-  $("open").href = s.url || sheetUrl(s.id, false);
+  $("open").href = sheetUrl(s.id, false);
 }
 // Google Sheets grabs focus when it loads, which makes the browser scroll the page to it.
 // Remember where every scrolled box was and put it back for a moment afterwards.
