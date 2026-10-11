@@ -15,6 +15,9 @@ jobs:
       - uses: actions/checkout@v4
       # The production math must pass its tests before anything is published
       - run: node tests/breakdown.test.js && node tests/production.test.js && node tests/prodpanel.test.js && node tests/board.test.js
+      # Every page must open in a real browser without a JavaScript error (Playwright is installed outside the site folder, so it never gets published)
+      - run: npm install --prefix "$RUNNER_TEMP/pw" playwright@1.56.0 && "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - run: NODE_PATH="$RUNNER_TEMP/pw/node_modules" node tests/pages.smoke.js
       - run: sed -i "s|__API_KEY__|${{ secrets.GOOGLE_API_KEY }}|" config.json index.html
       - run: grep -c "__API_KEY__" config.json index.html || echo "replaced"
       - uses: actions/configure-pages@v5
