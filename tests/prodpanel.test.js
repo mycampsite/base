@@ -163,8 +163,8 @@ test("shots join to scenes by the heading's permanent id, in shot order", () => 
   assert.strictEqual(m.s3[0].shot, "1");   // numbers come back as text
 });
 test("renumbered scenes keep their shots (the id, not the number, is the link)", () => {
-  const renum = { scenes: [{ n: 5, id: "s1" }], shots: [{ scene: 5, shot: "1A" }] };
-  assert.deepStrictEqual(P.shotsBySceneId(renum).s1.map((x) => x.shot), ["1A"]);
+  const renum = { scenes: [{ n: 5, id: "s1" }], shots: [{ scene: 5, shot: "1A", size: "WS" }, { scene: 5, shot: "1B" }] };
+  assert.deepStrictEqual(P.shotsBySceneId(renum).s1.map((x) => x.shot), ["1A"], "an empty template row is not a shot");
 });
 test("a bad or missing shot list gives no shots, never an error", () => {
   assert.deepStrictEqual(P.shotsBySceneId(null), {});

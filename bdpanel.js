@@ -105,7 +105,6 @@ const css = `
 #bdctl .cat > .ch .add:hover{ opacity:1; }
 #bdctl .cat .items{ display:flex; flex-wrap:wrap; gap:5px; padding:7px 8px; min-height:34px; }
 #bdctl .el{ display:inline-flex; align-items:center; gap:4px; border:1px solid color-mix(in srgb, var(--cc) 55%, #222); background:color-mix(in srgb, var(--cc) 14%, #151515); border-radius:7px; padding:2px 4px 2px 8px; font-size:12px; max-width:100%; }
-#bdctl .el.man{ border-style:dashed; }
 #bdctl .el b{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
 #bdctl .el .qty{ color:var(--uiMuted); font-weight:400; font-size:11px; }
 #bdctl .el .hero{ color:#f1c76b; font-size:11px; }
@@ -421,7 +420,7 @@ function sheetsView(b, can){
         <label>Est. minutes<input type="number" id="shEst" min="5" max="1440" step="5" value="${s.estAuto ? "" : s.est}" placeholder="${s.est}" style="width:84px"${dis}></label>
         <label>Unit<select id="shUnit"${dis}>${["Main", "2nd unit", "Splinter", "Pick-up"].map((u) => `<option${u === s.unit ? " selected" : ""}>${u}</option>`).join("")}</select></label>
       </div>
-      <div class="shSyn"><label for="shSyn">Synopsis</label><textarea id="shSyn" rows="2" maxlength="2000"${dis}>${esc(s.synAuto ? "" : s.syn)}</textarea>${s.synAuto && s.syn ? `<div style="font-size:11.5px;color:var(--uiMuted);margin-top:3px">Automatic: ${esc(s.syn)}</div>` : ""}</div>
+      <div class="shSyn"><label for="shSyn">Synopsis <span style="text-transform:none;letter-spacing:0;opacity:.7">· written from the script, edit to replace it</span></label><textarea id="shSyn" rows="2" maxlength="2000"${dis}>${esc(s.syn)}</textarea></div>
       <div class="shCats">${E.CATS.map(catBox).join("") || `<div class="bdEmpty" style="grid-column:1/-1;padding:6px 0">Nothing found in this scene yet.</div>`}</div>
       ${can ? `<div class="shMore"><span>Add</span>${E.CATS.filter((c) => !(s.els[c.id] || []).length && adding !== c.id).map((c) => `<button type="button" class="catChip" style="--cc:${c.color}" data-a="add" data-c="${c.id}" data-sk="${esc(s.key)}">+ ${esc(c.short)}</button>`).join("")}</div>` : ""}
       <div class="shNote"><label style="display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--uiMuted);margin-bottom:4px" for="shNote">Scene notes</label><textarea id="shNote" rows="2" maxlength="2000"${dis}>${esc(s.note)}</textarea></div>
@@ -576,7 +575,7 @@ function wire(box, pid){
     if(t.dataset && t.dataset.a === "script"){ S.scriptPick[pid] = t.value; S.model = null; loadScript(t.value); rerender(); return; }
     if(!can) return;
     const sk = (model() && model().scenes[S.sel - 1] || {}).key; if(!sk) return;
-    if(t.id === "shSyn") edit(pid, sid, (st) => E.setScene(st, sk, "syn", t.value), true);
+    if(t.id === "shSyn"){ const cur = model().scenes[S.sel - 1], v = t.value.trim(); edit(pid, sid, (st) => E.setScene(st, sk, "syn", cur && cur.synAuto && v === cur.syn ? "" : v), true); }
     else if(t.id === "shNote") edit(pid, sid, (st) => E.setScene(st, sk, "note", t.value), true);
     else if(t.id === "shDay"){ edit(pid, sid, (st) => E.setScene(st, sk, "day", t.value.trim())); }
     else if(t.id === "shEst"){ edit(pid, sid, (st) => E.setScene(st, sk, "est", t.value)); }

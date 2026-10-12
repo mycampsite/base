@@ -435,7 +435,7 @@
         <div class="bar">
           <div class="tabs" id="tabs" role="tablist" aria-label="Sheets"></div>
           <div class="actions">
-            <button id="syncBtn" class="btn hidden" type="button" title="Rebuild the Schedule (with Day Out of Days), the Budget and the call sheets from the plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="lbl">Sync to Sheets</span></button>
+            <button id="syncBtn" class="btn hidden" type="button" title="Rebuild the Schedule (with Day Out of Days), the Budget and the call sheets from the plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="lbl">Sync</span></button>
             <button id="createDocs" class="btn hidden" type="button" title="Build a budget, schedule, shot list or crew docs from the script"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Create</span></button>
             <a id="open" class="btn hidden" target="_blank" rel="noopener" title="Open in Google Sheets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><span class="lbl">Open in Sheets</span></a>
             <button id="sheetMenu" class="btn primary" type="button" aria-haspopup="menu" aria-label="Sheet options" title="Sheet options: toolbar, dark view, downloads, shortcuts"><span class="lbl">Sheet</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg></button>
@@ -1088,6 +1088,12 @@ function wireList(pane) {
 }
 document.querySelectorAll(".mtab").forEach(t => t.addEventListener("click", () => { current.tab = t.dataset.tab; saveLast(); renderBody(); }));
 
+// Tabs show the kind of sheet, not the film's title ("Film - Budget" -> "Budget"; the crew sheet is the Production Directory)
+function tabLabel(name) {
+  let n = String(name || ""), i = n.lastIndexOf(" - ");
+  if (i > 0) n = n.slice(i + 3);
+  return /^production docs$/i.test(n.trim()) ? "Production Directory" : n;
+}
 function renderTabs() {
   const box = $("tabs"); box.innerHTML = "";
   const c = sheetsByProject[current.pid]; if (!c) return;
@@ -1107,7 +1113,7 @@ function renderTabs() {
     b.type = "button"; b.setAttribute("role", "tab");
     b.className = "tab" + (s.id === current.key ? " on" : "");
     b.setAttribute("aria-selected", s.id === current.key ? "true" : "false");
-    b.textContent = s.name;
+    b.textContent = tabLabel(s.name); b.title = s.name;
     b.draggable = FINE; b.dataset.id = s.id;
     b.onclick = () => { holdScroll(); current.key = s.id; lastKey[current.pid] = s.id; saveLast(); renderTabs(); showFrame(); };
     const after = e => { const r = b.getBoundingClientRect(); return e.clientX > r.left + r.width / 2; };
@@ -1131,7 +1137,7 @@ function renderTabs() {
   const on = box.querySelector(".tab.on");
   if (on) { const l = on.offsetLeft - box.offsetLeft, r = l + on.offsetWidth; if (l < box.scrollLeft) box.scrollLeft = l - 8; else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth + 8; }
 }
-// Sync to Sheets in the bar: owner only, once there's a plan; marked when the Sheets are behind the plan
+// Sync in the bar: owner only, once there's a plan; marked when the Sheets are behind the plan
 function syncState() {
   const b = $("syncBtn"); if (!b) return;
   const p = projects[current.pid], ok = !!(p && isOwner(p) && p.production);
@@ -1155,7 +1161,9 @@ function showFrame() {
   $("prodPane").classList.toggle("pseudo", pseudo);
   try { window.CampProdPanel && window.CampProdPanel.setMode(current.key === "@plan" ? "plan" : current.key === "@cs" ? "cs" : "off"); } catch (e) { console.error(e); }
   try { if (window.CampBdPanel) { window.CampBdPanel.setMode(current.key === "@bd"); if (current.key === "@bd") window.CampBdPanel.render(current.pid); } } catch (e) { console.error(e); }
-  $("createDocs").classList.toggle("hidden", !(p && isOwner(p)));
+  { const names = ((sheetsByProject[current.pid] || {}).list || []).map(x => x.name || ""), has = re => names.some(n => re.test(n));
+    const all = has(/budget/i) && has(/schedule/i) && has(/shot ?list/i) && has(/production (docs|directory)/i);
+    $("createDocs").classList.toggle("hidden", !(p && isOwner(p)) || all); }
   syncState();
   { const hasDocs = !!(sheetsByProject[current.pid] && (sheetsByProject[current.pid].list || []).length), l = $("createDocs").querySelector(".lbl");
     if (l) l.textContent = hasDocs ? "Docs" : "Create"; $("createDocs").title = hasDocs ? "Add or update production docs (keeps what you've typed)" : "Build a budget, schedule, shot list or crew docs from the script"; }
@@ -1477,7 +1485,7 @@ function linkScript(btn) {
 // Link script now sits in the Scripts list (next to New script) instead of the project header
 
 // ---------- create production docs (built by Camp's script cloud into this project's Drive folder) ----------
-const DOCS = { budget: "Budget", schedule: "Schedule", shotlist: "Shot list", productiondocs: "Crew, cast & locations" };
+const DOCS = { budget: "Budget", schedule: "Schedule", shotlist: "Shot list", productiondocs: "Production Directory" };
 async function exportDoc(kind, fileId, retried) {
   if (!RIP.ep) RIP.ep = await CampEndpoint();
   if (!RIP.ep) throw new Error("The script cloud isn't set up on this device. Open the Script library once to set it up.");

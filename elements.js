@@ -684,6 +684,27 @@ function estimate(s) {
   return m;
 }
 
+// ---------- A short automatic synopsis: the opening of the scene, tidied (caps names -> Names, no ages) ----------
+function summarise(tx, s) {
+  const tidy = function (x) {
+    x = clean(x).replace(/\([^)]{0,30}\)/g, " ").replace(/^(?:we (?:see|hear|watch)|angle on|close on|insert[ -]+|cut to:?)\s+/i, "");
+    x = x.replace(/\b([A-Z][A-Z'’\-]{3,})\b/g, function (w) { return w.charAt(0) + w.slice(1).toLowerCase(); });
+    return clean(x);
+  };
+  const sents = [];
+  (tx && tx.action || []).forEach(function (a) { String(a).split(/(?<=[.!?])\s+/).forEach(function (p) { p = tidy(p); if (p.length > 3) sents.push(p); }); });
+  let out = sents[0] || "";
+  if (out && out.length < 70 && sents[1]) out += " " + sents[1];
+  if (!out) {
+    const names = (s && s.cast || []).map(function (n) { return n.charAt(0) + n.slice(1).toLowerCase(); });
+    if (names.length > 1) return "Conversation between " + names.slice(0, -1).join(", ") + " and " + names[names.length - 1] + ".";
+    if (names.length === 1) return names[0] + " speaks.";
+    return "";
+  }
+  if (out.length > 170) { out = out.slice(0, 170).replace(/\s+\S*$/, "") + "…"; }
+  return out;
+}
+
 // ---------- Build the full breakdown: suggestions + the user's changes ----------
 function sceneKey(s) { return s.id ? String(s.id) : "n" + s.n; }
 function resolve(alias, k) { const seen = {}; while (alias[k] && alias[k] !== k && !seen[k]) { seen[k] = 1; k = alias[k]; } return k; }
@@ -746,7 +767,7 @@ function build(doc, bd, store) {
     const estAuto = estimate(s);
     return {
       n: s.n, id: s.id, key: sk, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, dn: s.dn, eighths: s.eighths, bg: s.bg, flags: s.flags || [],
-      syn: clean(meta.syn) || s.syn || "", synAuto: !clean(meta.syn),
+      syn: clean(meta.syn) || summarise(txOf(s, i), s) || s.syn || "", synAuto: !clean(meta.syn),
       day: clean(meta.day) || d.label || "", dayAuto: !clean(meta.day), storyDay: d.day || 1, flash: !!d.flash,
       est: Number(meta.est) > 0 ? Math.round(Number(meta.est)) : estAuto, estAuto: !(Number(meta.est) > 0),
       unit: clean(meta.unit) || "Main", note: clean(meta.note), els: per, hits: hits, src: src, qty: qty,

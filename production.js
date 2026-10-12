@@ -462,6 +462,8 @@ function shotsBySceneId(shotlist){
   shotlist.scenes.forEach((sc) => { if(sc && sc.id && !sc.isExtra) idOfN[String(sc.n)] = String(sc.id); });
   shotlist.shots.forEach((sh) => {
     const id = sh && idOfN[String(sh.scene)]; if(!id) return;
+    // the sheet starts each scene with an empty numbered row: it's a shot only once something is filled in
+    if(!(sh.size || sh.angle || sh.move || sh.lens || sh.desc || sh.cast || sh.equip || sh.notes) && !/^(shot|needs reshoot)$/i.test(String(sh.status || ""))) return;
     (out[id] = out[id] || []).push({ shot: String(sh.shot == null ? "" : sh.shot), size: String(sh.size || ""), angle: String(sh.angle || ""), move: String(sh.move || ""),
       lens: String(sh.lens || ""), desc: String(sh.desc || ""), cast: String(sh.cast || ""), equip: String(sh.equip || ""), notes: String(sh.notes || ""), status: String(sh.status || "") });
   });
