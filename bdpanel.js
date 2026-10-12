@@ -474,7 +474,7 @@ const HEAVY_CATS = ["stunts", "vehicles", "weapons", "animals", "sfx", "vfx", "m
 /* ---------- stripboard: the shoot in order, one strip per scene, a banner at the end of each day ---------- */
 function stripsView(b, p){
   const pd = planDays(b, p);
-  if(!pd) return `<div class="bdEmpty">No shoot plan yet. Start it on the Plan tab and the stripboard appears here in shoot order.</div>`;
+  if(!pd) return `<div class="bdEmpty">No shoot plan yet. Start it on the Schedule tab and the stripboard appears here in shoot order.</div>`;
   const castNo = (k) => b.elements[k].no || "";
   const strip = (s) => {
     const cast = (s.els.cast || []).map(castNo).filter(Boolean).sort((x, y) => x - y);
@@ -493,7 +493,7 @@ function stripsView(b, p){
     <div class="stpWrap">${pd.days.map((d) => d.scenes.map(strip).join("") + banner(d)).join("")}
     ${pd.unsched.length ? `<div class="stpDay un"><b>Unscheduled</b><span>${pd.unsched.length} sc · ${E.fmtEighths(pd.unsched.reduce((a, s) => a + s.eighths, 0))} pg</span></div>${pd.unsched.map(strip).join("")}` : ""}</div>
     ${legend ? `<div class="stpLegend"><b>Cast</b>${legend}</div>` : ""}
-    <div class="bdEmpty" style="padding:8px 0">Move scenes between days on the Plan tab. Click a strip to open its sheet.</div>`;
+    <div class="bdEmpty" style="padding:8px 0">Move scenes between days in Schedule › Shoot plan. Click a strip to open its sheet.</div>`;
 }
 
 /* ---------- reports: by category, or what each shoot day needs ---------- */
@@ -502,7 +502,7 @@ function reportsView(b, p){
   const seg = `<div class="bdTools"><button class="btn sm" type="button" data-a="csv" title="Download this as a CSV file">Download CSV</button><div class="seg">${[["cat", "By category"], ["day", "By shoot day"]].map(([v, n]) => `<button type="button" class="${by === v ? "on" : ""}" data-a="rpby" data-v="${v}">${n}</button>`).join("")}</div></div>`;
   if(by === "day"){
     const pd = planDays(b, p);
-    if(!pd) return seg + `<div class="bdEmpty">No shoot plan yet. Start it on the Plan tab to see what each day needs.</div>`;
+    if(!pd) return seg + `<div class="bdEmpty">No shoot plan yet. Start it on the Schedule tab to see what each day needs.</div>`;
     const cards = pd.days.filter((d) => d.scenes.length).map((d) => {
       const rows = E.CATS.map((c) => {
         const ks = []; d.scenes.forEach((s) => (s.els[c.id] || []).forEach((k) => { if(ks.indexOf(k) < 0) ks.push(k); }));

@@ -615,7 +615,7 @@ function csView(pid, p, raw, pl, dates, scriptId){
   const errBox = err ? `<div class="csErr"><b>${auth ? "Google hasn't allowed Camp to make Docs yet" : "The call sheets didn't build"}</b>
       ${auth ? `<ol><li>Open your Camp script in Apps Script (script.google.com).</li><li>Pick <code>authorizeCallSheets</code> in the function list and press Run. Allow the permissions Google asks for.</li><li>Deploy › Manage deployments › edit › New version › Deploy.</li><li>Come back and press <b>Make call sheets</b>.</li></ol>` : `<div>${esc(err)}</div>`}</div>` : "";
   if(S.busy[pid]) return `<div class="ctlLoad"><span class="spin"></span><b>${S.busy[pid] === "sync" ? "Syncing to Sheets…" : "Making call sheets…"}</b><span>One Google Doc per shoot day. This can take a minute.</span></div>`;
-  if(!raw) return `<div class="csWrap"><h3>No shoot plan yet</h3><p>Start the plan on the Plan tab first.</p></div>`;
+  if(!raw) return `<div class="csWrap"><h3>No shoot plan yet</h3><p>Start it in Schedule › Shoot plan first.</p></div>`;
   const list = days.length ? `<div class="csList">${days.map((d) => { const i = Number(d.day) - 1; return `<a class="csDay${stale ? " stale" : ""}" href="${esc(d.url)}" target="_blank" rel="noopener"><b>Day ${esc(d.day)} ↗</b><span>${esc(fmtDate(dates[i]) || "")}${pl.days[i] ? " · " + pl.days[i].scenes.length + " scene" + (pl.days[i].scenes.length === 1 ? "" : "s") : ""}</span></a>`; }).join("")}</div>` : "";
   return `<div class="csWrap">
     <p>One Google Doc per shoot day. ${days.length ? `Last made ${esc(when)}.` : ""}${stale ? " <b style=\"color:#f1c76b\">The plan changed since then.</b>" : ""}</p>
@@ -713,7 +713,7 @@ function wire(box, pid, ctx){
         Promise.resolve(k === "cs" ? hub.makeCallsheets(pid, ctx.scriptId, a) : hub.syncSheets(pid, ctx.scriptId, a)).finally(() => { delete S.busy[pid]; rerender(); });
         return;
       }
-      if(k === "pop"){ window.open(location.pathname + "?pid=" + encodeURIComponent(pid) + "&tab=production&popout=1", "campProdPop", "popup=yes,width=1280,height=900"); return; }
+      if(k === "pop"){ window.open(location.pathname + "?pid=" + encodeURIComponent(pid) + "&tab=schedule&popout=1", "campProdPop", "popup=yes,width=1280,height=900"); return; }
       if(k === "reload"){ const id = ctx.scriptId || hub.scriptIds(p)[0]; loadScript(id, true); loadShots(id, true); return; }
       if(k === "dismiss"){ delete S.notice[pid]; render(pid); return; }
       if(k === "unpick"){ S.pick = null; render(pid); return; }

@@ -151,6 +151,8 @@
   #budgetHint > b{ color:#a9c1ff; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
   #budgetHint span{ flex:1; } #budgetHint span b{ color:var(--uiText); }
   #prodPane.pseudo #frames, #prodPane.pseudo #banner{ display:none; }
+  /* Breakdown has its own view switcher, so the sheet strip and its buttons go */
+  #prodPane[data-tab=breakdown] > .bar{ display:none; }
   .actions{ margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
   #frames{ position:relative; flex:1; min-height:0; background:#1b1b1b; }
   /* Pop-out window: just the production control panel */
@@ -332,8 +334,8 @@
     .pHead h2{ flex:1 1 100%; order:-1; font-size:16px; }
     .pHead .btn, .actions .btn{ padding:0 11px; }
     .mtabs{ padding:0 4px; }
-    /* Phones: all four tabs fit on screen (icon over label) instead of Production hiding off the edge */
-    .mtab{ flex:1 1 0; min-width:0; flex-direction:column; gap:4px; padding:9px 2px 8px; font-size:11.5px; }
+    /* Phones: all the tabs fit on screen (icon over label) instead of Production hiding off the edge */
+    .mtab{ flex:1 1 0; min-width:0; flex-direction:column; gap:4px; padding:9px 1px 8px; font-size:10px; letter-spacing:-.1px; }
     .mtab svg{ width:17px; height:17px; }
     .mtab .n{ display:none; }
     #listPane{ padding:10px; }
@@ -421,10 +423,12 @@
       </div>
       <div class="mtabs" role="tablist" aria-label="Project sections">
         <button class="mtab" type="button" role="tab" data-tab="scripts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>Scripts<span class="n" id="nScripts"></span></button>
-        <button class="mtab" type="button" role="tab" data-tab="storyboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l2.2-4h3l-2 4M9 8l2-4h3l-2 4M15 8l2-4h3l-2 4"/><rect x="3" y="8" width="18" height="12" rx="1.5"/></svg>Storyboard</button>
         <button class="mtab" type="button" role="tab" data-tab="treatment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg>Treatment</button>
+        <button class="mtab" type="button" role="tab" data-tab="storyboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l2.2-4h3l-2 4M9 8l2-4h3l-2 4M15 8l2-4h3l-2 4"/><rect x="3" y="8" width="18" height="12" rx="1.5"/></svg>Storyboard</button>
+        <button class="mtab" type="button" role="tab" data-tab="breakdown" title="Every scene's cast, props, wardrobe and more"><svg></svg>Breakdown</button>
+        <button class="mtab" type="button" role="tab" data-tab="schedule" title="Shoot days, scene order, Day Out of Days and call sheets"><svg></svg>Schedule</button>
+        <button class="mtab" type="button" role="tab" data-tab="docs" title="Budget, Schedule, Shot List and Production Directory Sheets"><svg></svg>Docs<span class="n" id="nSheets"></span></button>
         <button class="mtab" type="button" role="tab" data-tab="board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="9" r="3"/><path d="M2.5 20a5.5 5.5 0 0 1 11 0"/></svg>Board</button>
-        <button class="mtab" type="button" role="tab" data-tab="production"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>Production<span class="n" id="nSheets"></span></button>
       </div>
 
       <div id="listPane"></div>
@@ -513,7 +517,13 @@ const ERRORS = {
   INTERNAL: "Something went wrong on the server. Try again."
 };
 const NEW_ACTIONS = ["renameProject", "archiveProject", "setProjectStatus", "unlinkScript", "clearRoomData", "deleteProject"];
-const TABS = ["scripts", "storyboard", "treatment", "board", "production"];
+const TABS = ["scripts", "treatment", "storyboard", "breakdown", "schedule", "docs", "board"];
+// Breakdown, Schedule and Docs share the one production pane; each shows its own part of it
+const PROD_TABS = ["breakdown", "schedule", "docs"];
+const isProdTab = t => PROD_TABS.includes(t);
+const tabOfKey = k => k === "@bd" ? "breakdown" : (k === "@plan" || k === "@cs") ? "schedule" : "docs";
+// Older saves and links used one "production" tab: send them to the part they were on
+const fixTab = (t, key) => t === "production" ? (key ? tabOfKey(key) : "schedule") : t;
 const LS_LAST = "Camp_HUB_LAST_V2", LS_BANNER = "Camp_HUB_BANNER_HIDDEN_V2";
 // Shared with the Library and editor (don't rename)
 const ENDPOINT_KEYS = ["SCRIPTY_CLOUD_ENDPOINT_V1", "SCRIPTY_CLOUD_ENDPOINT", "SCRIPTY_CLOUD_URL", "CLOUD_ENDPOINT", "SCRIPTY_GAS_ENDPOINT", "SCRIPTY_CLOUD_ENDPOINT_V0"];
@@ -579,7 +589,10 @@ const GLYPH = {
   storyboard: `<rect x="3" y="4" width="8" height="6" rx="1"/><rect x="13" y="4" width="8" height="6" rx="1"/><rect x="3" y="13" width="8" height="6" rx="1"/><rect x="13" y="13" width="8" height="6" rx="1"/>`,
   treatment: `<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 15l5-5 4 4 3-3 6 6"/>`,
   board: `<circle cx="8" cy="8.5" r="3"/><path d="M2.5 20a5.5 5.5 0 0 1 11 0"/><path d="M17.5 3.5a3.5 3.5 0 0 1 3.5 3.5c0 2.6-3.5 6.5-3.5 6.5S14 9.6 14 7a3.5 3.5 0 0 1 3.5-3.5z"/><circle cx="17.5" cy="7" r="1"/>`,
-  production: `<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>`
+  production: `<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>`,
+  breakdown: `<path d="M9 5h10M9 12h10M9 19h10"/><path d="M4 4.5l1 1 2-2M4 11.5l1 1 2-2M4 18.5l1 1 2-2"/>`,
+  schedule: `<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M7 17h7"/>`,
+  docs: `<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>`
 };
 const glyphSvg = (k, px) => `<svg width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${GLYPH[k]}</svg>`;
 const ICON = {};
@@ -588,8 +601,8 @@ const ICON = {};
 });
 
 // URL (?pid=…&tab=…) wins, then what this device remembers
-try { const s = JSON.parse(lsGet(LS_LAST) || "{}"); lastKey = s.keys || {}; current.pid = s.pid || null; if (TABS.includes(s.tab)) current.tab = s.tab; } catch (_e) {}
-{ const q = new URLSearchParams(location.search); if (q.get("popout") === "1") document.body.classList.add("popout"); if (q.get("pid")) current.pid = q.get("pid"); if (TABS.includes(q.get("tab"))) current.tab = q.get("tab"); if (q.get("projects") === "1" && window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("sideOpen"); }
+try { const s = JSON.parse(lsGet(LS_LAST) || "{}"); lastKey = s.keys || {}; current.pid = s.pid || null; const t = fixTab(s.tab, lastKey[s.pid]); if (TABS.includes(t)) current.tab = t; } catch (_e) {}
+{ const q = new URLSearchParams(location.search); if (q.get("popout") === "1") document.body.classList.add("popout"); if (q.get("pid")) current.pid = q.get("pid"); { const t = fixTab(q.get("tab"), q.get("popout") === "1" ? "@plan" : lastKey[current.pid]); if (TABS.includes(t)) current.tab = t; } if (q.get("projects") === "1" && window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("sideOpen"); }
 
 // authuser picks the Google account the hub is signed in with. Without it, a browser signed in to
 // several Google accounts opens the Sheet as the first one, which may have no access (Google's 400/401 page).
@@ -940,6 +953,18 @@ function reloadSheet() {
 }
 
 // ---------- rendering ----------
+// The production key for the open tab: keep it if it belongs there, else what was last open on that tab, else its first item
+function pickKey() {
+  const c = sheetsByProject[current.pid]; if (!c) return;
+  const has = k => k === "@plan" || k === "@bd" || k === "@cs" || c.list.some(s => s.id === k);
+  const tab = isProdTab(current.tab) ? current.tab : tabOfKey(has(lastKey[current.pid]) ? lastKey[current.pid] : "@plan");
+  const fits = k => has(k) && tabOfKey(k) === tab;
+  if (fits(current.key)) return;
+  const remembered = lastKey[current.pid + "|" + tab], last = lastKey[current.pid];
+  current.key = fits(remembered) ? remembered : fits(last) ? last : tab === "breakdown" ? "@bd" : tab === "schedule" ? "@plan" : (c.list[0] ? c.list[0].id : null);
+}
+// Remember what's open, both for the project and for its tab
+function rememberKey(key) { lastKey[current.pid] = key; lastKey[current.pid + "|" + tabOfKey(key)] = key; }
 function render() {
   if (!me) return;
   if (pendingProject && projects[pendingProject]) { current.pid = pendingProject; current.key = null; pendingProject = null; }
@@ -955,9 +980,8 @@ function render() {
       c = sheetsByProject[current.pid] = cached ? { list: applyOrder(current.pid, cached), state: "ok" } : { list: [], state: "loading" };
       loadSheets(current.pid);
     }
-    const has = k => k === "@plan" || k === "@bd" || k === "@cs" || c.list.some(s => s.id === k);
-    if (POPOUT) current.key = "@plan";
-    else if (!has(current.key)) current.key = has(lastKey[current.pid]) ? lastKey[current.pid] : "@plan";
+    if (POPOUT) { current.key = "@plan"; current.tab = "schedule"; }
+    else pickKey();
     saveLast();
     if (RIP.state === "idle") loadCamp();
     // A newly linked script the list doesn't know yet: refresh once
@@ -996,11 +1020,11 @@ function renderBody() {
   $("nSheets").textContent = sh && sh.state === "ok" && sh.list.length ? String(sh.list.length) : "";
   document.querySelectorAll(".mtab").forEach(t => { const on = t.dataset.tab === current.tab; t.classList.toggle("on", on); t.setAttribute("aria-selected", on ? "true" : "false"); });
 
-  const prod = current.tab === "production", board = current.tab === "board";
+  const prod = isProdTab(current.tab), board = current.tab === "board";
   $("listPane").classList.toggle("hidden", prod || board);
   $("prodPane").classList.toggle("hidden", !prod);
   $("boardPane").classList.toggle("hidden", !board);
-  if (prod) { renderTabs(); showFrame(); try { window.CampProdPanel && window.CampProdPanel.render(current.pid); } catch (e) { console.error(e); } }
+  if (prod) { pickKey(); $("prodPane").dataset.tab = current.tab; renderTabs(); showFrame(); try { window.CampProdPanel && window.CampProdPanel.render(current.pid); } catch (e) { console.error(e); } }
   else if (board) { try { window.CampBoard && window.CampBoard.render && window.CampBoard.render(current.pid); } catch (e) { console.error(e); } }
   else renderList(p);
 }
@@ -1086,7 +1110,7 @@ function wireList(pane) {
     r.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === r) location.href = r.dataset.href; });
   });
 }
-document.querySelectorAll(".mtab").forEach(t => t.addEventListener("click", () => { current.tab = t.dataset.tab; saveLast(); renderBody(); }));
+document.querySelectorAll(".mtab").forEach(t => t.addEventListener("click", () => { current.tab = t.dataset.tab; if (isProdTab(current.tab)) pickKey(); saveLast(); renderBody(); }));
 
 // Tabs show the kind of sheet, not the film's title ("Film - Budget" -> "Budget"; the crew sheet is the Production Directory)
 function tabLabel(name) {
@@ -1101,13 +1125,13 @@ function renderTabs() {
     const b = document.createElement("button");
     b.type = "button"; b.setAttribute("role", "tab"); b.className = "tab pseudo" + (current.key === key ? " on" : "");
     b.setAttribute("aria-selected", current.key === key ? "true" : "false"); b.textContent = label; b.title = title; b.dataset.id = key;
-    b.onclick = () => { current.key = key; lastKey[current.pid] = key; saveLast(); renderTabs(); showFrame(); };
+    b.onclick = () => { current.key = key; rememberKey(key); saveLast(); renderTabs(); showFrame(); };
     box.appendChild(b);
   };
   const sep = () => { const i = document.createElement("span"); i.className = "tabSep"; box.appendChild(i); };
-  pseudoTab("@plan", "Plan", "Shoot days, scene order and Day Out of Days");
-  pseudoTab("@bd", "Breakdown", "Every scene's cast, props, wardrobe, vehicles, stunts and more");
-  if (c.list.length) sep();
+  // Breakdown has its own views inside the panel, so it needs no strip of its own
+  if (current.tab === "schedule") { pseudoTab("@plan", "Shoot plan", "Shoot days, scene order and Day Out of Days"); pseudoTab("@cs", "Call sheets", "One Google Doc per shoot day"); }
+  if (current.tab !== "docs") return;
   c.list.forEach(s => {
     const b = document.createElement("button");
     b.type = "button"; b.setAttribute("role", "tab");
@@ -1115,7 +1139,7 @@ function renderTabs() {
     b.setAttribute("aria-selected", s.id === current.key ? "true" : "false");
     b.textContent = tabLabel(s.name); b.title = s.name;
     b.draggable = FINE; b.dataset.id = s.id;
-    b.onclick = () => { holdScroll(); current.key = s.id; lastKey[current.pid] = s.id; saveLast(); renderTabs(); showFrame(); };
+    b.onclick = () => { holdScroll(); current.key = s.id; rememberKey(s.id); saveLast(); renderTabs(); showFrame(); };
     const after = e => { const r = b.getBoundingClientRect(); return e.clientX > r.left + r.width / 2; };
     b.ondragstart = e => { dragSheet = s.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", s.id); } catch (_e) {} };
     b.ondragend = () => { dragSheet = null; box.querySelectorAll(".tab").forEach(t => t.classList.remove("dl", "dr")); };
@@ -1132,7 +1156,6 @@ function renderTabs() {
     };
     box.appendChild(b);
   });
-  sep(); pseudoTab("@cs", "Call sheets", "One Google Doc per shoot day");
   // bring the open tab into view sideways only (scrollIntoView would also scroll the page)
   const on = box.querySelector(".tab.on");
   if (on) { const l = on.offsetLeft - box.offsetLeft, r = l + on.offsetWidth; if (l < box.scrollLeft) box.scrollLeft = l - 8; else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth + 8; }
@@ -1140,7 +1163,7 @@ function renderTabs() {
 // Sync in the bar: owner only, once there's a plan; marked when the Sheets are behind the plan
 function syncState() {
   const b = $("syncBtn"); if (!b) return;
-  const p = projects[current.pid], ok = !!(p && isOwner(p) && p.production);
+  const p = projects[current.pid], ok = !!(p && isOwner(p) && p.production) && current.tab !== "breakdown";
   b.classList.toggle("hidden", !ok);
   const stale = ok && window.CampProdPanel && window.CampProdPanel.isStale(current.pid);
   b.classList.toggle("primary", !!stale);
@@ -1163,7 +1186,7 @@ function showFrame() {
   try { if (window.CampBdPanel) { window.CampBdPanel.setMode(current.key === "@bd"); if (current.key === "@bd") window.CampBdPanel.render(current.pid); } } catch (e) { console.error(e); }
   { const names = ((sheetsByProject[current.pid] || {}).list || []).map(x => x.name || ""), has = re => names.some(n => re.test(n));
     const all = has(/budget/i) && has(/schedule/i) && has(/shot ?list/i) && has(/production (docs|directory)/i);
-    $("createDocs").classList.toggle("hidden", !(p && isOwner(p)) || all); }
+    $("createDocs").classList.toggle("hidden", !(p && isOwner(p)) || all || current.tab !== "docs"); }
   syncState();
   { const hasDocs = !!(sheetsByProject[current.pid] && (sheetsByProject[current.pid].list || []).length), l = $("createDocs").querySelector(".lbl");
     if (l) l.textContent = hasDocs ? "Docs" : "Create"; $("createDocs").title = hasDocs ? "Add or update production docs (keeps what you've typed)" : "Build a budget, schedule, shot list or crew docs from the script"; }
@@ -1537,7 +1560,7 @@ function createDocsFlow(btn) {
     }
     rememberDocs(current.pid, made);
     toast("Done. Saved in the project's Drive folder.", "ok");
-    current.tab = "production"; saveLast();
+    current.tab = "docs"; if (tabOfKey(current.key) !== "docs") current.key = null; saveLast();
     // Drive can take a few seconds to list new files: look again until they show up
     const want = kinds.length, before = ((sheetsByProject[current.pid] || {}).list || []).length;
     for (let i = 0; i < 4; i++) {
