@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><div id="bdctl"></div>
+<!-- Test page for tests/pages.smoke.js: the Production panel with a fake hub (no sign-in, no network) -->
+<script>
+const L=(t,x)=>({id:"l"+Math.random().toString(36).slice(2),type:t,runs:[{t:x}]});
+const doc={title:{title:"T"},lines:[L("scene","INT. KITCHEN - DAY"),L("character","ANA"),L("dialogue","Hello there my friend, long line."),L("scene","INT. HOUSE - NIGHT"),L("character","BEN"),L("dialogue","Hi."),L("scene","INT. BEDROOM - DAY"),L("action","ANA sleeps."),L("scene","EXT. STREET - DAY"),L("action","Cars.")],meta:{pages:2},pageSettings:{}};
+const proj={id:"p1",name:"P",production:{scriptId:"f1",settings:{days:2},days:[{scenes:[]},{scenes:[]}],callsheets:{at:1000,days:[]},updatedAt:99999}};
+window.__CampHub={project:()=>proj,canEdit:()=>true,isOwner:()=>true,scriptIds:()=>["f1"],scriptModified:()=>"m1",scriptTitle:()=>"S",
+ ripGet:async(q)=>q.action==="load"?{ok:true,doc}:{ok:true,shots:[]},
+ writeProduction:async(pid,plan)=>{proj.production=Object.assign(JSON.parse(JSON.stringify(plan)),{updatedAt:Date.now()});},
+ toast(){},prompt:async()=>"FARM",confirm:async()=>true,hasSheets:()=>true,createDocs(){},layoutChanged(){},syncState(){}};
+</script>
+<script src="../../production.js"></script><script src="../../breakdown.js"></script><script src="../../elements.js"></script><script src="../../bdpanel.js"></script>
+</body></html>

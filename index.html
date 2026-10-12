@@ -356,7 +356,8 @@
     .main{ overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
     .main #projectView{ flex:none !important; min-height:auto !important; }
     .main #listPane, .main #boardPane, .main #prodPane, .main #boardPane .bdBody{ flex:none; min-height:auto; overflow:visible; }
-    .main #prodPane #ctl{ flex:none; min-height:auto; }
+    .main #prodPane #ctl, .main #prodPane #bdctl{ flex:none; min-height:auto; }
+    .main #prodPane .bdBody{ flex:none; min-height:auto; overflow:visible; }
     .main #prodPane .ctlBody{ flex:none; min-height:auto; overflow:visible; }
     .main #ctl .dayTabs{ top:54px; }
     .main .mtabs{ position:sticky; top:0; z-index:6; background:var(--uiPanel); }
@@ -441,6 +442,7 @@
           </div>
         </div>
         <div id="ctl"></div>
+        <div id="bdctl"></div>
         <div id="banner">
           <span>Sheet blank or asking you to sign in? Your browser blocks Google's sign-in inside other sites.</span>
           <button id="bnSign" class="btn sm" type="button" title="Opens the Sheet in a small window. Sign in there if asked, close it, and the Sheet reloads here.">Sign in &amp; reload</button>
@@ -482,7 +484,9 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 
 <script src="breakdown.js" defer></script>
 <script src="production.js" defer></script>
+<script src="elements.js" defer></script>
 <script src="prodpanel.js" defer></script>
+<script src="bdpanel.js" defer></script>
 <script src="board.js" defer></script>
 <script src="boardpanel.js" defer></script>
 <script type="module">
@@ -950,7 +954,7 @@ function render() {
       c = sheetsByProject[current.pid] = cached ? { list: applyOrder(current.pid, cached), state: "ok" } : { list: [], state: "loading" };
       loadSheets(current.pid);
     }
-    const has = k => k === "@plan" || k === "@cs" || c.list.some(s => s.id === k);
+    const has = k => k === "@plan" || k === "@bd" || k === "@cs" || c.list.some(s => s.id === k);
     if (POPOUT) current.key = "@plan";
     else if (!has(current.key)) current.key = has(lastKey[current.pid]) ? lastKey[current.pid] : "@plan";
     saveLast();
@@ -1095,6 +1099,7 @@ function renderTabs() {
   };
   const sep = () => { const i = document.createElement("span"); i.className = "tabSep"; box.appendChild(i); };
   pseudoTab("@plan", "Plan", "Shoot days, scene order and Day Out of Days");
+  pseudoTab("@bd", "Breakdown", "Every scene's cast, props, wardrobe, vehicles, stunts and more");
   if (c.list.length) sep();
   c.list.forEach(s => {
     const b = document.createElement("button");
@@ -1145,9 +1150,10 @@ function showFrame() {
   Object.values(frames).forEach(f => { f.classList.add("hidden"); f._loader.classList.add("hidden"); });
   const p = projects[current.pid], c = sheetsByProject[current.pid];
   const s = c && current.key ? c.list.find(x => x.id === current.key) : null;
-  const pseudo = current.key === "@plan" || current.key === "@cs";
+  const pseudo = current.key === "@plan" || current.key === "@bd" || current.key === "@cs";
   $("prodPane").classList.toggle("pseudo", pseudo);
   try { window.CampProdPanel && window.CampProdPanel.setMode(current.key === "@plan" ? "plan" : current.key === "@cs" ? "cs" : "off"); } catch (e) { console.error(e); }
+  try { if (window.CampBdPanel) { window.CampBdPanel.setMode(current.key === "@bd"); if (current.key === "@bd") window.CampBdPanel.render(current.pid); } } catch (e) { console.error(e); }
   $("createDocs").classList.toggle("hidden", !(p && isOwner(p)));
   syncState();
   { const hasDocs = !!(sheetsByProject[current.pid] && (sheetsByProject[current.pid].list || []).length), l = $("createDocs").querySelector(".lbl");
