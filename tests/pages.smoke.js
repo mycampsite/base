@@ -123,7 +123,7 @@ let BASE = "";
     await p.waitForTimeout(700); await p.evaluate(() => CampBdPanel.render("p1")); await p.waitForTimeout(300);
     await expect(p, () => document.querySelectorAll(".bdSc").length >= 3 && !!document.querySelector(".bdSheet .cat"), "scene list and a sheet with category boxes");
     await expect(p, () => /ANA/.test(document.querySelector(".bdSheet").innerText), "cast on the sheet");
-    await p.click("[data-a=add][data-c=props]"); await p.fill("#bdAdd", "lantern"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
+    await p.selectOption("#bdQCat", "props"); await p.fill("#bdQuick", "lantern"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
     await expect(p, () => /Lantern/.test(document.querySelector(".bdSheet").innerText), "the hand-added prop");
     await expect(p, () => { const b = __CampHub.project().breakdown; const sid = b && Object.keys(b)[0]; return !!sid && JSON.stringify(b[sid].tags || {}).indexOf("props|lantern") >= 0; }, "the tag shared to the team's copy");
     await p.click('.el [data-a=rm]:near(:text("Lantern"))'); await p.waitForTimeout(300);
@@ -134,7 +134,7 @@ let BASE = "";
     await p.waitForTimeout(300);
     await expect(p, () => /Goose/.test(document.querySelector(".bdSheet").innerText), "a teammate's tag");
     // the database refuses: the change stays on this device and says so
-    await p.evaluate(() => { window.__denyBd = true; }); await p.click("[data-a=add][data-c=props]"); await p.fill("#bdAdd", "kite"); await p.keyboard.press("Enter"); await p.waitForTimeout(400);
+    await p.evaluate(() => { window.__denyBd = true; }); await p.selectOption("#bdQCat", "props"); await p.fill("#bdQuick", "kite"); await p.keyboard.press("Enter"); await p.waitForTimeout(400);
     await expect(p, () => /Kite/.test(document.querySelector(".bdSheet").innerText) && /Not shared/.test(document.querySelector(".bdTop").innerText), "kept on this device, marked not shared");
     await p.click('[data-a=view][data-v=elements]'); await p.waitForTimeout(300);
     await expect(p, () => !!document.querySelector("table.bdT tbody tr"), "the elements table");

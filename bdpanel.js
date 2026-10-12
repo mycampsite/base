@@ -46,6 +46,8 @@ const S = {
   model: null, modelKey: "",
   sel: 1,                               // scene number open on the Sheets view
   cat: "all", q: "", rpBy: "cat",                    // Elements view filter
+  scQ: "", scF: "all",                  // Sheets view: scene search and I/E · D/N filter
+  qCat: lsGet("Camp_BD_QCAT_V1") || "props",   // category the quick-add box last used
   adding: null,                         // { sk, cat } adding an element by hand
   edit: null,                           // element key being edited
   share: {},                            // pid|scriptId -> "ok" | "denied" | "error" | "off" (no database)
@@ -74,38 +76,60 @@ const css = `
 #bdctl .bdNote{ margin:10px 0 0; padding:8px 12px; border-radius:10px; background:rgba(241,199,107,.08); border:1px solid rgba(241,199,107,.3); font-size:12px; color:#e6d3a0; line-height:1.5; }
 /* sheets view */
 #bdctl .bdBody.split{ overflow:hidden; display:flex; flex-direction:column; }
-#bdctl .bdSplit{ display:grid; grid-template-columns:250px minmax(0,1fr); grid-template-rows:minmax(0,1fr); gap:14px; padding-top:12px; flex:1; min-height:0; }
-#bdctl .bdSheet{ overflow:auto; min-height:0; overscroll-behavior:contain; padding-bottom:20px; }
-#bdctl .shMeta label{ display:flex; flex-direction:column; gap:3px; }
-#bdctl .bdList{ display:flex; flex-direction:column; gap:5px; height:100%; min-height:0; overflow:auto; padding:2px 4px 14px 0; overscroll-behavior:contain; }
-#bdctl .bdSc{ text-align:left; width:100%; border:1px solid rgba(255,255,255,.08); border-left:5px solid var(--sc,#ddd); border-radius:8px; padding:6px 8px; background:color-mix(in srgb, var(--sc,#ddd) 8%, #1b1b1b); cursor:pointer; font:inherit; font-size:12px; color:inherit; }
-#bdctl .bdSc:hover{ border-color:rgba(255,255,255,.25); border-left-color:var(--sc,#ddd); }
-#bdctl .bdSc.on{ border-left-color:#fff; border-left-width:6px; background:color-mix(in srgb, var(--sc,#ddd) 16%, #262626); border-color:rgba(255,255,255,.35); border-left-color:#fff; }
-#bdctl .bdSc .t{ display:flex; justify-content:space-between; gap:6px; font-weight:700; }
-#bdctl .bdSc .t span{ color:var(--uiMuted); font-weight:600; white-space:nowrap; }
-#bdctl .bdSc .l{ color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-#bdctl .bdSc .dots{ display:flex; gap:2px; margin-top:4px; flex-wrap:wrap; }
-#bdctl .bdSc .dots i{ width:7px; height:7px; border-radius:50%; display:block; }
-#bdctl .bdSheet{ border:1px solid var(--uiBorder); border-radius:12px; background:#1b1b1b; min-width:0; }
-#bdctl .shHead{ display:flex; gap:10px; align-items:center; padding:10px 14px; border-bottom:1px solid var(--uiBorder); border-left:6px solid var(--sc,#ddd); border-radius:12px 12px 0 0; flex-wrap:wrap; }
-#bdctl .shHead h3{ margin:0; font-size:15px; flex:1; min-width:180px; }
-#bdctl .shHead .nav{ display:flex; gap:6px; }
-#bdctl .shMeta{ display:flex; flex-wrap:wrap; gap:10px 16px; padding:10px 14px; border-bottom:1px solid var(--uiBorder); font-size:12px; color:var(--uiMuted); align-items:flex-end; }
-#bdctl .shMeta label{ display:flex; flex-direction:column; gap:3px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; }
-#bdctl .shMeta b{ color:var(--uiText); font-size:13px; text-transform:none; letter-spacing:0; }
+#bdctl .bdSplit{ display:grid; grid-template-columns:280px minmax(0,1fr); grid-template-rows:minmax(0,1fr); gap:14px; padding-top:12px; flex:1; min-height:0; }
+#bdctl .bdListWrap{ display:flex; flex-direction:column; min-height:0; gap:8px; }
+#bdctl .bdSplit > *, #bdctl .shGrid > *{ min-width:0; }
+#bdctl input, #bdctl select, #bdctl textarea{ box-sizing:border-box; max-width:100%; }
+#bdctl .bdFind{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+#bdctl .bdFind input{ flex:1 1 100%; }
+#bdctl .bdFind .cnt{ margin-left:auto; font-size:11px; color:var(--uiMuted); }
+#bdctl .seg.sm button{ padding:3px 8px; font-size:11.5px; }
+#bdctl .bdList{ display:flex; flex-direction:column; gap:2px; flex:1; min-height:0; overflow:auto; padding:0 4px 14px 0; overscroll-behavior:contain; }
+#bdctl .bdSc{ display:grid; grid-template-columns:34px minmax(0,1fr) auto; gap:8px; align-items:center; text-align:left; width:100%; border:0; border-left:5px solid var(--sc,#ddd); border-radius:4px; padding:6px 8px 6px 6px; background:color-mix(in srgb, var(--sc,#ddd) 9%, #1b1b1b); cursor:pointer; font:inherit; font-size:12px; color:inherit; }
+#bdctl .bdSc:hover{ background:color-mix(in srgb, var(--sc,#ddd) 17%, #1d1d1d); }
+#bdctl .bdSc.on{ background:color-mix(in srgb, var(--sc,#ddd) 24%, #262626); box-shadow:inset 0 0 0 1px rgba(255,255,255,.4); }
+#bdctl .bdSc .no{ font-weight:800; font-size:14px; text-align:center; font-variant-numeric:tabular-nums; }
+#bdctl .bdSc .mid{ min-width:0; display:flex; flex-direction:column; gap:1px; }
+#bdctl .bdSc .l{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#bdctl .bdSc .m{ color:var(--uiMuted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#bdctl .bdSc .cn{ color:#ddd; }
+#bdctl .bdSc .pg{ color:var(--uiMuted); font-size:11px; white-space:nowrap; align-self:start; padding-top:1px; }
+#bdctl .bdSc .dots{ display:flex; gap:2px; margin-top:3px; flex-wrap:wrap; }
+#bdctl .bdSc .dots i{ width:6px; height:6px; border-radius:50%; display:block; }
+#bdctl .bdSheet{ overflow:auto; min-height:0; overscroll-behavior:contain; border:1px solid var(--uiBorder); border-radius:12px; background:#1b1b1b; min-width:0; }
+#bdctl .shHead{ position:sticky; top:0; z-index:2; display:flex; gap:14px; align-items:center; padding:12px 14px; background:color-mix(in srgb, var(--sc,#ddd) 16%, #1d1d1d); border-bottom:1px solid var(--uiBorder); border-left:6px solid var(--sc,#ddd); border-radius:12px 12px 0 0; }
+#bdctl .shHead .big{ flex:none; min-width:52px; height:52px; padding:0 8px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; background:var(--sc,#ddd); color:#111; font-variant-numeric:tabular-nums; }
+#bdctl .shHead .hd{ flex:1; min-width:0; }
+#bdctl .shHead h3{ margin:0 0 5px; font-size:16px; letter-spacing:.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#bdctl .facts{ display:flex; flex-wrap:wrap; gap:4px 16px; font-size:12.5px; font-weight:600; }
+#bdctl .facts em{ font-style:normal; font-weight:500; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--uiMuted); margin-right:5px; }
+#bdctl .shHead .nav{ display:flex; gap:6px; align-items:center; flex:none; }
+#bdctl .shHead .pos{ font-size:11.5px; color:var(--uiMuted); min-width:46px; text-align:center; font-variant-numeric:tabular-nums; }
+#bdctl .shGrid{ display:grid; grid-template-columns:minmax(0,1fr) 300px; align-items:start; }
+#bdctl .shMain{ min-width:0; padding:12px 14px 16px; }
+#bdctl .shSide{ border-left:1px solid var(--uiBorder); padding:12px 14px 16px; display:flex; flex-direction:column; gap:12px; position:sticky; top:77px; }
+#bdctl .fld label, #bdctl .shMeta label{ display:flex; flex-direction:column; gap:4px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--uiMuted); }
+#bdctl .fld label{ display:block; margin-bottom:4px; }
+#bdctl .fld .hint{ text-transform:none; letter-spacing:0; opacity:.7; margin-left:4px; }
+#bdctl .shMeta{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+#bdctl .shMeta label:last-child{ grid-column:1 / -1; }
+#bdctl .shMeta input, #bdctl .shMeta select{ width:100%; }
 #bdctl input[type=text], #bdctl input[type=number], #bdctl select, #bdctl textarea{ border-radius:8px; border:1px solid var(--uiBorder); background:#111; color:inherit; font:inherit; font-size:13px; padding:0 8px; height:30px; text-transform:none; letter-spacing:0; }
 #bdctl textarea{ height:auto; padding:7px 9px; width:100%; resize:vertical; line-height:1.45; }
-#bdctl .shSyn{ padding:10px 14px; border-bottom:1px solid var(--uiBorder); }
-#bdctl .shSyn label{ display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--uiMuted); margin-bottom:4px; }
-#bdctl .shCats{ display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:10px; padding:12px 14px 14px; }
-#bdctl .cat{ border:1px solid color-mix(in srgb, var(--cc) 55%, #222); border-radius:10px; background:color-mix(in srgb, var(--cc) 7%, #181818); overflow:hidden; }
-#bdctl .cat > .ch{ display:flex; align-items:center; gap:6px; padding:5px 9px; background:color-mix(in srgb, var(--cc) 22%, #181818); font-size:11.5px; font-weight:700; letter-spacing:.03em; }
+#bdctl .qAdd{ display:flex; gap:6px; margin-bottom:12px; }
+#bdctl .qAdd select{ flex:0 0 auto; max-width:170px; border-left:4px solid var(--cc,#888); }
+#bdctl .qAdd input{ flex:1; min-width:0; }
+#bdctl .shCats{ display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; }
+#bdctl .cat{ border:1px solid color-mix(in srgb, var(--cc) 45%, #222); border-radius:10px; background:color-mix(in srgb, var(--cc) 6%, #181818); overflow:hidden; }
+#bdctl .cat > .ch{ display:flex; align-items:center; gap:7px; padding:6px 9px; background:color-mix(in srgb, var(--cc) 20%, #181818); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
 #bdctl .cat > .ch i{ width:9px; height:9px; border-radius:50%; background:var(--cc); display:block; }
-#bdctl .cat > .ch .add{ margin-left:auto; border:0; background:none; color:inherit; cursor:pointer; font-size:15px; line-height:1; padding:0 4px; opacity:.75; }
+#bdctl .cat > .ch .k{ color:var(--uiMuted); font-weight:600; }
+#bdctl .cat > .ch .add{ margin-left:auto; border:0; background:none; color:inherit; cursor:pointer; font-size:15px; line-height:1; padding:0 4px; opacity:.6; }
 #bdctl .cat > .ch .add:hover{ opacity:1; }
-#bdctl .cat .items{ display:flex; flex-wrap:wrap; gap:5px; padding:7px 8px; min-height:34px; }
-#bdctl .el{ display:inline-flex; align-items:center; gap:4px; border:1px solid color-mix(in srgb, var(--cc) 55%, #222); background:color-mix(in srgb, var(--cc) 14%, #151515); border-radius:7px; padding:2px 4px 2px 8px; font-size:12px; max-width:100%; }
+#bdctl .cat .items{ display:flex; flex-wrap:wrap; gap:5px; padding:8px; min-height:34px; }
+#bdctl .el{ display:inline-flex; align-items:center; gap:4px; border:1px solid color-mix(in srgb, var(--cc) 50%, #222); background:color-mix(in srgb, var(--cc) 13%, #151515); border-radius:7px; padding:2px 4px 2px 8px; font-size:12.5px; max-width:100%; }
 #bdctl .el b{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+#bdctl .el .cno{ display:inline-block; min-width:18px; margin-right:5px; padding:0 4px; border-radius:4px; background:var(--cc); color:#fff; font-size:11px; text-align:center; }
 #bdctl .el .qty{ color:var(--uiMuted); font-weight:400; font-size:11px; }
 #bdctl .el .hero{ color:#f1c76b; font-size:11px; }
 #bdctl .el small{ color:var(--uiMuted); font-size:10.5px; }
@@ -113,8 +137,12 @@ const css = `
 #bdctl .el button:hover{ color:#fff; }
 #bdctl .addRow{ display:flex; gap:5px; padding:0 8px 8px; }
 #bdctl .addRow input{ flex:1; min-width:0; }
-#bdctl .shMore{ display:flex; flex-wrap:wrap; gap:5px; align-items:center; padding:0 14px 14px; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--uiMuted); }
-#bdctl .shNote{ padding:0 14px 14px; }
+@media (max-width:1180px){
+  #bdctl .shGrid{ grid-template-columns:1fr; }
+  #bdctl .shSide{ border-left:0; border-top:1px solid var(--uiBorder); position:static; }
+  #bdctl .shMeta{ grid-template-columns:repeat(3,1fr); }
+  #bdctl .shMeta label:last-child{ grid-column:auto; }
+}
 /* elements view */
 #bdctl .bdTools{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:12px 0 8px; }
 #bdctl .catChips{ display:flex; gap:5px; flex-wrap:wrap; }
@@ -166,7 +194,16 @@ const css = `
   #bdctl .bdBody{ padding:0 10px 90px; }
   #bdctl .bdSplit{ grid-template-columns:1fr; }
   #bdctl .bdList{ flex-direction:row; max-height:none; overflow-x:auto; position:static; padding-bottom:6px; }
-  #bdctl .bdSc{ flex:0 0 150px; }
+  #bdctl .bdSc{ flex:0 0 170px; }
+  #bdctl .bdFind input{ flex:1 1 auto; }
+  #bdctl .shHead{ position:static; flex-wrap:wrap; }
+  #bdctl .shHead .big{ min-width:42px; height:42px; font-size:19px; }
+  #bdctl .shHead h3{ white-space:normal; }
+  #bdctl .shHead .nav{ width:100%; justify-content:flex-end; }
+  #bdctl .shMeta{ grid-template-columns:1fr 1fr; }
+  #bdctl .shMeta label:last-child{ grid-column:1 / -1; }
+  #bdctl .qAdd{ flex-wrap:wrap; }
+  #bdctl .qAdd select{ max-width:none; flex:1 1 100%; }
   #bdctl .shCats{ grid-template-columns:1fr; }
   #bdctl input, #bdctl select, #bdctl textarea{ font-size:16px; }
   #bdctl .bdChip.hideSm{ display:none; }
@@ -388,44 +425,75 @@ function shareChip(st, can){
 }
 
 /* ---------- sheets ---------- */
+const SC_FILTERS = [["all", "All"], ["int", "INT"], ["ext", "EXT"], ["D", "Day"], ["N", "Night"]];
+function scMatch(x){
+  const f = S.scF, ie = x.ie || "", q = S.scQ.trim().toLowerCase();
+  if(f === "int" && !/INT/.test(ie)) return false;
+  if(f === "ext" && !/EXT/.test(ie)) return false;
+  if((f === "D" || f === "N") && x.dn !== f) return false;
+  return !q || String(x.n) === q || (x.heading || "").toLowerCase().indexOf(q) >= 0 || (x.syn || "").toLowerCase().indexOf(q) >= 0;
+}
 function sheetsView(b, can){
   const s = b.scenes[S.sel - 1];
-  const list = b.scenes.map((x) => {
-    const cats = E.CATS.filter((c) => (x.els[c.id] || []).length);
-    return `<button type="button" class="bdSc${x.n === S.sel ? " on" : ""}" data-a="pick" data-n="${x.n}" style="--sc:${stripColor(x)}">
-      <div class="t">Sc ${x.n} · ${esc(x.ie || "")} ${esc(DN[x.dn] || "")}<span>${E.fmtEighths(x.eighths)} pg</span></div>
-      <div class="l">${esc(x.set || x.loc || x.heading)}</div>
-      <div class="dots" title="${x.count} elements">${cats.map((c) => `<i style="background:${c.color}"></i>`).join("")}</div></button>`;
-  }).join("");
+  const castNos = (x) => (x.els.cast || []).map((k) => b.elements[k].no).filter(Boolean).sort((p, q) => p - q);
+  const shown = b.scenes.filter(scMatch);
+  const list = shown.map((x) => {
+    const cats = E.CATS.filter((c) => (x.els[c.id] || []).length), cn = castNos(x);
+    return `<button type="button" class="bdSc${x.n === S.sel ? " on" : ""}" data-a="pick" data-n="${x.n}" style="--sc:${stripColor(x)}" title="${esc(x.heading || "")}">
+      <span class="no">${x.n}</span>
+      <span class="mid"><span class="l">${esc(x.set || x.loc || x.heading)}</span><span class="m">${esc(x.ie || "")} · ${esc(DN[x.dn] || "")}${cn.length ? ` · <span class="cn">${cn.join(", ")}</span>` : ""}</span>
+        <span class="dots" title="${x.count} elements">${cats.map((c) => `<i style="background:${c.color}"></i>`).join("")}</span></span>
+      <span class="pg">${E.fmtEighths(x.eighths)}</span></button>`;
+  }).join("") || `<div class="bdEmpty" style="padding:10px 4px">No scenes match.</div>`;
+  const listBox = `<div class="bdListWrap"><div class="bdFind"><input type="text" id="bdScQ" placeholder="Find a scene" value="${esc(S.scQ)}" autocomplete="off" aria-label="Find a scene">
+      <div class="seg sm">${SC_FILTERS.map(([v, n]) => `<button type="button" class="${S.scF === v ? "on" : ""}" data-a="scf" data-v="${v}">${n}</button>`).join("")}</div>
+      <span class="cnt">${shown.length === b.scenes.length ? b.scenes.length + " scenes" : shown.length + " of " + b.scenes.length}</span></div>
+    <div class="bdList" role="list">${list}</div></div>`;
+
   const adding = S.adding && S.adding.sk === s.key ? S.adding.cat : "";
   const catBox = (c) => {
     const keys = s.els[c.id] || [];
-    if(!keys.length && adding !== c.id) return "";   // empty categories hide behind the "+ Add" row
+    if(!keys.length && adding !== c.id) return "";   // empty categories stay hidden; the quick-add box reaches them all
     const items = keys.map((k) => {
       const e = b.elements[k], tip = (e.auto ? e.why.join(", ") : "added by hand") + (e.note ? " — " + e.note : "") + (e.scenes.length > 1 ? " · in scenes " + e.scenes.join(", ") : "");
-      return `<span class="el${e.manual && !e.auto ? " man" : ""}" title="${esc(tip)}"><b data-a="edit" data-k="${esc(k)}">${e.no && c.id === "cast" ? e.no + ". " : ""}${esc(e.name)}${s.qty && s.qty[k] ? ` <span class="qty" title="How many the script mentions">×${s.qty[k]}</span>` : ""}${e.hero ? ` <span class="hero" title="Hero prop: in CAPS or handled in several scenes. Plan doubles and continuity.">★</span>` : ""}</b>${e.scenes.length > 1 ? `<small>${e.scenes.length}</small>` : ""}${can ? `<button type="button" data-a="rm" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Take ${esc(e.name)} out of this scene" title="Take out of this scene">✕</button>` : ""}</span>`;
+      return `<span class="el${e.manual && !e.auto ? " man" : ""}" title="${esc(tip)}"><b data-a="edit" data-k="${esc(k)}">${e.no && c.id === "cast" ? `<span class="cno">${e.no}</span>` : ""}${esc(e.name)}${s.qty && s.qty[k] ? ` <span class="qty" title="How many the script mentions">×${s.qty[k]}</span>` : ""}${e.hero ? ` <span class="hero" title="Hero prop: in CAPS or handled in several scenes. Plan doubles and continuity.">★</span>` : ""}</b>${e.scenes.length > 1 ? `<small title="In ${e.scenes.length} scenes">${e.scenes.length}</small>` : ""}${can ? `<button type="button" data-a="rm" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Take ${esc(e.name)} out of this scene" title="Take out of this scene">✕</button>` : ""}</span>`;
     }).join("");
     const names = (b.byCat[c.id] || []).map((k) => b.elements[k].name);
     const addRow = adding === c.id ? `<div class="addRow"><input type="text" id="bdAdd" list="bdDL" maxlength="60" placeholder="${esc(c.short)} name" autocomplete="off"><datalist id="bdDL">${names.map((n) => `<option value="${esc(n)}">`).join("")}</datalist><button class="btn sm primary" type="button" data-a="addok" data-c="${c.id}" data-sk="${esc(s.key)}">Add</button><button class="btn sm" type="button" data-a="addcancel">✕</button></div>` : "";
-    return `<div class="cat" style="--cc:${c.color}"><div class="ch"><i></i>${esc(c.label)}${keys.length ? ` · ${keys.length}` : ""}${can ? `<button class="add" type="button" data-a="add" data-c="${c.id}" data-sk="${esc(s.key)}" aria-label="Add ${esc(c.label)}" title="Add ${esc(c.label.toLowerCase())}">+</button>` : ""}</div>
+    return `<div class="cat" style="--cc:${c.color}"><div class="ch"><i></i>${esc(c.label)}<span class="k">${keys.length || ""}</span>${can ? `<button class="add" type="button" data-a="add" data-c="${c.id}" data-sk="${esc(s.key)}" aria-label="Add ${esc(c.label)}" title="Add ${esc(c.label.toLowerCase())}">+</button>` : ""}</div>
       <div class="items">${items || `<span style="color:var(--uiMuted);font-size:11.5px">None</span>`}</div>${addRow}</div>`;
   };
   const dis = can ? "" : " disabled";
-  const prev = s.n > 1 ? `<button class="btn sm" type="button" data-a="pick" data-n="${s.n - 1}" aria-label="Previous scene">←</button>` : "", next = s.n < b.scenes.length ? `<button class="btn sm" type="button" data-a="pick" data-n="${s.n + 1}" aria-label="Next scene">→</button>` : "";
-  return `<div class="bdSplit"><div class="bdList" role="list">${list}</div>
-    <div class="bdSheet"><div class="shHead" style="--sc:${stripColor(s)}"><h3>Sc ${s.n} · ${esc(s.heading || "(no scene heading)")}</h3><div class="nav">${prev}${next}</div></div>
-      <div class="shMeta">
-        <label title="Length of the scene in script pages (a page is 8 eighths, so 3 7/8 is almost four pages)">Length<b>${E.fmtEighths(s.eighths)} pg</b></label>
-        <label>I/E · D/N<b>${esc(s.ie || "—")} · ${esc(DN[s.dn] || "—")}</b></label>
-        <label>Set<b>${esc(s.set || s.loc || "—")}</b></label>
-        <label>Story day<input type="text" id="shDay" maxlength="40" value="${esc(s.dayAuto ? "" : s.day)}" placeholder="${esc(s.day)}" style="width:90px"${dis}></label>
-        <label>Est. minutes<input type="number" id="shEst" min="5" max="1440" step="5" value="${s.estAuto ? "" : s.est}" placeholder="${s.est}" style="width:84px"${dis}></label>
-        <label>Unit<select id="shUnit"${dis}>${["Main", "2nd unit", "Splinter", "Pick-up"].map((u) => `<option${u === s.unit ? " selected" : ""}>${u}</option>`).join("")}</select></label>
+  const qc = E.CAT[S.qCat] ? S.qCat : "props";
+  const allNames = Object.keys(b.elements).filter((k) => !(s.els[b.elements[k].cat] || []).includes(k)).map((k) => `<option value="${esc(b.elements[k].name)}" label="${esc(E.CAT[b.elements[k].cat].short)}">`).join("");
+  const quick = can ? `<div class="qAdd"><select id="bdQCat" aria-label="Category" style="--cc:${E.CAT[qc].color}">${E.CATS.map((c) => `<option value="${c.id}"${c.id === qc ? " selected" : ""}>${esc(c.label)}</option>`).join("")}</select>
+      <input type="text" id="bdQuick" list="bdQL" maxlength="60" placeholder="Add an element to this scene… (type a name, Enter)" autocomplete="off" aria-label="Add an element"><datalist id="bdQL">${allNames}</datalist>
+      <button class="btn sm primary" type="button" data-a="qadd" data-sk="${esc(s.key)}">Add</button></div>` : "";
+  const cats = E.CATS.map(catBox).join("");
+  const idx = shown.findIndex((x) => x.n === s.n);
+  const pv = idx > 0 ? shown[idx - 1].n : 0, nx = idx >= 0 && idx < shown.length - 1 ? shown[idx + 1].n : 0;
+  const nav = `<div class="nav"><button class="btn sm" type="button" data-a="pick" data-n="${pv}" aria-label="Previous scene" title="Previous scene (K)"${pv ? "" : " disabled"}>←</button><span class="pos">${s.n} / ${b.scenes.length}</span><button class="btn sm" type="button" data-a="pick" data-n="${nx}" aria-label="Next scene" title="Next scene (J)"${nx ? "" : " disabled"}>→</button></div>`;
+  const tot = E.CATS.reduce((a, c) => a + (s.els[c.id] || []).length, 0);
+  return `<div class="bdSplit">${listBox}
+    <div class="bdSheet">
+      <div class="shHead" style="--sc:${stripColor(s)}">
+        <div class="big" title="Scene number">${s.n}</div>
+        <div class="hd"><h3>${esc(s.heading || "(no scene heading)")}</h3>
+          <div class="facts"><span><em>I/E</em>${esc(s.ie || "—")}</span><span><em>D/N</em>${esc(DN[s.dn] || "—")}</span><span title="Length in script pages (a page is 8 eighths)"><em>Pages</em>${E.fmtEighths(s.eighths)}</span><span><em>Set</em>${esc(s.set || s.loc || "—")}</span><span><em>Story day</em>${esc(s.day || "—")}</span><span><em>Elements</em>${tot}</span></div></div>
+        ${nav}</div>
+      <div class="shGrid">
+        <div class="shMain">${quick}
+          <div class="shCats">${cats || `<div class="bdEmpty" style="grid-column:1/-1;padding:6px 0">Nothing found in this scene yet.${can ? " Add what it needs above." : ""}</div>`}</div></div>
+        <aside class="shSide">
+          <div class="fld"><label for="shSyn">Synopsis <span class="hint">from the script, edit to replace</span></label><textarea id="shSyn" rows="3" maxlength="2000"${dis}>${esc(s.syn)}</textarea></div>
+          <div class="shMeta">
+            <label>Story day<input type="text" id="shDay" maxlength="40" value="${esc(s.dayAuto ? "" : s.day)}" placeholder="${esc(s.day)}"${dis}></label>
+            <label title="Estimated shooting time in minutes">Est. minutes<input type="number" id="shEst" min="5" max="1440" step="5" value="${s.estAuto ? "" : s.est}" placeholder="${s.est}"${dis}></label>
+            <label>Unit<select id="shUnit"${dis}>${["Main", "2nd unit", "Splinter", "Pick-up"].map((u) => `<option${u === s.unit ? " selected" : ""}>${u}</option>`).join("")}</select></label>
+          </div>
+          <div class="fld"><label for="shNote">Scene notes</label><textarea id="shNote" rows="4" maxlength="2000"${dis}>${esc(s.note)}</textarea></div>
+        </aside>
       </div>
-      <div class="shSyn"><label for="shSyn">Synopsis <span style="text-transform:none;letter-spacing:0;opacity:.7">· written from the script, edit to replace it</span></label><textarea id="shSyn" rows="2" maxlength="2000"${dis}>${esc(s.syn)}</textarea></div>
-      <div class="shCats">${E.CATS.map(catBox).join("") || `<div class="bdEmpty" style="grid-column:1/-1;padding:6px 0">Nothing found in this scene yet.</div>`}</div>
-      ${can ? `<div class="shMore"><span>Add</span>${E.CATS.filter((c) => !(s.els[c.id] || []).length && adding !== c.id).map((c) => `<button type="button" class="catChip" style="--cc:${c.color}" data-a="add" data-c="${c.id}" data-sk="${esc(s.key)}">+ ${esc(c.short)}</button>`).join("")}</div>` : ""}
-      <div class="shNote"><label style="display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--uiMuted);margin-bottom:4px" for="shNote">Scene notes</label><textarea id="shNote" rows="2" maxlength="2000"${dis}>${esc(s.note)}</textarea></div>
     </div></div>`;
 }
 
@@ -538,6 +606,8 @@ function wire(box, pid){
     const a = ev.target.closest("[data-a]"); if(!a || a.tagName === "SELECT" || a.tagName === "INPUT") return;
     const k = a.dataset.a;
     if(k === "view"){ S.view = a.dataset.v; lsSet(VIEW_KEY, S.view); S.edit = null; S.adding = null; rerender(); return; }
+    if(k === "scf"){ S.scF = a.dataset.v; rerender(); return; }
+    if((k === "pick" || k === "goto") && !Number(a.dataset.n)) return;
     if(k === "pick" || k === "goto"){ S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; if(S.lock){ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); return; } rerender(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
     if(k === "csv"){ const m = model(); if(m) download(((hub.scriptTitle(sid) || "breakdown") + " - breakdown.csv").replace(/[\\/:*?"<>|]/g, "-"), E.csv(m)); return; }
@@ -548,6 +618,7 @@ function wire(box, pid){
     if(!can) return;
     if(k === "add"){ S.adding = { sk: a.dataset.sk, cat: a.dataset.c }; rerender(); setTimeout(() => { const i = box.querySelector("#bdAdd"); if(i) i.focus(); }, 30); return; }
     if(k === "addcancel"){ S.adding = null; rerender(); return; }
+    if(k === "qadd"){ quickAdd(box, a.dataset.sk, ed); return; }
     if(k === "addok"){ commitAdd(box, a.dataset.sk, a.dataset.c, ed); return; }
     if(k === "rm"){ const sk = a.dataset.sk, key = a.dataset.k; ed((st) => E.untag(st, sk, key)); return; }
     if(k === "edit"){ S.edit = a.dataset.k; S.view = "elements"; lsSet(VIEW_KEY, S.view); S.cat = "all"; rerender(); setTimeout(() => { const i = box.querySelector("#edName"); if(i){ i.focus(); i.select(); i.scrollIntoView({ block: "nearest" }); } }, 30); return; }
@@ -574,6 +645,7 @@ function wire(box, pid){
   };
   box.onchange = (ev) => {
     const t = ev.target;
+    if(t.id === "bdQCat"){ S.qCat = t.value; lsSet("Camp_BD_QCAT_V1", t.value); t.style.setProperty("--cc", (E.CAT[t.value] || {}).color || "#888"); const i = box.querySelector("#bdQuick"); if(i) i.focus(); return; }
     if(t.dataset && t.dataset.a === "script"){ S.scriptPick[pid] = t.value; S.model = null; loadScript(t.value); rerender(); return; }
     if(!can) return;
     const sk = (model() && model().scenes[S.sel - 1] || {}).key; if(!sk) return;
@@ -583,12 +655,26 @@ function wire(box, pid){
     else if(t.id === "shEst"){ edit(pid, sid, (st) => E.setScene(st, sk, "est", t.value)); }
     else if(t.id === "shUnit"){ edit(pid, sid, (st) => E.setScene(st, sk, "unit", t.value === "Main" ? "" : t.value)); }
   };
-  box.oninput = (ev) => { if(ev.target.id === "bdQ"){ S.q = ev.target.value; const pos = ev.target.selectionStart; rerender(); setTimeout(() => { const i = box.querySelector("#bdQ"); if(i){ i.focus(); try{ i.setSelectionRange(pos, pos); }catch(_e){} } }, 40); } };
+  box.oninput = (ev) => {
+    // picking a name the project already uses sets its category
+    if(ev.target.id === "bdQuick"){ const m = model(), v = ev.target.value.trim().toLowerCase(), hit = m && Object.keys(m.elements).find((k) => m.elements[k].name.toLowerCase() === v), sel = box.querySelector("#bdQCat"); if(hit && sel && sel.value !== m.elements[hit].cat){ sel.value = m.elements[hit].cat; S.qCat = sel.value; sel.style.setProperty("--cc", E.CAT[sel.value].color); } return; }
+    if(ev.target.id === "bdScQ"){ S.scQ = ev.target.value; const pos = ev.target.selectionStart; rerender(); setTimeout(() => { const i = box.querySelector("#bdScQ"); if(i){ i.focus(); try{ i.setSelectionRange(pos, pos); }catch(_e){} } }, 40); return; }
+    if(ev.target.id === "bdQ"){ S.q = ev.target.value; const pos = ev.target.selectionStart; rerender(); setTimeout(() => { const i = box.querySelector("#bdQ"); if(i){ i.focus(); try{ i.setSelectionRange(pos, pos); }catch(_e){} } }, 40); } };
   box.onkeydown = (ev) => {
-    if(ev.key === "Enter" && ev.target.id === "bdAdd" && S.adding){ ev.preventDefault(); commitAdd(box, S.adding.sk, S.adding.cat, ed); }
+    if(ev.key === "Enter" && ev.target.id === "bdQuick"){ ev.preventDefault(); const b2 = box.querySelector("[data-a=qadd]"); if(b2) quickAdd(box, b2.dataset.sk, ed); }
+    else if(ev.key === "Enter" && ev.target.id === "bdAdd" && S.adding){ ev.preventDefault(); commitAdd(box, S.adding.sk, S.adding.cat, ed); }
     else if(ev.key === "Escape" && (S.adding || S.edit)){ S.adding = null; S.edit = null; rerender(); }
     else if(ev.key === "Enter" && ev.target.id === "edName"){ const b = box.querySelector("[data-a=edsave]"); if(b) b.click(); }
   };
+}
+// The quick-add box: same tag call as the per-category "+", so it's shared with the team the same way
+function quickAdd(box, sk, ed){
+  const i = box.querySelector("#bdQuick"), sel = box.querySelector("#bdQCat"), name = i ? i.value.trim() : "", cat = sel ? sel.value : S.qCat;
+  if(!name){ H().toast("Type a name first.", "err", 1600); if(i) i.focus(); return; }
+  if(!E.CAT[cat]) return;
+  S.qCat = cat; lsSet("Camp_BD_QCAT_V1", cat);
+  ed((st) => E.tag(st, sk, cat, name));
+  setTimeout(() => { const j = box.querySelector("#bdQuick"); if(j) j.focus(); }, 60);
 }
 function commitAdd(box, sk, cat, ed){
   const i = box.querySelector("#bdAdd"), name = i ? i.value.trim() : "";
@@ -596,6 +682,15 @@ function commitAdd(box, sk, cat, ed){
   S.adding = null; ed((st) => E.tag(st, sk, cat, name));
 }
 
+// J / K: next / previous scene on the Sheets view (skips scenes hidden by the filter)
+document.addEventListener("keydown", (e) => {
+  if(!S.on || S.lock || !S.model || e.ctrlKey || e.metaKey || e.altKey) return;
+  if((S.view === "strips" ? "sheets" : S.view) !== "sheets" || (e.key !== "j" && e.key !== "k")) return;
+  if(e.target.closest && e.target.closest("input, select, textarea, [contenteditable=true]")) return;
+  if(document.querySelector(".shade")) return;
+  const shown = S.model.scenes.filter(scMatch), i = shown.findIndex((x) => x.n === S.sel), t = shown[i + (e.key === "j" ? 1 : -1)];
+  if(t){ e.preventDefault(); S.sel = t.n; S.adding = null; rerender(); }
+});
 // Ctrl/Cmd+Z while the breakdown is showing
 document.addEventListener("keydown", (e) => {
   if(!S.on || !S.pid || !(e.ctrlKey || e.metaKey)) return;
