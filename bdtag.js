@@ -50,7 +50,7 @@ const css = `
 .bdtPop .have button{ border:0; background:none; color:inherit; opacity:.65; cursor:pointer; padding:0 3px; }
 .bdtPop .have button:hover{ opacity:1; }
 .bdtPop .none{ opacity:.5; font-size:12px; }
-${E.CATS.map((c) => `::highlight(bd-${c.id}){ background-color:${c.color}33; text-decoration:underline; text-decoration-color:${c.color}; text-decoration-thickness:2px; text-underline-offset:2px; }`).join("\n")}
+${E.CATS.map((c) => `::highlight(bd-${c.id}){ background-color:${c.color}80; color:inherit; }`).join("\n")}
 @media print{ ${E.CATS.map((c) => `::highlight(bd-${c.id}){ background-color:transparent; text-decoration:none; }`).join(" ")} }`;
 const style = document.createElement("style"); style.textContent = css; document.head.appendChild(style);
 
@@ -208,7 +208,7 @@ function rangeIn(nodes, a, b){
 }
 /* ---------- show every active tag (View > Show Breakdown Tags) ----------
    The script is read the same way the Breakdown tab reads it (breakdown.js + elements.js), so what's coloured
-   here is exactly what's on the sheets: suggestions (dotted underline) and hand tags (solid), less anything
+   here is exactly what's on the sheets: suggestions (light fill) and hand tags (strong fill), less anything
    taken out or ignored. Click a category in the key to hide it. */
 const SUG_KEY = "Camp_BD_SHOWSUG_V1", HIDE_KEY = "Camp_BD_HIDECAT_V1";
 const showSug = () => lsGet(SUG_KEY) !== "0";
@@ -227,8 +227,14 @@ style.textContent += `
 .bdtKey .bdtCs button small{ opacity:.6; }
 .bdtKey .bdtCs button.off{ opacity:.4; text-decoration:line-through; }
 .bdtKey .bdtNote{ display:block; width:auto; font-size:11px; opacity:.55; margin-top:6px; font-style:normal; }
-${E.CATS.map((c) => `::highlight(bds-${c.id}){ background-color:${c.color}1f; text-decoration:underline dotted; text-decoration-color:${c.color}; text-decoration-thickness:2px; text-underline-offset:3px; }`).join("\n")}
-@media print{ .bdtKey{ display:none !important; } ${E.CATS.map((c) => `::highlight(bds-${c.id}){ background-color:transparent; text-decoration:none; }`).join(" ")} }`;
+${E.CATS.map((c) => `::highlight(bds-${c.id}){ background-color:${c.color}38; }`).join("\n")}
+@media print{ .bdtKey{ display:none !important; } ${E.CATS.map((c) => `::highlight(bds-${c.id}){ background-color:transparent; text-decoration:none; }`).join(" ")} }
+/* While tags are showing, comments step back to a coloured underline so the two don't look alike */
+body.bdTagsOn #scriptEditor .cmt[data-color]{ background:transparent !important; box-shadow:inset 0 -2px 0 0 var(--cmtLine, #e0ad2b) !important; }
+body.bdTagsOn #scriptEditor .cmt[data-color="pink"]{ --cmtLine:#ff5f95; } body.bdTagsOn #scriptEditor .cmt[data-color="blue"]{ --cmtLine:#4d8fff; }
+body.bdTagsOn #scriptEditor .cmt[data-color="green"]{ --cmtLine:#35b86b; } body.bdTagsOn #scriptEditor .cmt[data-color="purple"]{ --cmtLine:#9a6cff; }
+body.bdTagsOn #scriptEditor .cmt[data-color="custom"]{ --cmtLine:var(--cmt-hex, #e0ad2b); }
+@media print{ body.bdTagsOn #scriptEditor .cmt[data-color]{ box-shadow:none !important; } }`;
 
 // The script as the Breakdown reads it, straight from the page (so unsaved typing is included)
 function docFromPage(){
@@ -255,6 +261,7 @@ function doPaint(){
   try{
     clearAll();
     const ed = editor();
+    document.body.classList.toggle("bdTagsOn", !!(ed && showColours()));
     if(!ed || !showColours()){ key.hidden = true; return; }
     const doc = docFromPage(), bd = B ? B.analyze(doc) : { scenes: [], cast: [] }, m = E.build(doc, bd, load());
     const hide = {}; hiddenCats().forEach((c) => { hide[c] = 1; });
@@ -288,9 +295,9 @@ function doPaint(){
     }
     // the key: categories in this script, click to hide / show
     const html = `<div class="bdtHd">Breakdown tags<button type="button" data-k="off" title="Hide tags (View › Show Breakdown Tags)">✕</button></div>
-      <label><input type="checkbox" data-k="sug"${sug ? " checked" : ""}> Include suggestions <span style="opacity:.6">(dotted)</span></label>
+      <label><input type="checkbox" data-k="sug"${sug ? " checked" : ""}> Include suggestions <span style="opacity:.6">(light)</span></label>
       <div class="bdtCs">${E.CATS.filter((c) => count[c.id]).map((c) => `<button type="button" data-c="${c.id}" class="${hide[c.id] ? "off" : ""}" style="--cc:${c.color}" title="${hide[c.id] ? "Show" : "Hide"} ${esc(c.label.toLowerCase())}"><i></i>${esc(c.short)}<small>${count[c.id]}</small></button>`).join("") || `<span class="bdtNote">Nothing found yet.</span>`}</div>
-      ${canHighlight ? `<div class="bdtNote">Solid = tagged by hand. Select words and press Tag to add.</div>` : `<div class="bdtNote">This browser can't colour text. Update it to see tags in the script.</div>`}`;
+      ${canHighlight ? `<div class="bdtNote">Strong colour = tagged by hand, light = suggested. Comments show as underlines while tags are on. Select words and press Tag to add.</div>` : `<div class="bdtNote">This browser can't colour text. Update it to see tags in the script.</div>`}`;
     if(html !== lastKeyHtml){ key.innerHTML = html; lastKeyHtml = html; }
     key.hidden = false;
   }catch(_e){ try{ console.error(_e); }catch(_x){} }

@@ -104,6 +104,8 @@ const css = `
 #bdctl .el{ display:inline-flex; align-items:center; gap:4px; border:1px solid color-mix(in srgb, var(--cc) 55%, #222); background:color-mix(in srgb, var(--cc) 14%, #151515); border-radius:7px; padding:2px 4px 2px 8px; font-size:12px; max-width:100%; }
 #bdctl .el.man{ border-style:dashed; }
 #bdctl .el b{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+#bdctl .el .qty{ color:var(--uiMuted); font-weight:400; font-size:11px; }
+#bdctl .el .hero{ color:#f1c76b; font-size:11px; }
 #bdctl .el small{ color:var(--uiMuted); font-size:10.5px; }
 #bdctl .el button{ border:0; background:none; color:var(--uiMuted); cursor:pointer; font-size:12px; padding:0 4px; line-height:1; }
 #bdctl .el button:hover{ color:#fff; }
@@ -364,7 +366,7 @@ function sheetsView(b, can){
     if(!keys.length && adding !== c.id) return "";   // empty categories hide behind the "+ Add" row
     const items = keys.map((k) => {
       const e = b.elements[k], tip = (e.auto ? e.why.join(", ") : "added by hand") + (e.note ? " — " + e.note : "") + (e.scenes.length > 1 ? " · in scenes " + e.scenes.join(", ") : "");
-      return `<span class="el${e.manual && !e.auto ? " man" : ""}" title="${esc(tip)}"><b data-a="edit" data-k="${esc(k)}">${e.no && c.id === "cast" ? e.no + ". " : ""}${esc(e.name)}</b>${e.scenes.length > 1 ? `<small>${e.scenes.length}</small>` : ""}${can ? `<button type="button" data-a="rm" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Take ${esc(e.name)} out of this scene" title="Take out of this scene">✕</button>` : ""}</span>`;
+      return `<span class="el${e.manual && !e.auto ? " man" : ""}" title="${esc(tip)}"><b data-a="edit" data-k="${esc(k)}">${e.no && c.id === "cast" ? e.no + ". " : ""}${esc(e.name)}${s.qty && s.qty[k] ? ` <span class="qty" title="How many the script mentions">×${s.qty[k]}</span>` : ""}${e.hero ? ` <span class="hero" title="Hero prop: in CAPS or handled in several scenes. Plan doubles and continuity.">★</span>` : ""}</b>${e.scenes.length > 1 ? `<small>${e.scenes.length}</small>` : ""}${can ? `<button type="button" data-a="rm" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Take ${esc(e.name)} out of this scene" title="Take out of this scene">✕</button>` : ""}</span>`;
     }).join("");
     const names = (b.byCat[c.id] || []).map((k) => b.elements[k].name);
     const addRow = adding === c.id ? `<div class="addRow"><input type="text" id="bdAdd" list="bdDL" maxlength="60" placeholder="${esc(c.short)} name" autocomplete="off"><datalist id="bdDL">${names.map((n) => `<option value="${esc(n)}">`).join("")}</datalist><button class="btn sm primary" type="button" data-a="addok" data-c="${c.id}" data-sk="${esc(s.key)}">Add</button><button class="btn sm" type="button" data-a="addcancel">✕</button></div>` : "";
@@ -409,7 +411,7 @@ function elementsView(b, can){
         <button class="btn sm" type="button" data-a="edmerge" data-k="${esc(k)}">Merge</button>
         <button class="btn sm" type="button" data-a="eddrop" data-k="${esc(k)}" title="Remove this element from every scene">Ignore everywhere</button>
         <button class="btn sm" type="button" data-a="edcancel">Cancel</button></div></td></tr>` : "";
-    return `<tr><td><span class="dot" style="background:${c.color}"></span><b>${e.no && e.cat === "cast" ? e.no + ". " : ""}${esc(e.name)}</b>${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
+    return `<tr><td><span class="dot" style="background:${c.color}"></span><b>${e.no && e.cat === "cast" ? e.no + ". " : ""}${esc(e.name)}</b>${e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
       <td style="color:var(--uiMuted)">${esc(c.short)}</td>
       <td><div class="scBtns">${e.scenes.map((n) => `<button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${n}">${n}</button>`).join("")}</div></td>
       <td style="white-space:nowrap">${E.fmtEighths(e.eighths)}</td>
@@ -478,7 +480,7 @@ function reportsView(b, p){
   }
   const cards = E.CATS.map((c) => {
     const r = E.report(b, c.id); if(!r.length) return "";
-    return `<div class="rp" style="--cc:${c.color}"><h4><span>${esc(c.label)}</span><span>${r.length}</span></h4><table>${r.map((x) => `<tr><td><b>${x.no ? x.no + ". " : ""}${esc(x.name)}</b>${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</td><td>Sc ${x.scenes.length > 8 ? x.scenes.slice(0, 8).join(", ") + " +" + (x.scenes.length - 8) : x.scenes.join(", ")}</td></tr>`).join("")}</table></div>`;
+    return `<div class="rp" style="--cc:${c.color}"><h4><span>${esc(c.label)}</span><span>${r.length}</span></h4><table>${r.map((x) => `<tr><td><b>${x.no ? x.no + ". " : ""}${esc(x.name)}</b>${b.elements[x.key] && b.elements[x.key].hero ? ` <span style="color:#f1c76b" title="Hero prop">★</span>` : ""}${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</td><td>Sc ${x.scenes.length > 8 ? x.scenes.slice(0, 8).join(", ") + " +" + (x.scenes.length - 8) : x.scenes.join(", ")}</td></tr>`).join("")}</table></div>`;
   }).join("");
   return seg + `<div class="rpGrid">${cards || `<div class="bdEmpty">No elements yet.</div>`}</div>`;
 }

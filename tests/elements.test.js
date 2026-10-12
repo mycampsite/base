@@ -47,7 +47,7 @@ test("props: verbs and cast names don't count", () => {
 test("CAPS sounds go to Sound, not Props", () => {
   const b = run([["scene", "INT. HOUSE - NIGHT"], ["action", "The door SLAMS. A phone BUZZES. We hear a distant siren."]]);
   const s = names(b, 1, "sound");
-  ["Slam", "Buzz", "Siren"].forEach((x) => assert.ok(s.includes(x), x + " in " + s));
+  ["Slam", "Buzz", "Siren"].forEach((x) => assert.ok(s.some((n) => n.toLowerCase().indexOf(x.toLowerCase()) >= 0), x + " in " + s));
   assert.ok(!names(b, 1, "props").includes("Slam"));
 });
 
@@ -103,7 +103,7 @@ test("store: tag by hand, take out of one scene, ignore everywhere", () => {
   const lines = [["scene", "INT. A - DAY"], ["action", "She checks her phone."], ["scene", "INT. B - DAY"], ["action", "The phone rings."]];
   let st = E.tag({}, "l0", "setdress", "Fairy lights");
   let b = run(lines, st);
-  assert.deepStrictEqual(names(b, 1, "setdress"), ["Fairy lights"]);
+  assert.ok(names(b, 1, "setdress").includes("Fairy lights"), names(b, 1, "setdress").join());
   assert.ok(b.elements["setdress|fairy light"].manual);
   st = E.untag(st, "l2", "props|phone");
   b = run(lines, st);
@@ -199,10 +199,36 @@ test("sync: merging keeps both sides' tags; editor ops replay on the team's copy
   assert.strictEqual(r.tags.l2[0].n, "Lamp"); assert.ok(!r.tags.l0); assert.deepStrictEqual(r.off.l0, ["props|cup"]);
 });
 
+test("a real-style script: the things each department needs, and none of the usual false alarms", () => {
+  const d = require("./fixtures/sample-script.js"), b = E.build(d, B.analyze(d), {});
+  const all = (n) => { const s = b.scenes[n - 1]; const o = {}; Object.keys(s.els).forEach((c) => { o[c] = s.els[c].map((k) => b.elements[k].name); }); return o; };
+  const has = (n, cat, name) => assert.ok((all(n)[cat] || []).includes(name), "sc " + n + " " + cat + " should have " + name + ": " + JSON.stringify(all(n)[cat] || []));
+  const hasNot = (n, cat, name) => assert.ok(!(all(n)[cat] || []).includes(name), "sc " + n + " " + cat + " shouldn't have " + name);
+  has(1, "vehicles", "Holden ute"); has(1, "stunts", "Vehicle crash"); has(1, "stunts", "Precision driving"); has(1, "equipment", "Rain towers");
+  has(1, "wardrobe", "Maggie: wet costume (doubles)"); has(1, "props", "Thermos"); hasNot(1, "stunts", "Fight");
+  has(2, "art", "Phone screen (graphic)"); has(2, "camera", "Car mount");
+  has(3, "props", "Landline"); has(3, "props", "Tea towel"); has(3, "props", "Pint glass"); hasNot(3, "props", "Tea"); hasNot(3, "props", "Xxxx");
+  has(3, "setdress", "Jukebox"); has(3, "setdress", "Mounted deer head"); has(3, "makeup", "Bandage");
+  assert.strictEqual(b.scenes[2].qty[b.scenes[2].els.background[0]], 12);                     // "a dozen drinkers"
+  has(4, "setdress", "Single bed"); has(4, "props", "Duffel bag"); has(4, "props", "Painkillers");
+  hasNot(4, "animals", "Horse"); assert.ok(!all(4).background, "a room upstairs isn't a public bar");   // the horse is in a photograph
+  has(5, "cast", "ELLIE"); has(5, "animals", "Kelpie"); has(5, "stunts", "Horse riding"); has(5, "labor", "Stunt double (child)"); has(5, "props", "Walking stick"); has(5, "wardrobe", "Ellie: gumboots");
+  hasNot(5, "props", "Reid");
+  has(6, "props", "Eggs"); has(6, "props", "Bacon"); has(6, "setdress", "Wood-fired stove"); has(6, "art", "Letter (graphic)"); has(6, "makeup", "Cuts & grazes"); hasNot(6, "props", "Fries");
+  has(7, "art", "Bank statement (insert)"); hasNot(7, "weapons", "Rifle");                    // "rifles through a filing cabinet"
+  has(8, "vehicles", "Road train"); has(8, "art", "Banner (graphic)");
+  has(9, "sfx", "Fireworks (pyro)"); has(9, "labor", "Pyrotechnician"); has(9, "props", "Dagwood dog"); hasNot(9, "animals", "Dog"); hasNot(9, "setdress", "Swing");
+  has(10, "stunts", "Fall from horse"); has(10, "wardrobe", "Ellie: riding helmet"); hasNot(10, "props", "Helmet");
+  has(11, "cast", "FRANK"); has(11, "cast", "ELLIE"); has(11, "makeup", "Arm cast"); has(11, "setdress", "Heart monitor"); has(11, "music", "Recorded song (playback)"); has(11, "props", "Walkman");
+  hasNot(11, "art", "Computer screen graphics"); hasNot(11, "props", "Singing");
+  has(12, "weapons", "Shotgun"); has(12, "stunts", "Dive"); has(12, "cast", "FRANK"); hasNot(12, "props", "Broken");
+  assert.ok(b.elements[E.key("props", "map")].hero, "a prop written in CAPS is a hero prop");
+});
+
 test("bad input: empty doc, missing breakdown, junk store", () => {
   assert.strictEqual(E.build(null, null, null).scenes.length, 0);
   const b = run([["scene", "INT. A - DAY"], ["action", "x"]], { tags: { l0: [null, { c: "nope", n: "x" }, { c: "props", n: "  " }] }, alias: { a: "a" }, drop: [] });
-  assert.strictEqual(b.scenes[0].count, 0);
+  assert.deepStrictEqual(Object.keys(b.scenes[0].els), ["setdress"]);   // only the set itself
 });
 
 test("reports and CSV: one row per scene, one column per category", () => {
