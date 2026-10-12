@@ -7320,7 +7320,7 @@ function _getActiveLineInEditor(){
 
   function _setSpell(target, on){
     if(!target) return;
-    try{ target.setAttribute("spellcheck", on ? "true" : "false"); }catch(_e){}
+    try{ target.setAttribute("spellcheck", (on && !(window.CampSpell)) ? "true" : "false"); }catch(_e){}
   }
 
   function _isCommitEvent(ev){
@@ -7358,7 +7358,7 @@ function _getActiveLineInEditor(){
                 // Native spellcheck cadence:
         // Keep the editor root stable (spellcheck="true") to avoid rare caret/selection glitches on very fast typing.
         // Suppress only the *active line* while you are mid-word, then re-enable it on true word boundaries.
-        try{ if(el.getAttribute("spellcheck") !== "true") el.setAttribute("spellcheck","true"); }catch(_e){}
+        try{ const v = window.CampSpell ? "false" : "true"; if(el.getAttribute("spellcheck") !== v) el.setAttribute("spellcheck", v); }catch(_e){}
 
         if(!isCommit){
           if(line){
@@ -15488,7 +15488,7 @@ function __setSpellSuggestMode(_mode){
   __SPELL_MODE = "native";
   try{
     const ed = document.getElementById("scriptEditor");
-    if(ed) ed.setAttribute("spellcheck","true");
+    if(ed) ed.setAttribute("spellcheck", window.CampSpell ? "false" : "true");
   }catch(_e){}
 }
 window.__toggleSpellSuggestMode = null;

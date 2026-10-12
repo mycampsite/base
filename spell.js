@@ -31,6 +31,7 @@
     return new Promise(function(res, rej){ var s = document.createElement("script"); s.src = "spell/typo.js"; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
   }
 
+  window.CampSpell = window.CampSpell || {};
   var user = userWords();
   function ok(w){
     var k = w.toLowerCase();
@@ -92,7 +93,7 @@
   }
   function suggest(w){ try{ return typo.suggest(w, 5) || []; }catch(e){ return []; } }
 
-  window.CampSpell = {
+  Object.assign(window.CampSpell, {
     hit: function(x, y){ return typo ? wordAt(x, y) : null; },
     suggest: suggest,
     replace: function(hit, text){
@@ -102,5 +103,5 @@
     add: function(w){ user.add(w.toLowerCase()); saveUser(user); cache.clear(); scan(); },
     ignore: function(w){ user.add(w.toLowerCase()); cache.clear(); scan(); },   // this session only
     refresh: later
-  };
+  });
 })();
