@@ -767,7 +767,7 @@ function build(doc, bd, store) {
     const estAuto = estimate(s);
     return {
       n: s.n, id: s.id, key: sk, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, dn: s.dn, eighths: s.eighths, bg: s.bg, flags: s.flags || [],
-      syn: clean(meta.syn) || summarise(txOf(s, i), s) || s.syn || "", synAuto: !clean(meta.syn),
+      syn: clean(meta.syn), synAuto: !clean(meta.syn),   // only what someone typed: no summary is made up from the script
       day: clean(meta.day) || d.label || "", dayAuto: !clean(meta.day), storyDay: d.day || 1, flash: !!d.flash,
       est: Number(meta.est) > 0 ? Math.round(Number(meta.est)) : estAuto, estAuto: !(Number(meta.est) > 0),
       unit: clean(meta.unit) || "Main", note: clean(meta.note), dir: clean(meta.dir), els: per, hits: hits, src: src, qty: qty,

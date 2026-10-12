@@ -607,7 +607,7 @@ function sheetsView(b, can){
         <div class="shMain">${S.showText ? sceneText(b, s) : ""}${quick}
           <div class="shCats">${cats || `<div class="bdEmpty" style="grid-column:1/-1;padding:6px 0">Nothing found in this scene yet.${can ? " Add what it needs above." : ""}</div>`}</div></div>
         <aside class="shSide">
-          <div class="fld"><label for="shSyn">Scene summary <span class="hint">from the script, edit to replace</span></label><textarea id="shSyn" rows="3" maxlength="2000"${dis}>${esc(s.syn)}</textarea></div>
+          <div class="fld"><label for="shSyn">Scene summary</label><textarea id="shSyn" rows="3" maxlength="2000"${dis}>${esc(s.syn)}</textarea></div>
           <div class="fld"><label for="shNote">Production notes</label><textarea id="shNote" rows="4" maxlength="2000"${dis}>${esc(s.note)}</textarea></div>
           <div class="fld"><label for="shDir">Director's notes</label><textarea id="shDir" rows="4" maxlength="2000"${dis}>${esc(s.dir || "")}</textarea></div>
         </aside>
