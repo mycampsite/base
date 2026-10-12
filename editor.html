@@ -2222,6 +2222,7 @@ html,body{ background: var(--uiBg) !important; }
           <div class="sep"></div>
           <button class="item" id="mFind" type="button">Find &amp; Replace…</button>
           <button class="item" id="mAddComment" type="button">Add Comment</button>
+          <button class="item" id="mTagBreakdown" type="button" title="Tag the selected words for the breakdown (Ctrl/Cmd+Alt+B)">Tag for Breakdown…</button>
           <button class="item" id="mNames" type="button">Name Dictionary…</button>
         </div>
       </div>
@@ -18123,6 +18124,8 @@ function clearHighlights(){
 </script>
 
 <script src="camp-core.js"></script>
+<script src="elements.js"></script>
+<script src="bdtag.js" defer></script>
 <script>
 /* ---------- Camp banner: menu, sign out, email chip, back to the hub ---------- */
 (function(){

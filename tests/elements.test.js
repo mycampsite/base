@@ -116,6 +116,15 @@ test("store: tag by hand, take out of one scene, ignore everywhere", () => {
   assert.deepStrictEqual(b.elements["props|phone"].scenes, [1, 2]);
 });
 
+test("store: a tag remembers the words it was made from (for the editor's highlights)", () => {
+  let st = E.tag({}, "l0", "props", "Shotgun", "SHOTGUN");
+  st = E.tag(st, "l0", "props", "shotgun", "the old shotgun"); st = E.tag(st, "l0", "props", "Shotgun", "SHOTGUN");
+  assert.strictEqual(st.tags.l0.length, 1);
+  assert.deepStrictEqual(st.tags.l0[0].q, ["SHOTGUN", "the old shotgun"]);
+  const b = run([["scene", "INT. A - DAY"], ["action", "x"]], st);
+  assert.ok(b.scenes[0].els.props.length === 1);
+});
+
 test("store: rename, merge, move category, notes follow, no loops", () => {
   const lines = [["scene", "INT. A - DAY"], ["action", "She checks her phone. He opens his laptop."]];
   let st = E.rename({}, "props|phone", "props", "Sarah's iPhone");

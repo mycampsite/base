@@ -54,6 +54,21 @@ let BASE = "";
   await page(browser, "hub opens", "/index.html");
   await page(browser, "library opens", "/library.html");
   await page(browser, "editor shows the script's scenes", "/editor.html?fileId=f1", (p) => expect(p, () => /SMOKE/.test(document.body.innerText) && /INT\. HOUSE/.test(document.body.innerText), "the script title and scenes"));
+  await page(browser, "editor: tag selected words for the breakdown", "/editor.html?fileId=f1", async (p) => {
+    await p.evaluate(() => localStorage.clear());
+    await expect(p, () => !!document.querySelector('#scriptEditor .line[data-type="action"]') && !!window.CampBdTag, "the script and the tagger");
+    await p.evaluate(() => {
+      const line = document.querySelector('#scriptEditor .line[data-type="action"]'), t = line.firstChild;
+      const r = document.createRange(); r.setStart(t.nodeType === 3 ? t : line.firstChild.firstChild, 0); r.setEnd(t.nodeType === 3 ? t : line.firstChild.firstChild, 3);
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      document.getElementById("mTagBreakdown").click();
+    });
+    await p.waitForTimeout(300);
+    await expect(p, () => !document.querySelector(".bdtPop").hidden && document.querySelector("#bdtName").value === "ANA", "the tag card with the selected word");
+    await p.click('.bdtPop [data-c=wardrobe]'); await p.click('.bdtPop [data-a=add]'); await p.waitForTimeout(400);
+    await expect(p, () => { const st = window.CampBdTag.store(); const k = Object.keys(st.tags || {})[0]; return k && st.tags[k][0].c === "wardrobe" && st.tags[k][0].n === "ANA"; }, "the tag saved for the scene");
+    await expect(p, () => !window.CSS.highlights || window.CSS.highlights.has("bd-wardrobe"), "the words coloured by category");
+  });
   await page(browser, "storyboard opens", "/storyboard.html?fileId=f1");
   await page(browser, "treatment builds its pages, and Export shows the preview first", "/treatment.html?fileId=f1", async (p) => {
     await expect(p, () => document.querySelectorAll(".navItem").length > 2 && !!document.querySelector("#stage .tpage"), "pages on the stage");

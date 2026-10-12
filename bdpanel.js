@@ -14,10 +14,17 @@ const H = () => window.__CampHub;
 const VIEW_KEY = "Camp_BD_VIEW_V1", NOTE_KEY = "Camp_BD_NOTE_V1";
 
 /* ---------- where edits live (one place to change) ---------- */
+// One store per script, so the editor (which only knows the script) and this tab see the same edits.
 const storage = {
-  key: (pid, sid) => "Camp_BD_V1_" + pid + "_" + sid,
-  load(pid, sid){ try{ const v = JSON.parse(lsGet(this.key(pid, sid)) || "{}"); return v && typeof v === "object" ? v : {}; }catch(_e){ return {}; } },
-  save(pid, sid, st){ lsSet(this.key(pid, sid), JSON.stringify(st || {})); }
+  key: (sid) => "Camp_BD_V1_" + sid,
+  load(pid, sid){
+    try{
+      let raw = lsGet(this.key(sid));
+      if(raw == null){ raw = lsGet("Camp_BD_V1_" + pid + "_" + sid); if(raw != null) lsSet(this.key(sid), raw); }   // edits made before the editor could tag
+      const v = JSON.parse(raw || "{}"); return v && typeof v === "object" ? v : {};
+    }catch(_e){ return {}; }
+  },
+  save(pid, sid, st){ lsSet(this.key(sid), JSON.stringify(st || {})); }
 };
 
 const S = {
@@ -405,6 +412,8 @@ document.addEventListener("keydown", (e) => {
   if(k === "z" || k === "y"){ e.preventDefault(); stepHist(S.pid, S.sid, k === "z" && !e.shiftKey); }
 });
 
-function setMode(on){ on = !!on; if(on === S.on) return; S.on = on; if(on){ S.edit = null; S.adding = null; } rerender(); const box = document.getElementById("bdctl"); if(box) box.className = on ? "on" : ""; }
+// Tags made in the editor (another tab) arrive through localStorage
+window.addEventListener("storage", (e) => { if(e.key && e.key.indexOf("Camp_BD_V1_") === 0){ S.stores = {}; S.model = null; rerender(); } });
+function setMode(on){ on = !!on; if(on === S.on) return; S.on = on; if(on){ S.edit = null; S.adding = null; S.stores = {}; S.model = null; } rerender(); const box = document.getElementById("bdctl"); if(box) box.className = on ? "on" : ""; }
 window.CampBdPanel = { render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, reloadScript: (id) => loadScript(id, true) };
 })();

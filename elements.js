@@ -386,12 +386,15 @@ function build(doc, bd, store) {
 
 // ---------- Store edits (pure: each returns a new store) ----------
 function copy(st) { return JSON.parse(JSON.stringify(st && typeof st === "object" ? st : {})); }
-function tag(st, sk, cat, name) {
+function tag(st, sk, cat, name, quote) {
   st = copy(st); name = clean(name).slice(0, 60);
   if (!CAT[cat] || !name) return st;
-  const k = key(cat, name);
+  const k = key(cat, name), q = clean(quote).slice(0, 80);
   st.tags = st.tags || {}; const list = st.tags[sk] = st.tags[sk] || [];
-  if (!list.some(function (t) { return key(t.c, t.n) === k; })) list.push({ c: cat, n: name });
+  let t = null;
+  list.forEach(function (x) { if (key(x.c, x.n) === k) t = x; });
+  if (!t) { t = { c: cat, n: name }; list.push(t); }
+  if (q) { t.q = Array.isArray(t.q) ? t.q : []; if (t.q.indexOf(q) < 0 && t.q.length < 6) t.q.push(q); }   // the words in the script that this element was tagged from
   if (st.off && st.off[sk]) { st.off[sk] = st.off[sk].filter(function (x) { return x !== k; }); if (!st.off[sk].length) delete st.off[sk]; }
   if (st.drop) st.drop = st.drop.filter(function (x) { return x !== k; });
   return st;
