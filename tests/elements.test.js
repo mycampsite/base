@@ -265,5 +265,16 @@ test("enrich: element sheets drive each scene's cast, flags and needs for the pl
   assert.ok(ig.scenes[4].flags.filter((f) => f === "animals").length === 0 || bd.scenes[4].flags.indexOf("animals") >= 0);
 });
 
+test("false props: adjectives and adverbs after a body part, abstract nouns, and a cast name starting with 'The'", () => {
+  const b = run([["scene", "INT. ROOM - DAY"], ["action", "THE DOCTOR (50s) sits. Holds their laugh. Wipes his face dry. Raises his hand high. Shows rings joined together. The TV playing quietly. The doctor nods."], ["character", "THE DOCTOR"], ["dialogue", "The thing is, the end."]]);
+  const props = names(b, 1, "props").map((n) => n.toLowerCase());
+  ["dry", "high", "together", "laugh"].forEach((w) => assert.ok(props.indexOf(w) < 0, w + " is not a prop"));
+  assert.strictEqual(names(b, 1, "art").indexOf("TV playback"), -1, "a TV that is just on is set dressing, not playback graphics");
+  assert.ok(names(b, 1, "setdress").indexOf("Television") >= 0);
+  Object.keys(b.scenes[0].hits).forEach((k) => assert.ok(b.scenes[0].hits[k].every((q) => !/^the$/i.test(q)), "no element is coloured on the word 'the'"));
+  const b2 = run([["scene", "INT. ROOM - DAY"], ["action", "A TV shows the evening news."]]);
+  assert.ok(names(b2, 1, "art").indexOf("TV playback") >= 0, "a TV showing something needs playback");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
