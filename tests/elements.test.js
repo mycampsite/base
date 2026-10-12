@@ -287,5 +287,26 @@ test("sheetPayload: what Sync sends to the Schedule sheet and call sheets", () =
   JSON.parse(JSON.stringify(pl));
 });
 
+test("more props and stunts: tools in lists, 'with a rag', 'reaches for a bat', climbing, jumping, choking, shootings, fire", () => {
+  const one = (a) => run([["scene", "INT. SHED - DAY"], ["action", a]]);
+  const has = (b, cat, n) => assert.ok(names(b, 1, cat).map((x) => x.toLowerCase()).indexOf(n.toLowerCase()) >= 0, n + " in " + cat + ": " + names(b, 1, cat).join(", "));
+  let b = one("She grabs the keys from the hook, a set of pliers and a roll of duct tape."); has(b, "props", "Keys"); has(b, "props", "Pliers"); has(b, "props", "Duct tape");
+  b = one("Tom wipes the bar with a rag, then reaches under the counter for a baseball bat."); has(b, "props", "Rag"); has(b, "weapons", "Baseball bat");
+  b = one("Dean unlocks the safe, pulls out a bundle of cash and an envelope."); has(b, "props", "Cash"); assert.ok(names(b, 1, "props").indexOf("Bundle") < 0, "a bundle of cash is cash");
+  b = one("She climbs the ladder to the roof and hangs from the gutter."); has(b, "stunts", "Climb / work at height");
+  b = one("Dean leaps over the counter and tackles the thug. They struggle, Dean chokes him."); has(b, "stunts", "Jump"); has(b, "stunts", "Fight");
+  b = one("A bottle smashes over his head. He drops to the floor, knocked out."); has(b, "stunts", "Fall");
+  b = one("The man catches fire and runs screaming."); has(b, "stunts", "Fire gag (stunt)");
+  b = one("The thief shoots Frank in the leg. Blood sprays the wall."); has(b, "weapons", "Firearm"); has(b, "sfx", "Blood hit / squib");
+  b = one("The kids ride bikes down the lane."); has(b, "vehicles", "Bicycle");
+  b = one("He sits with a smile and a plan."); assert.strictEqual(names(b, 1, "props").length, 0, "'with a smile' is not a prop");
+});
+test("background counts come only from the script: no invented crowd of 50", () => {
+  const b = run([["scene", "EXT. SHOWGROUND - DAY"], ["action", "A crowd gathers. Hundreds of locals cheer. Twelve guests sit with their parents."]]);
+  const q = b.scenes[0].qty || {}, vals = Object.keys(q).map((k) => q[k]);
+  assert.ok(vals.indexOf(50) < 0, "no made-up 50");
+  assert.ok(vals.every((n) => n === 12 || n === 2), "only counts written out");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

@@ -228,7 +228,14 @@ style.textContent += `
 .bdtKey .bdtRow small{ opacity:.55; font-size:10.5px; }
 .bdtKey .bdtRow button{ background:none; border:0; color:inherit; opacity:.55; cursor:pointer; font-size:13px; padding:0 3px; }
 .bdtKey .bdtRow button:hover{ opacity:1; }
-.bdtKey .bdtRow.sug .nm{ opacity:.8; font-style:italic; }
+.bdtKey .bdtGrp{ margin:2px 0; }
+.bdtKey .bdtGrp summary{ display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; padding:3px 0; list-style:none; }
+.bdtKey .bdtGrp summary::-webkit-details-marker{ display:none; }
+.bdtKey .bdtGrp summary::before{ content:"▸"; opacity:.6; font-size:10px; width:8px; }
+.bdtKey .bdtGrp[open] summary::before{ content:"▾"; }
+.bdtKey .bdtGrp summary i{ width:8px; height:8px; border-radius:50%; background:var(--cc); }
+.bdtKey .bdtGrp summary small{ margin-left:auto; opacity:.6; }
+.bdtKey .bdtGrp .bdtRow{ padding-left:20px; }
 .bdtKey .bdtHd{ display:flex; align-items:center; gap:6px; font-weight:600; margin-bottom:6px; }
 .bdtKey .bdtHd button{ margin-left:auto; background:none; border:0; color:inherit; opacity:.6; cursor:pointer; font-size:13px; }
 .bdtKey label{ display:flex; gap:6px; align-items:center; font-size:12px; opacity:.85; margin-bottom:6px; cursor:pointer; }
@@ -293,8 +300,7 @@ function doPaint(){
         count[c] = (count[c] || 0) + 1;
         if(hide[c] || !canHighlight) return;
         const how = s.src[k] === "auto" ? "auto" : "hand";
-        if(how === "auto" && !sug) return;
-        const into = how === "auto" ? auto : hand;
+        const into = hand;   // what's found is already a tag: take a few out rather than confirming each one
         (s.hits[k] || []).forEach((q) => index().forEach((ix) => occurrences(ix.text, q).forEach((mm) => {
           const r = rangeIn(ix.nodes, mm[0], mm[1]); if(r) (into[c] = into[c] || []).push(r);
         })));
@@ -311,14 +317,17 @@ function doPaint(){
 
 // The key (and this scene's tags) live in the right-hand panel under Font; they float over the page when that panel is closed
 let lastModel = null, lastCount = {}, lastHide = {}, lastSugOn = true, curScene = "n1";
+const OPEN_KEY = "Camp_BD_OPENCATS_V1";
+const openCats = () => { try{ const v = JSON.parse(lsGet(OPEN_KEY) || "[]"); return Array.isArray(v) ? v : []; }catch(_e){ return []; } };
 function sceneRows(m, sk){
   const sc = m && m.scenes.find((x) => x.key === sk); if(!sc) return "";
-  const rows = [];
-  E.CATS.forEach((c) => (sc.els[c.id] || []).forEach((k) => {
-    const e = m.elements[k], hand = sc.src[k] !== "auto";
-    rows.push(`<div class="bdtRow${hand ? "" : " sug"}" style="--cc:${c.color}"><i></i><span class="nm" title="${esc(c.label)}">${esc(e.name)}</span><small>${hand ? "tagged" : "suggested"}</small>${hand ? "" : `<button type="button" data-k="keep" data-e="${esc(k)}" title="Keep: make it a tag of your own">✓</button>`}<button type="button" data-k="rm" data-e="${esc(k)}" title="Take out of this scene">✕</button></div>`);
-  }));
-  return `<div class="bdtSc"><div class="bdtScH">This scene · ${esc(sceneTitle(sk))}</div>${rows.join("") || `<div class="bdtNote">Nothing found yet.</div>`}</div>`;
+  const open = openCats(), groups = [];
+  E.CATS.forEach((c) => {
+    const list = sc.els[c.id] || []; if(!list.length) return;
+    const rows = list.map((k) => `<div class="bdtRow" style="--cc:${c.color}"><i></i><span class="nm">${esc(m.elements[k].name)}</span><button type="button" data-k="rm" data-e="${esc(k)}" title="Take out of this scene">✕</button></div>`).join("");
+    groups.push(`<details class="bdtGrp" data-g="${c.id}" style="--cc:${c.color}"${open.indexOf(c.id) >= 0 ? " open" : ""}><summary><i></i>${esc(c.label)}<small>${list.length}</small></summary>${rows}</details>`);
+  });
+  return `<div class="bdtSc"><div class="bdtScH">This scene · ${esc(sceneTitle(sk))}</div>${groups.join("") || `<div class="bdtNote">Nothing found yet.</div>`}</div>`;
 }
 function renderKey(){
   const field = document.getElementById("bdtField");
@@ -327,9 +336,8 @@ function renderKey(){
   const r = readSelection(); if(r) curScene = r.sk;
   if(!m.scenes.some((x) => x.key === curScene) && m.scenes.length) curScene = m.scenes[0].key;   // nothing clicked yet: the first scene
   const html = `<div class="bdtHd">Breakdown tags<button type="button" data-k="off" title="Hide tags (View › Show Breakdown Tags)">✕</button></div>
-      <label><input type="checkbox" data-k="sug"${sug ? " checked" : ""}> Include suggestions <span style="opacity:.6">(light)</span></label>
       <div class="bdtCs">${E.CATS.filter((c) => count[c.id]).map((c) => `<button type="button" data-c="${c.id}" class="${hide[c.id] ? "off" : ""}" style="--cc:${c.color}" title="${hide[c.id] ? "Show" : "Hide"} ${esc(c.label.toLowerCase())}"><i></i>${esc(c.short)}<small>${count[c.id]}</small></button>`).join("") || `<span class="bdtNote">Nothing found yet.</span>`}</div>
-      ${canHighlight ? `<div class="bdtNote">Strong colour = tagged by hand, light = suggested. Comments show as underlines while tags are on. Select words and press Tag to add.</div>` : `<div class="bdtNote">This browser can't colour text. Update it to see tags in the script.</div>`}${sceneRows(m, curScene)}`;
+      ${canHighlight ? `<div class="bdtNote">Everything found in the script is tagged. Open a category below to take things out, or select words and press Tag to add. Comments show as underlines while tags are on.</div>` : `<div class="bdtNote">This browser can't colour text. Update it to see tags in the script.</div>`}${sceneRows(m, curScene)}`;
   const host = document.getElementById("bdtPanel"), side = host && host.closest("#panel");
   const docked = !!(host && side && side.offsetParent !== null);
   if(docked){ if(key.parentNode !== host) host.appendChild(key); field.hidden = false; }
@@ -343,12 +351,12 @@ key.addEventListener("click", (e) => {
   const c = e.target.closest("[data-c]");
   if(c){ const h = hiddenCats(), i = h.indexOf(c.dataset.c); if(i >= 0) h.splice(i, 1); else h.push(c.dataset.c); lsSet(HIDE_KEY, JSON.stringify(h)); lastKeyHtml = ""; paint(); return; }
   const k = e.target.closest("[data-k=off]"); if(k){ setShow(false); return; }
-  const act = e.target.closest("[data-k=keep],[data-k=rm]"); if(!act || !lastModel) return;
+  const act = e.target.closest("[data-k=rm]"); if(!act || !lastModel) return;
   const sc = lastModel.scenes.find((x) => x.key === curScene), ek = act.dataset.e, el = lastModel.elements[ek]; if(!sc || !el) return;
   if(act.dataset.k === "rm"){ save(E.untag(load(), curScene, ek)); queue({ t: "untag", sk: curScene, k: ek }); say("Took " + el.name + " out of this scene."); }
-  else { const q = (sc.hits[ek] || [])[0] || el.name; save(E.tag(load(), curScene, el.cat, el.name, q)); queue({ t: "tag", sk: curScene, c: el.cat, n: el.name, q: q }); say("Kept " + el.name + "."); }
   lastKeyHtml = ""; paint();
 });
+key.addEventListener("toggle", (e) => { const d = e.target; if(!d || !d.classList || !d.classList.contains("bdtGrp")) return; const h = openCats(), i = h.indexOf(d.dataset.g); if(d.open && i < 0) h.push(d.dataset.g); else if(!d.open && i >= 0) h.splice(i, 1); lsSet(OPEN_KEY, JSON.stringify(h)); lastKeyHtml = ""; }, true);
 key.addEventListener("change", (e) => { if(e.target.dataset.k === "sug"){ lsSet(SUG_KEY, e.target.checked ? "1" : "0"); lastKeyHtml = ""; paint(); } });
 document.addEventListener("selectionchange", () => { if(showColours() && lastModel) renderKey(); });
 function setShow(on){ lsSet(SHOW_KEY, on ? "1" : "0"); lastKeyHtml = ""; paint(); }

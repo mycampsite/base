@@ -80,8 +80,7 @@ const css = `
 #bdctl .bdList{ display:flex; flex-direction:column; gap:5px; height:100%; min-height:0; overflow:auto; padding:2px 4px 14px 0; overscroll-behavior:contain; }
 #bdctl .bdSc{ text-align:left; width:100%; border:1px solid rgba(255,255,255,.08); border-left:5px solid var(--sc,#ddd); border-radius:8px; padding:6px 8px; background:color-mix(in srgb, var(--sc,#ddd) 8%, #1b1b1b); cursor:pointer; font:inherit; font-size:12px; color:inherit; }
 #bdctl .bdSc:hover{ border-color:rgba(255,255,255,.25); border-left-color:var(--sc,#ddd); }
-#bdctl .bdSc.on{ background:#ececf0; color:#111; border-color:#fff; box-shadow:0 0 0 2px #fff; }
-#bdctl .bdSc.on .l{ color:#222; } #bdctl .bdSc.on .t span{ color:#444; }
+#bdctl .bdSc.on{ border-left-color:#fff; border-left-width:6px; background:color-mix(in srgb, var(--sc,#ddd) 16%, #262626); border-color:rgba(255,255,255,.35); border-left-color:#fff; }
 #bdctl .bdSc .t{ display:flex; justify-content:space-between; gap:6px; font-weight:700; }
 #bdctl .bdSc .t span{ color:var(--uiMuted); font-weight:600; white-space:nowrap; }
 #bdctl .bdSc .l{ color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
