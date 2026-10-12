@@ -257,5 +257,32 @@ test("timetable: a company move when the location changes; settings, defaults an
   assert.strictEqual(tt.length, 2); assert.strictEqual(tt[0].rows[0].shoot, "08:00"); assert.strictEqual(tt[1].wrap, "");
 });
 
+test("sunrise and sunset: known places and dates, and no sunrise at the pole in summer", () => {
+  const hm = (iso, lat, lng, tz) => { const t = P.sunTimes(iso, lat, lng); return [P.hmIn(t.rise, tz), P.hmIn(t.set, tz)]; };
+  const near = (a, b) => Math.abs(P.toMin(a) - P.toMin(b)) <= 3;
+  const [r1, s1] = hm("2026-06-21", 51.5072, -0.1276, "Europe/London"); assert.ok(near(r1, "04:43") && near(s1, "21:21"), r1 + " " + s1);
+  const [r2, s2] = hm("2024-11-04", 34.0522, -118.2437, "America/Los_Angeles"); assert.ok(near(r2, "06:15") && near(s2, "16:58"), r2 + " " + s2);
+  const [r3, s3] = hm("2026-11-04", -37.8136, 144.9631, "Australia/Melbourne"); assert.ok(near(r3, "06:10") && near(s3, "19:57"), r3 + " " + s3);
+  assert.strictEqual(P.sunTimes("2026-06-21", 78.2, 15.6), null);
+  assert.strictEqual(P.sunTimes("", 1, 1), null);
+});
+test("plan keeps day timing, places and scene status; drops junk", () => {
+  const pl = P.normalize({ settings: { times: { prep: 45, turn: "", meal: -1 }, where: { name: "Melbourne", lat: -37.81, lng: 144.96, tz: "Australia/Melbourne" } },
+    days: [{ scenes: ["a"], where: { name: "Geelong", lat: -38.15, lng: 144.36 } }, { scenes: [], where: { name: "" } }],
+    status: [{ id: "a", s: "Shot" }, { id: "b", s: "Scheduled" }, { id: "c", s: "bogus" }] });
+  assert.deepStrictEqual(pl.settings.times, { prep: 45 });
+  assert.strictEqual(pl.settings.where.tz, "Australia/Melbourne");
+  assert.strictEqual(pl.days[0].where.name, "Geelong"); assert.ok(!pl.days[1].where);
+  assert.strictEqual(P.whereOf(pl, 0).name, "Geelong"); assert.strictEqual(P.whereOf(pl, 1).name, "Melbourne");
+  assert.deepStrictEqual(pl.status, [{ id: "a", s: "Shot" }]);
+  assert.strictEqual(P.statusOf(pl, "a"), "Shot"); assert.strictEqual(P.statusOf(pl, "z"), "Scheduled");
+  P.setStatus(pl, "a", "Scheduled"); assert.deepStrictEqual(pl.status, []);
+  P.setStatus(pl, "a", "Part shot"); assert.strictEqual(P.statusOf(pl, "a"), "Part shot");
+  assert.strictEqual(P.cleanWhere({ name: "X", lat: 0, lng: 0 }).lat, undefined);
+  assert.strictEqual(P.cleanWhere({ name: "X", tz: "bad tz!" }).tz, undefined);
+  // the timetable reads the settings that were kept
+  assert.strictEqual(P.dayTimes({ scenes: ["a"] }, { a: { id: "a", est: 60 } }, pl.settings).rows[0].shoot, "07:45");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

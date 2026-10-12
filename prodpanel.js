@@ -137,6 +137,19 @@ const css = `
 .brk.late{ color:#f1c76b; border-color:rgba(241,199,107,.45); }
 .brk.move{ background:rgba(241,199,107,.06); }
 .colCall{ flex-wrap:wrap; }
+.colSun{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-top:6px; font-size:11px; color:var(--uiMuted); font-variant-numeric:tabular-nums; }
+.colSun .place{ border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); border-radius:7px; padding:1px 7px; font:inherit; font-size:11px; cursor:pointer; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.colSun .place.own{ border-color:rgba(127,182,255,.5); }
+.colSun .place:disabled{ cursor:default; }
+.colSun .wx{ color:#ddd; }
+.strip .stat{ font-style:normal; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:1px 5px; border-radius:5px; margin-left:6px; background:rgba(255,255,255,.12); color:#fff; }
+.strip .stat.s-shot{ background:#2f9e44; } .strip .stat.s-partshot{ background:#f59f00; color:#111; } .strip .stat.s-pickup{ background:#1c7ed6; } .strip .stat.s-moved{ background:#868e96; } .strip .stat.s-omitted{ background:#e03131; }
+.moveBar .stSel{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--uiMuted); }
+.ctlSet label.wide input{ min-width:220px; }
+.tmSet{ flex-basis:100%; }
+.tmSet summary{ cursor:pointer; font-size:11px; color:var(--uiMuted); text-transform:uppercase; letter-spacing:.05em; }
+.tmRow{ display:flex; flex-wrap:wrap; gap:10px 14px; margin-top:8px; }
+.tmRow input{ width:90px; }
 .colCall .wrapT{ white-space:nowrap; margin-left:auto; color:var(--uiText); font-weight:600; font-variant-numeric:tabular-nums; }
 .strip .nd{ display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
 .strip .nd i{ display:block; width:7px; height:7px; border-radius:50%; background:var(--c,#666); }
@@ -271,6 +284,46 @@ const H = () => window.__CampHub;
 // Call times: a dropdown in 15-minute steps, shown in 12- or 24-hour time (a per-device choice)
 const H24_KEY = "Camp_PROD_24H_V1";
 const is24 = () => lsGet(H24_KEY) === "1";
+/* ---------- places, sunrise / sunset and weather ----------
+   A place is looked up once (Open-Meteo geocoding, free, no key) and saved in the plan with its time zone, so every
+   device shows the same sunrise and sunset (worked out here, any date). Weather comes from Open-Meteo's forecast,
+   which only reaches about 16 days ahead; it's shown and sent with Sync, never saved in the plan. */
+async function geocode(q){
+  q = String(q || "").trim(); if(!q) return null;
+  try{
+    const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=" + encodeURIComponent(q));
+    const j = await r.json(), x = j && j.results && j.results[0]; if(!x) return null;
+    return { name: q, label: [x.name, x.admin1, x.country_code].filter(Boolean).join(", "), lat: x.latitude, lng: x.longitude, tz: x.timezone || "" };
+  }catch(_e){ return null; }
+}
+const WX = {}, WX_KEY = "Camp_WX_V1";
+try{ const c = JSON.parse(lsGet(WX_KEY) || "{}"); Object.keys(c).forEach((k) => { if(c[k] && Date.now() - c[k].at < 3 * 3600e3) WX[k] = c[k]; }); }catch(_e){}
+const WX_WORDS = { 0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle", 56: "Freezing drizzle", 57: "Freezing drizzle",
+  61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain", 67: "Freezing rain", 71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow grains", 80: "Showers", 81: "Showers", 82: "Heavy showers",
+  85: "Snow showers", 86: "Snow showers", 95: "Thunderstorms", 96: "Thunderstorms, hail", 99: "Thunderstorms, hail" };
+// The forecast for a place on a date: { t: "Light rain 18° / 12°" } once known, "" when out of range, null while loading
+function weatherFor(w, iso){
+  if(!w || w.lat == null || !iso) return "";
+  const ahead = (Date.parse(iso + "T00:00:00Z") - Date.now()) / 864e5;
+  if(!(ahead > -2 && ahead < 15.5)) return "";
+  const k = w.lat + "," + w.lng + "," + iso, c = WX[k];
+  if(c) return c.t;
+  WX[k] = { t: null, at: Date.now() };
+  fetch("https://api.open-meteo.com/v1/forecast?daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&latitude=" + w.lat + "&longitude=" + w.lng + "&start_date=" + iso + "&end_date=" + iso)
+    .then((r) => r.json()).then((j) => {
+      const d = j && j.daily; let t = "";
+      if(d && d.time && d.time.length){ const hi = d.temperature_2m_max[0], lo = d.temperature_2m_min[0]; t = (WX_WORDS[d.weather_code[0]] || "") + (hi != null ? " " + Math.round(hi) + "° / " + Math.round(lo) + "°" : ""); }
+      WX[k] = { t: t.trim(), at: Date.now() };
+      try{ const keep = {}; Object.keys(WX).forEach((x) => { if(WX[x].t != null) keep[x] = WX[x]; }); lsSet(WX_KEY, JSON.stringify(keep)); }catch(_e){}
+      rerender();
+    }).catch(() => { WX[k] = { t: "", at: Date.now() }; });
+  return null;
+}
+// Sunrise / sunset at the day's place, "HH:MM" in that place's time zone
+function sunFor(w, iso){ if(!w || w.lat == null || !iso) return null; const s = P.sunTimes(iso, w.lat, w.lng); return s ? { rise: P.hmIn(s.rise, w.tz), set: P.hmIn(s.set, w.tz) } : null; }
+// What goes in a scene's "Special req. / equipment": the breakdown's booking categories
+const REQ_CATS = ["stunts", "vehicles", "weapons", "sfx", "mfx", "vfx", "animals", "wrangler", "camera", "equipment", "security", "labor"];
+const reqOf = (s) => REQ_CATS.filter((c) => s && s.needs && (s.needs[c] || []).length).map((c) => s.needs[c].join(", ")).join(", ");
 const fmtMins = (m) => { m = Math.round(Number(m) || 0); return m >= 60 ? Math.floor(m / 60) + "h" + (m % 60 ? " " + String(m % 60).padStart(2, "0") : "") : m + "m"; };
 function fmtTime(hm){
   const m = /^(\d{2}):(\d{2})$/.exec(hm || ""); if(!m) return hm || "";
@@ -469,6 +522,9 @@ function draw(pid){
       <label>Shooting week<select data-s="perWeek"${dis}>${[[5, "5 days (Mon–Fri)"], [6, "6 days (Mon–Sat)"], [7, "7 days"]].map(([v, n]) => `<option value="${v}"${v === st.perWeek ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <label>Pages per day (limit)<select data-s="maxEighths"${dis}>${pageOpts.map((e) => `<option value="${e}"${e === st.maxEighths ? " selected" : ""}>${P.fmtEighths(e)}</option>`).join("")}</select></label>
       <label>Default call<span class="ctlTime">${timeSelect(st.call, 'data-s="call"', dis)}<button type="button" class="btn sm h24${is24() ? " on" : ""}" data-a="h24" aria-pressed="${is24()}" title="Show times as 24-hour (this device)">24h</button></span></label>
+      <label class="wide">Location<input type="text" data-s="where" value="${esc(st.where ? st.where.name : "")}" placeholder="City or address" maxlength="80"${dis} title="${st.where ? esc(st.where.label || st.where.name) + (st.where.lat == null ? " (not found: sunrise and weather need a place that can be found)" : "") : "Where you're shooting: gives each day's sunrise, sunset and forecast. A day can have its own."}"></label>
+      ${(() => { const T = P.timeSettings(st); const f = (k, label, tip) => `<label title="${tip}">${label}<input type="number" min="0" max="${k === "mealBy" ? 12 : 600}" step="${k === "mealBy" ? 0.5 : 5}" data-t="${k}" value="${k === "mealBy" ? T[k] / 60 : T[k]}"${dis}></label>`;
+        return `<details class="tmSet"${S.tmOpen ? " open" : ""}><summary>Day timing</summary><div class="tmRow">${f("prep", "First shot (min after call)", "Crew call to the first shot: lighting, rehearsal, makeup")}${f("turn", "Between setups (min)", "Reset time between one scene and the next")}${f("meal", "Meal (min)", "Length of the meal break; 0 = none")}${f("mealBy", "Meal within (hours)", "The meal starts no later than this many hours after call")}${f("move", "Company move (min)", "Added when the location changes; 0 = never")}</div></details>`; })()}
     </div></details>`;
 
   const hasDocs = hub.hasSheets(pid);
@@ -487,10 +543,11 @@ function draw(pid){
 
   const strip = (id, tr) => {
     const s = byId[id]; if(!s) return "";
+    const stat = P.statusOf(pl, id);
     const isNew = n && n.added.indexOf(id) >= 0;
     const rv = revOf[id];
     return `<button class="strip${S.pick === id ? " pick" : ""}${isNew ? " new" : ""}${rv ? " rev" : ""}${S.landed && S.landed.id === id ? " landed" : ""}" type="button" data-sid="${esc(id)}" draggable="${canEdit}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}">
-      <div class="t">Sc ${s.n} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}<span>${shotMap[id] ? shotMap[id].length + " sh · " : ""}${P.fmtEighths(s.eighths)} pg</span></div>
+      <div class="t">Sc ${s.n} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}${stat !== "Scheduled" ? `<em class="stat s-${stat.replace(/[^a-z]/gi, "").toLowerCase()}">${esc(stat)}</em>` : ""}<span>${shotMap[id] ? shotMap[id].length + " sh · " : ""}${P.fmtEighths(s.eighths)} pg</span></div>
       <div class="l">${esc(s.set || s.loc || "")}</div>
       <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div>${needDots(s.needs)}${tr ? `<div class="tm" title="Call ${esc(fmtTime(tr.call))} · shoot ${esc(fmtTime(tr.shoot))} · wrap ${esc(fmtTime(tr.wrap))} (${fmtMins(tr.est)} of shooting)">${esc(fmtTime(tr.shoot))} – ${esc(fmtTime(tr.wrap))}<span>${fmtMins(tr.est)}</span></div>` : ""}${rv ? `<div class="revTag" title="${esc(revText(rv))}">⚠ Revised: ${esc(rv.what.join(", "))}</div>` : ""}</button>`;
   };
@@ -511,6 +568,8 @@ function draw(pid){
           <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc${shotsOn ? " · " + P.dayShots(d, shotMap).total + " shots" : ""} · ${x.cast.length} cast</span></div>
           <div class="cap"><i style="width:${pct}%"></i></div>
           ${needsRow(x.needs)}
+          ${(() => { const w = P.whereOf(pl, i), sun = sunFor(w, dates[i]), wx = weatherFor(w, dates[i]);
+            return `<div class="colSun"><button type="button" class="place${d.where ? " own" : ""}" data-a="dwhere" data-i="${i}"${dis} title="${w ? esc((w.label || w.name) + (d.where ? " (this day)" : " (the shoot's location)")) + ". Click to change this day's location" : "Set this day's location for sunrise, sunset and weather"}">${w ? esc(w.name) : "Set location"}</button>${sun ? `<span title="Sunrise · sunset at ${esc(w.name)}">☀ ${esc(fmtTime(sun.rise))} · ${esc(fmtTime(sun.set))}</span>` : w && w.lat != null && !dates[i] ? `<span>Set a date for sunrise</span>` : ""}${wx ? `<span class="wx" title="Forecast (Open-Meteo)">${esc(wx)}</span>` : ""}</div>`; })()}
           <div class="colCall">Call ${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}${times[i].wrap ? `<span class="wrapT" title="Estimated wrap: ${fmtMins(times[i].est)} of shooting plus setups${times[i].rows.some((r) => r.type === "meal") ? ", the meal" : ""}${times[i].rows.some((r) => r.type === "move") ? " and company moves" : ""}">Wrap ${esc(fmtTime(times[i].wrap))}</span>` : ""}${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
         <div class="strips">${d.scenes.length ? dayRows(times[i]) : `<div class="colEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`}</div></div>`;
     })).join("");
@@ -523,7 +582,9 @@ function draw(pid){
     return `<div class="moveBar"><b>Sc ${byId[S.pick].n}</b> ${esc(byId[S.pick].heading)} → <select data-move="${esc(S.pick)}">
       <option value="-1"${cur < 0 ? " selected" : ""}>Unscheduled</option>
       ${pl.days.map((d, i) => `<option value="${i}"${i === cur ? " selected" : ""}>Day ${i + 1}${dates[i] ? " · " + esc(fmtDate(dates[i])) : ""} (${P.fmtEighths(stats[i].eighths)} pg)${i === sug ? " ★ suggested" : ""}</option>`).join("")}
-      </select><button class="btn sm" type="button" data-a="unpick">Done</button></div>`;
+      </select>
+      <label class="stSel">Status <select data-status="${esc(S.pick)}">${P.STATUSES.map((x) => `<option${x === P.statusOf(pl, S.pick) ? " selected" : ""}>${x}</option>`).join("")}</select></label>
+      <button class="btn sm" type="button" data-a="unpick">Done</button></div>`;
   })() : "";
 
   const kidOf = {}; bd.cast.forEach((c) => { if(c.minor) kidOf[c.name] = c; });
@@ -740,6 +801,9 @@ function wire(box, pid, ctx){
       if(k === "reload"){ const id = ctx.scriptId || hub.scriptIds(p)[0]; loadScript(id, true); loadShots(id, true); return; }
       if(k === "dismiss"){ delete S.notice[pid]; render(pid); return; }
       if(k === "unpick"){ S.pick = null; render(pid); return; }
+      if(k === "dwhere"){ const i = Number(a.dataset.i), cur = planOf(pid).days[i]; const ui = window.CampUI;
+        const ask = ui && ui.prompt ? ui.prompt("Day " + (i + 1) + " location\nWhere this day shoots, for its sunrise, sunset and weather. Leave it empty to use the shoot's location.", cur && cur.where ? cur.where.name : "") : Promise.resolve(window.prompt("Day " + (i + 1) + " location", cur && cur.where ? cur.where.name : ""));
+        ask.then((v) => { if(v != null) setWhere(pid, i, v); }); return; }
       if(!canEdit) return;
       if(k === "start"){
         const today = new Date(), d = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + 14));
@@ -780,12 +844,17 @@ function wire(box, pid, ctx){
     }
     if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }
     if(t.dataset.call != null){ update((plan) => { const d = plan.days[Number(t.dataset.call)]; if(d) d.call = t.value === plan.settings.call ? "" : t.value; }); return; }
+    if(t.dataset.status != null){ const id = t.dataset.status, v = t.value; update((plan) => { P.setStatus(plan, id, v); }); H().toast("Sc " + ((ctx.bd && P.sceneMap(ctx.bd)[id] || {}).n || "") + ": " + v, "ok", 1400); return; }
+    if(t.dataset.t != null){ const k = t.dataset.t, v = Number(t.value); update((plan) => { const T = Object.assign({}, plan.settings.times || {}); const val = k === "mealBy" ? Math.round(v * 60) : Math.round(v);
+      if(t.value === "" || !isFinite(v) || val === P.TIME_DEFAULTS[k]) delete T[k]; else T[k] = Math.max(0, Math.min(1440, val)); if(Object.keys(T).length) plan.settings.times = T; else delete plan.settings.times; }); return; }
+    if(t.dataset.s === "where"){ setWhere(pid, -1, t.value); return; }
     const k = t.dataset.s; if(!k) return;
     if(k === "days"){ const r = P.resizeDays(planOf(pid), Number(t.value)); confirmShrink(pid, r); return; }
     if(k === "script"){ update((plan) => { plan.scriptId = t.value; }); return; }
     update((plan) => { plan.settings[k] = (k === "start" || k === "call") ? t.value : Number(t.value); });
   };
   const lcName = box.querySelector("#lcName"); if(lcName){ lcName.oninput = () => { if(S.locForm) S.locForm.name = lcName.value; }; lcName.onkeydown = (e) => { e.stopPropagation(); if(e.key === "Enter"){ e.preventDefault(); const ok = box.querySelector("[data-a=lcok]"); if(ok) ok.click(); } }; if(!lcName.value) lcName.focus({ preventScroll: true }); }
+  const tm = box.querySelector("details.tmSet"); if(tm) tm.ontoggle = () => { S.tmOpen = tm.open; };
   const det = box.querySelector("details.dood:not(.fx)"); if(det) det.ontoggle = () => { S.doodOpen = det.open; lsSet(DOOD_KEY, det.open ? "1" : "0"); };
   box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : d.dataset.sec === "shots" ? SHOTS_KEY : d.dataset.sec === "cast" ? CAST_KEY : LOCS_KEY, d.open ? "1" : "0"); });
   if(!canEdit) return;
@@ -811,6 +880,16 @@ function wire(box, pid, ctx){
     line.remove();
     moveScene(pid, id, Number(c.dataset.day), at);
   };
+}
+// Save a place for the shoot (day -1) or one day: looked up first, so sunrise and weather work on every device
+async function setWhere(pid, day, text){
+  text = String(text || "").trim();
+  const put = (w) => { const plan = planOf(pid); if(day < 0){ if(w) plan.settings.where = w; else delete plan.settings.where; } else if(plan.days[day]){ if(w) plan.days[day].where = w; else delete plan.days[day].where; } save(pid, plan); rerender(); };
+  if(!text){ put(null); return; }
+  const g = await geocode(text);
+  if(!g) H().toast("Couldn't find “" + text + "”. It's saved as typed, but sunrise and weather need a place that can be found (try adding the city).", "err", 5000);
+  else H().toast("Location: " + g.label, "ok", 2200);
+  put(g || { name: text });
 }
 // For the Stripboard: move a scene to a day (or -1 = Unscheduled), in front of another scene or at the end.
 // Goes through moveScene, so it saves, joins undo and says what happened exactly like a drag on the Plan.
@@ -879,6 +958,18 @@ function syncNow(pid, btn){
 }
 const isStale = (pid) => { const p = H().project(pid); return !!(p && P.callsheetsStale(p.production)); };
 // Each day's call / shoot / wrap times for Sync (null until the plan has been drawn for this project in this tab)
-function timetable(pid){ try{ if(!S.lastBd || S.lastBdPid !== pid) return null; return P.timetable(planOf(pid), P.sceneMap(S.lastBd)); }catch(_e){ return null; } }
+function timetable(pid){
+  try{
+    if(!S.lastBd || S.lastBdPid !== pid) return null;
+    const pl = planOf(pid), byId = P.sceneMap(S.lastBd);
+    return P.timetable(pl, byId).map((d, i) => {
+      const w = P.whereOf(pl, i), sun = sunFor(w, d.date), wx = weatherFor(w, d.date);
+      return Object.assign(d, { where: w ? w.name : "", sunrise: sun ? sun.rise : "", sunset: sun ? sun.set : "", weather: wx || "",
+        rows: d.rows.map((r) => { if(r.type !== "scene") return r; const s = byId[r.id] || {};
+          return Object.assign({}, r, { status: P.statusOf(pl, r.id), req: reqOf(s), notes: s.note || "", set: s.set || s.loc || "", ie: s.ie || "", dn: s.dn || "", eighths: s.eighths || 0,
+            storyDay: s.storyDay || "", syn: s.syn || "", castNo: s.castNo || [], bg: s.bgN || 0 }); }) });
+    });
+  }catch(_e){ return null; }
+}
 window.CampProdPanel = { syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, timetable, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
 })();

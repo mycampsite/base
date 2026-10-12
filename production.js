@@ -60,6 +60,47 @@ function planDates(plan){
 
 // ---------- normalising what comes back from the database ----------
 // Realtime Database drops empty arrays and may hand arrays back as objects; make it a clean plan.
+// A place: what someone typed plus where it is (looked up once, then saved so every device agrees)
+function cleanWhere(w){
+  if(!w || typeof w !== "object") return null;
+  const name = String(w.name || "").trim().slice(0, 80), lat = Number(w.lat), lng = Number(w.lng);
+  if(!name) return null;
+  const o = { name };
+  if(isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0)){ o.lat = Math.round(lat * 1e4) / 1e4; o.lng = Math.round(lng * 1e4) / 1e4; }
+  if(w.tz && /^[A-Za-z_]+(\/[A-Za-z0-9_+\-]+)*$/.test(String(w.tz))) o.tz = String(w.tz).slice(0, 60);
+  if(w.label) o.label = String(w.label).slice(0, 120);
+  return o;
+}
+// Shooting status of a scene. "Scheduled" is the default and isn't stored.
+const STATUSES = ["Scheduled", "Shot", "Part shot", "Pick-up", "Moved", "Omitted"];
+function statusOf(plan, id){ const x = ((plan && plan.status) || []).find((y) => y.id === id); return x ? x.s : "Scheduled"; }
+function setStatus(plan, id, s){ plan.status = (plan.status || []).filter((y) => y.id !== id); if(STATUSES.indexOf(s) > 0) plan.status.push({ id: String(id), s }); return plan; }
+// The day's place: its own, else the shoot's base location
+function whereOf(plan, i){ const d = plan && plan.days && plan.days[i]; return (d && d.where) || (plan && plan.settings && plan.settings.where) || null; }
+// Sunrise and sunset (UTC milliseconds) for a date at a place, by the standard sunrise equation (to about a minute).
+// null when the sun doesn't rise or set that day (polar day or night).
+function sunTimes(iso, lat, lng){
+  const d = parseISO(iso); lat = Number(lat); lng = Number(lng);
+  if(!d || !isFinite(lat) || !isFinite(lng)) return null;
+  const rad = Math.PI / 180, ms = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12);
+  const n = Math.round(ms / 86400000 + 2440587.5 - 2451545.0 + 0.0008);
+  const Js = n - lng / 360;
+  const M = ((357.5291 + 0.98560028 * Js) % 360 + 360) % 360;
+  const C = 1.9148 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 0.0003 * Math.sin(3 * M * rad);
+  const L = ((M + C + 180 + 102.9372) % 360 + 360) % 360;
+  const Jt = 2451545.0 + Js + 0.0053 * Math.sin(M * rad) - 0.0069 * Math.sin(2 * L * rad);
+  const dec = Math.asin(Math.sin(L * rad) * Math.sin(23.4397 * rad));
+  const cw = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * Math.sin(dec)) / (Math.cos(lat * rad) * Math.cos(dec));
+  if(cw < -1 || cw > 1) return null;
+  const w = Math.acos(cw) / rad;
+  const toMs = (J) => Math.round((J - 2440587.5) * 86400000);
+  return { rise: toMs(Jt - w / 360), set: toMs(Jt + w / 360) };
+}
+// "HH:MM" at that place (its time zone when known, else this device's)
+function hmIn(msUtc, tz){
+  try{ const f = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz || undefined }); const p = f.formatToParts(new Date(msUtc)); const h = p.find((x) => x.type === "hour").value, m = p.find((x) => x.type === "minute").value; return (h === "24" ? "00" : h) + ":" + m; }
+  catch(_e){ const dt = new Date(msUtc); return String(dt.getHours()).padStart(2, "0") + ":" + String(dt.getMinutes()).padStart(2, "0"); }
+}
 function normalize(plan){
   plan = (plan && typeof plan === "object") ? plan : {};
   const s = Object.assign({}, DEFAULTS, plan.settings || {});
@@ -71,8 +112,11 @@ function normalize(plan){
     call: /^\d{2}:\d{2}$/.test(s.call || "") ? s.call : DEFAULTS.call,
     off: (Array.isArray(s.off) ? s.off : (s.off && typeof s.off === "object" ? Object.values(s.off) : [])).filter((x) => parseISO(x)).sort()
   };
+  // day timing someone changed (see TIME_DEFAULTS), and the shoot's base location (sunrise, sunset and weather come from it)
+  if(s.times && typeof s.times === "object"){ const t = {}; Object.keys(TIME_DEFAULTS).forEach((k) => { const v = Number(s.times[k]); if(s.times[k] !== "" && s.times[k] != null && isFinite(v) && v >= 0 && v <= 1440) t[k] = Math.round(v); }); if(Object.keys(t).length) settings.times = t; }
+  const w = cleanWhere(s.where); if(w) settings.where = w;
   const arr = (v) => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).sort((a, b) => a - b).map((k) => v[k]) : []);
-  let days = arr(plan.days).map((d) => ({ id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }));
+  let days = arr(plan.days).map((d) => { const o = { id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }; const w = cleanWhere(d && d.where); if(w) o.where = w; return o; });
   // the day count setting is the truth: pad with empty days. More stored days than the setting
   // (an older save) are kept and the count follows them, so no scheduled scene is ever lost.
   while(days.length < settings.days) days.push({ id: uid(), scenes: [], call: "", note: "", date: "" });
@@ -90,6 +134,8 @@ function normalize(plan){
   // cast types someone chose (Lead / Supporting / …), over the automatic ones
   out.castType = arr(plan.castType).filter((c) => c && c.name && CAST_TYPES.indexOf(c.t) >= 0).map((c) => ({ name: String(c.name), t: c.t }));
   out.flagStatus = arr(plan.flagStatus).filter((f) => f && f.id && /^(keep|watch|ignore)$/.test(f.s)).map((f) => ({ id: String(f.id), scene: f.scene ? String(f.scene) : "", s: f.s }));
+  // each scene's shooting status, when it isn't just "Scheduled" (a list: scene ids may not suit database keys)
+  out.status = arr(plan.status).filter((x) => x && x.id && STATUSES.indexOf(x.s) > 0).map((x) => ({ id: String(x.id), s: x.s }));
   // links to the call sheets made by the last Sync (kept as they are)
   if(plan.callsheets && typeof plan.callsheets === "object") out.callsheets = plan.callsheets;
   return out;
@@ -517,6 +563,6 @@ function dayShots(day, shotMap){
 }
 
 const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
-  moveSceneIn, placeScenes, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
+  moveSceneIn, placeScenes, STATUSES, statusOf, setStatus, cleanWhere, whereOf, sunTimes, hmIn, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);
