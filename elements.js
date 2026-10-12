@@ -58,6 +58,7 @@ const DETC = "(?:" + DET.slice(3, -1).split("|").map(function (w) { return "[" +
 const NUM_DET_ = /^(two|three|four|five|several|one)$/i;
 // Words that are also verbs: only a prop with "a/the/her…" right in front ("the watch", not "the kids watch")
 const AMBIG_ = /^(watch|watches|ring|rings|file|files|sign|signs|record|records|tape|tapes|bill|drink|drinks|matches|box|boxes|book|books|whistle|needle|cards|mic|toy|bowl|bowls|ball)$/i;
+const Q_LEAD_ = /^(?:wearing|wears|wore|dressed in|clad in|changes into|puts on|pulls on|in|we hear|hears?|the sound of|sound of|noise of)\s+/i;
 const DET_LEAD_ = /^(?:a|an|the|his|her|their|its|my|your|our|this|that|these|those|some|another)\s+/i;
 function singular(w) {
   w = String(w || "");
@@ -134,11 +135,15 @@ function sceneTexts(doc) {
 // ---------- Auto suggestions for one scene ----------
 function suggestScene(s, tx, ctx) {
   const items = []; const seen = {};
-  const add = function (cat, name, why) {
+  // q = the words in the script it was found from (the editor colours them); taken from a “quoted” why when not given
+  const add = function (cat, name, why, q) {
     if (!name) return;
     const k = key(cat, name);
-    if (!norm(name) || seen[k]) return;
-    seen[k] = 1; items.push({ c: cat, n: display(name, cat), k: k, why: why || "" });
+    if (!norm(name)) return;
+    if (q == null) { const m = /“([^”]+)”/.exec(why || ""); q = m ? m[1] : ""; }
+    q = clean(q).replace(Q_LEAD_, "").replace(DET_LEAD_, "").replace(/^scene set in an? /i, "");
+    if (seen[k] != null) { const it = items[seen[k]]; if (q && it.q.indexOf(q) < 0) it.q.push(q); return; }
+    seen[k] = items.length; items.push({ c: cat, n: display(name, cat), k: k, why: why || "", q: q ? [q] : [] });
   };
   const act = (tx && tx.action) ? tx.action.join("\n") : "";
   const actLow = act.toLowerCase();
@@ -146,13 +151,13 @@ function suggestScene(s, tx, ctx) {
   const words = function (id) { return fw[id] || []; };
 
   // Cast (from breakdown.js, which already knows who is in the scene)
-  (s.cast || []).forEach(function (n) { add("cast", n, "in the scene"); });
+  (s.cast || []).forEach(function (n) { add("cast", n, "in the scene", n); });
 
   // Background
   const groups = {}; let gm; SMALL_GROUP_.lastIndex = 0;
   while ((gm = SMALL_GROUP_.exec(act)) !== null) groups[gm[1].toLowerCase()] = 1;
   if (s.bg === "Crowd") add("background", "Crowd", "crowd in the action");
-  Object.keys(groups).forEach(function (g) { add("background", g.charAt(0).toUpperCase() + g.slice(1), "named in the action"); });
+  Object.keys(groups).forEach(function (g) { add("background", g.charAt(0).toUpperCase() + g.slice(1), "named in the action", g); });
   if (s.bg === "Small group" && !Object.keys(groups).length && !items.some(function (i) { return i.c === "background"; })) add("background", "Background (small group)", "public place or group cue");
 
   // Flags breakdown.js already found (its word lists know what doesn't count)
@@ -352,10 +357,18 @@ function build(doc, bd, store) {
   const scenes = bds.map(function (s, i) {
     const sk = sceneKey(s), meta = smeta[sk] || {}, offs = {};
     (off[sk] || []).forEach(function (k) { offs[resolve(alias, k)] = 1; offs[k] = 1; });
-    const per = {};
-    const put = function (e) { if (!e || offs[e.key]) return; (per[e.cat] = per[e.cat] || []); if (per[e.cat].indexOf(e.key) < 0) per[e.cat].push(e.key); };
-    suggestScene(s, txOf(s, i), ctx).forEach(function (it) { if (offs[it.k] || offs[resolve(alias, it.k)]) return; put(touch(it.k, it.c, it.n, s.n, s.eighths, true, it.why)); });
-    (tags[sk] || []).forEach(function (t) { if (!t || !CAT[t.c] || !clean(t.n)) return; put(touch(key(t.c, t.n), t.c, t.c === "cast" ? clean(t.n).toUpperCase() : clean(t.n).charAt(0).toUpperCase() + clean(t.n).slice(1), s.n, s.eighths, false, "tagged")); });
+    const per = {}, hits = {}, src = {};
+    // hits: the words to colour for each element in this scene; src: found automatically, tagged by hand, or both
+    const put = function (e, qs, how) {
+      if (!e || offs[e.key]) return false;
+      (per[e.cat] = per[e.cat] || []); if (per[e.cat].indexOf(e.key) < 0) per[e.cat].push(e.key);
+      const h = hits[e.key] = hits[e.key] || [];
+      (qs || []).forEach(function (q) { if (q && h.indexOf(q) < 0) h.push(q); });
+      src[e.key] = src[e.key] && src[e.key] !== how ? "both" : how;
+      return true;
+    };
+    suggestScene(s, txOf(s, i), ctx).forEach(function (it) { if (offs[it.k] || offs[resolve(alias, it.k)]) return; put(touch(it.k, it.c, it.n, s.n, s.eighths, true, it.why), it.q, "auto"); });
+    (tags[sk] || []).forEach(function (t) { if (!t || !CAT[t.c] || !clean(t.n)) return; put(touch(key(t.c, t.n), t.c, t.c === "cast" ? clean(t.n).toUpperCase() : clean(t.n).charAt(0).toUpperCase() + clean(t.n).slice(1), s.n, s.eighths, false, "tagged"), Array.isArray(t.q) && t.q.length ? t.q : [clean(t.n)], "hand"); });
     Object.keys(per).forEach(function (c) { per[c].sort(function (a, b) { return c === "cast" ? ((els[a].no || 999) - (els[b].no || 999)) : els[a].name.localeCompare(els[b].name); }); });
     const d = days[i] || {};
     const estAuto = estimate(s);
@@ -364,7 +377,7 @@ function build(doc, bd, store) {
       syn: clean(meta.syn) || s.syn || "", synAuto: !clean(meta.syn),
       day: clean(meta.day) || d.label || "", dayAuto: !clean(meta.day), storyDay: d.day || 1, flash: !!d.flash,
       est: Number(meta.est) > 0 ? Math.round(Number(meta.est)) : estAuto, estAuto: !(Number(meta.est) > 0),
-      unit: clean(meta.unit) || "Main", note: clean(meta.note), els: per,
+      unit: clean(meta.unit) || "Main", note: clean(meta.note), els: per, hits: hits, src: src,
       count: Object.keys(per).reduce(function (a, c) { return a + per[c].length; }, 0)
     };
   });

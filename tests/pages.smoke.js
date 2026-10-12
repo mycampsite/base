@@ -65,9 +65,12 @@ let BASE = "";
     });
     await p.waitForTimeout(300);
     await expect(p, () => !document.querySelector(".bdtPop").hidden && document.querySelector("#bdtName").value === "ANA", "the tag card with the selected word");
-    await p.click('.bdtPop [data-c=wardrobe]'); await p.click('.bdtPop [data-a=add]'); await p.waitForTimeout(400);
+    await p.click('.bdtPop [data-c=wardrobe]'); await p.click('.bdtPop [data-a=add]'); await p.waitForTimeout(900);
     await expect(p, () => { const st = window.CampBdTag.store(); const k = Object.keys(st.tags || {})[0]; return k && st.tags[k][0].c === "wardrobe" && st.tags[k][0].n === "ANA"; }, "the tag saved for the scene");
     await expect(p, () => !window.CSS.highlights || window.CSS.highlights.has("bd-wardrobe"), "the words coloured by category");
+    await expect(p, () => !document.querySelector(".bdtKey").hidden && !window.CSS.highlights || window.CSS.highlights.has("bds-cast"), "suggested tags (cast) shown with the key");
+    await p.keyboard.press("Escape"); await p.evaluate(() => document.getElementById("mToggleTags").click()); await p.waitForTimeout(300);
+    await expect(p, () => document.querySelector(".bdtKey").hidden && (!window.CSS.highlights || !window.CSS.highlights.has("bds-cast")), "View › Show Breakdown Tags turns them off");
   });
   await page(browser, "storyboard opens", "/storyboard.html?fileId=f1");
   await page(browser, "treatment builds its pages, and Export shows the preview first", "/treatment.html?fileId=f1", async (p) => {

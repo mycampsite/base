@@ -4,7 +4,8 @@
    coloured in the script by category. Nothing is written into the script itself: tags go into this device's
    copy of the breakdown plus a queue the hub uploads to the team (bdpanel.js), and the colours are drawn with the browser's
    highlight layer, so printing, exports and the saved script are untouched.
-   Needs: elements.js. Works on editor.html. */
+   View › Show Breakdown Tags (Ctrl/Cmd+Alt+T) colours every active tag, suggestions included, with a key.
+   Needs: breakdown.js, elements.js. Works on editor.html. */
 (function(){
 "use strict";
 const E = window.CampElements;
@@ -23,7 +24,7 @@ function save(st){ lsSet(STORE_KEY, JSON.stringify(st || {})); }
 // The hub uploads these to the team's copy (Breakdown tab) the next time it's open, or straight away if it is
 const PEND_KEY = "Camp_BD_PENDING_V1_" + fileId;
 function queue(op){ try{ const l = JSON.parse(lsGet(PEND_KEY) || "[]"); (Array.isArray(l) ? l : []).push(op); lsSet(PEND_KEY, JSON.stringify(l.slice(-500))); }catch(_e){ lsSet(PEND_KEY, JSON.stringify([op])); } }
-const showColours = () => lsGet(SHOW_KEY) !== "0";
+const showColours = () => lsGet(SHOW_KEY) === "1";
 
 /* ---------- styles ---------- */
 const css = `
@@ -104,7 +105,7 @@ function drawPop(){
   pop.innerHTML = `<div class="hd">Tag for breakdown<small>${esc(sceneTitle(sk))}</small><button type="button" data-a="close" aria-label="Close">✕</button></div>
     <label for="bdtName">Element</label><input type="text" id="bdtName" maxlength="60" value="${esc(cur.name)}" placeholder="What is it? (e.g. Shotgun)" autocomplete="off">
     <label>Category</label><div class="cats">${E.CATS.map((c) => `<button type="button" data-c="${c.id}" class="${c.id === cat ? "on" : ""}" style="--cc:${c.color}"><i></i>${esc(c.short)}</button>`).join("")}</div>
-    <div class="acts"><button type="button" class="primary" data-a="add">Add to scene</button><button type="button" data-a="close">Done</button>${canHighlight ? `<label><input type="checkbox" data-a="show"${showColours() ? " checked" : ""}> Show colours</label>` : ""}</div>
+    <div class="acts"><button type="button" class="primary" data-a="add">Add to scene</button><button type="button" data-a="close">Done</button>${canHighlight ? `<label><input type="checkbox" data-a="show"${showColours() ? " checked" : ""}> Show tags</label>` : ""}</div>
     <label>Tagged in this scene</label>${have.length ? `<div class="have">${have.map((h) => `<span style="--cc:${E.CAT[h.c].color}" title="${esc(E.CAT[h.c].label)}">${esc(h.n)}<button type="button" data-a="rm" data-k="${esc(h.k0)}" aria-label="Remove ${esc(h.n)}">✕</button></span>`).join("")}</div>` : `<div class="none">Nothing tagged by hand yet. The sheet also fills in suggestions on its own.</div>`}`;
 }
 function place(){
@@ -134,6 +135,7 @@ function add(){
   save(E.tag(load(), cur.sk, cat, name, cur.quote));
   queue({ t: "tag", sk: cur.sk, c: cat, n: name, q: cur.quote || "" });
   lsSet(LAST_KEY, cat);
+  if(!showColours()) lsSet(SHOW_KEY, "1");   // show what you just tagged
   say("Tagged " + name + " as " + E.CAT[cat].label.toLowerCase() + ".");
   cur.name = ""; cur.quote = ""; drawPop(); place(); paint();
   const j = pop.querySelector("#bdtName"); if(j) j.focus();
@@ -147,7 +149,7 @@ pop.addEventListener("click", (e) => {
   else if(a.dataset.a === "add") add();
   else if(a.dataset.a === "rm"){ save(E.untag(load(), cur.sk, a.dataset.k)); queue({ t: "untag", sk: cur.sk, k: a.dataset.k }); drawPop(); paint(); }
 });
-pop.addEventListener("change", (e) => { if(e.target.dataset && e.target.dataset.a === "show"){ lsSet(SHOW_KEY, e.target.checked ? "1" : "0"); paint(); } });
+pop.addEventListener("change", (e) => { if(e.target.dataset && e.target.dataset.a === "show") setShow(e.target.checked); });
 pop.addEventListener("keydown", (e) => {
   e.stopPropagation();
   if(e.key === "Enter" && e.target.id === "bdtName"){ e.preventDefault(); add(); }
@@ -204,51 +206,123 @@ function rangeIn(nodes, a, b){
   const r = document.createRange(); try{ r.setStart(sn, Math.max(0, so)); r.setEnd(en, Math.max(0, eo)); }catch(_e){ return null; }
   return r;
 }
-let paintT = 0;
+/* ---------- show every active tag (View > Show Breakdown Tags) ----------
+   The script is read the same way the Breakdown tab reads it (breakdown.js + elements.js), so what's coloured
+   here is exactly what's on the sheets: suggestions (dotted underline) and hand tags (solid), less anything
+   taken out or ignored. Click a category in the key to hide it. */
+const SUG_KEY = "Camp_BD_SHOWSUG_V1", HIDE_KEY = "Camp_BD_HIDECAT_V1";
+const showSug = () => lsGet(SUG_KEY) !== "0";
+const hiddenCats = () => { try{ const v = JSON.parse(lsGet(HIDE_KEY) || "[]"); return Array.isArray(v) ? v : []; }catch(_e){ return []; } };
+const B = window.CampBreakdown;
+const key = document.createElement("div"); key.className = "bdtKey"; key.hidden = true; document.body.appendChild(key);
+style.textContent += `
+.bdtKey{ position:fixed; right:14px; bottom:14px; z-index:9990; width:260px; max-width:calc(100vw - 28px); max-height:46vh; overflow:auto; background:#1c1d21; color:rgba(255,255,255,.92); border:1px solid rgba(255,255,255,.16); border-radius:12px; box-shadow:0 14px 36px rgba(0,0,0,.5); font:12.5px/1.4 Inter,system-ui,sans-serif; padding:10px; }
+.bdtKey[hidden]{ display:none; }
+.bdtKey .bdtHd{ display:flex; align-items:center; gap:6px; font-weight:600; margin-bottom:6px; }
+.bdtKey .bdtHd button{ margin-left:auto; background:none; border:0; color:inherit; opacity:.6; cursor:pointer; font-size:13px; }
+.bdtKey label{ display:flex; gap:6px; align-items:center; font-size:12px; opacity:.85; margin-bottom:6px; cursor:pointer; }
+.bdtKey .bdtCs{ display:flex; flex-wrap:wrap; gap:4px; }
+.bdtKey .bdtCs button{ display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); color:inherit; border-radius:7px; padding:1px 7px; font:inherit; font-size:11.5px; cursor:pointer; }
+.bdtKey .bdtCs button i{ width:8px; height:8px; border-radius:50%; background:var(--cc); display:block; }
+.bdtKey .bdtCs button small{ opacity:.6; }
+.bdtKey .bdtCs button.off{ opacity:.4; text-decoration:line-through; }
+.bdtKey .bdtNote{ display:block; width:auto; font-size:11px; opacity:.55; margin-top:6px; font-style:normal; }
+${E.CATS.map((c) => `::highlight(bds-${c.id}){ background-color:${c.color}1f; text-decoration:underline dotted; text-decoration-color:${c.color}; text-decoration-thickness:2px; text-underline-offset:3px; }`).join("\n")}
+@media print{ .bdtKey{ display:none !important; } ${E.CATS.map((c) => `::highlight(bds-${c.id}){ background-color:transparent; text-decoration:none; }`).join(" ")} }`;
+
+// The script as the Breakdown reads it, straight from the page (so unsaved typing is included)
+function docFromPage(){
+  const ed = editor(); if(!ed) return { lines: [] };
+  const t = (el) => el ? [{ t: el.textContent || "" }] : [];
+  const lines = Array.from(ed.querySelectorAll(".line")).map((l) => {
+    const type = l.dataset.type || "action";
+    if(type === "dual"){
+      const f = (p) => l.querySelector(`.dualField[data-part="${p}"]`);
+      return { id: l.dataset.id || "", type, dual: { left: { characterRuns: t(f("L_CHAR")), dialogueRuns: t(f("L_DLG")) }, right: { characterRuns: t(f("R_CHAR")), dialogueRuns: t(f("R_DLG")) } } };
+    }
+    return { id: l.dataset.id || "", type, runs: t(l) };
+  });
+  return { lines };
+}
+let paintT = 0, lastKeyHtml = "";
 function paint(){
   clearTimeout(paintT);
-  if(!canHighlight) return;
-  paintT = setTimeout(doPaint, 60);
+  syncMenu();
+  paintT = setTimeout(doPaint, showColours() ? 500 : 30);
 }
+function clearAll(){ if(canHighlight) E.CATS.forEach((c) => { CSS.highlights.delete("bd-" + c.id); CSS.highlights.delete("bds-" + c.id); }); }
 function doPaint(){
   try{
-    E.CATS.forEach((c) => CSS.highlights.delete("bd-" + c.id));
-    const ed = editor(); if(!ed || !showColours()) return;
-    const st = load(); if(!st.tags) return;
-    // lines grouped by scene, in script order
+    clearAll();
+    const ed = editor();
+    if(!ed || !showColours()){ key.hidden = true; return; }
+    const doc = docFromPage(), bd = B ? B.analyze(doc) : { scenes: [], cast: [] }, m = E.build(doc, bd, load());
+    const hide = {}; hiddenCats().forEach((c) => { hide[c] = 1; });
+    const sug = showSug();
+    // lines grouped by scene key, in script order (the same keys the model uses)
     const bySc = {}; let sk = "n1";
     ed.querySelectorAll(".line").forEach((l) => { if(l.dataset.type === "scene") sk = l.dataset.id || "n1"; (bySc[sk] = bySc[sk] || []).push(l); });
-    const per = {}; const drop = {}; (st.drop || []).forEach((k) => { drop[k] = 1; });
-    Object.keys(st.tags).forEach((scene) => {
-      const lines = bySc[scene]; if(!lines) return;
-      const offs = {}; ((st.off && st.off[scene]) || []).forEach((k) => { offs[k] = 1; offs[E.resolve(st.alias || {}, k)] = 1; });
-      const idx = lines.map((l) => {
+    const hand = {}, auto = {}, count = {};
+    m.scenes.forEach((s) => {
+      const lines = bySc[s.key]; if(!lines) return;
+      let idx = null;
+      const index = () => idx || (idx = lines.map((l) => {
         const nodes = []; let acc = ""; const w = document.createTreeWalker(l, NodeFilter.SHOW_TEXT);
         while(w.nextNode()){ nodes.push({ node: w.currentNode, start: acc.length }); acc += w.currentNode.nodeValue; }
         return { nodes: nodes, text: acc };
-      });
-      st.tags[scene].forEach((t) => {
-        if(!t || !E.CAT[t.c]) return;
-        const k0 = E.key(t.c, t.n), k = E.resolve(st.alias || {}, k0);
-        if(drop[k] || drop[k0] || offs[k]) return;
-        const c = k.split("|")[0]; if(!E.CAT[c]) return;
-        const quotes = Array.isArray(t.q) && t.q.length ? t.q : [t.n];
-        idx.forEach((ix) => quotes.forEach((q) => occurrences(ix.text, q).forEach((m) => {
-          const r = rangeIn(ix.nodes, m[0], m[1]); if(r) (per[c] = per[c] || []).push(r);
+      }));
+      Object.keys(s.els).forEach((c) => s.els[c].forEach((k) => {
+        count[c] = (count[c] || 0) + 1;
+        if(hide[c] || !canHighlight) return;
+        const how = s.src[k] === "auto" ? "auto" : "hand";
+        if(how === "auto" && !sug) return;
+        const into = how === "auto" ? auto : hand;
+        (s.hits[k] || []).forEach((q) => index().forEach((ix) => occurrences(ix.text, q).forEach((mm) => {
+          const r = rangeIn(ix.nodes, mm[0], mm[1]); if(r) (into[c] = into[c] || []).push(r);
         })));
-      });
+      }));
     });
-    Object.keys(per).forEach((c) => CSS.highlights.set("bd-" + c, new Highlight(...per[c])));
-  }catch(_e){}
+    if(canHighlight){
+      Object.keys(hand).forEach((c) => CSS.highlights.set("bd-" + c, new Highlight(...hand[c])));
+      Object.keys(auto).forEach((c) => CSS.highlights.set("bds-" + c, new Highlight(...auto[c])));
+    }
+    // the key: categories in this script, click to hide / show
+    const html = `<div class="bdtHd">Breakdown tags<button type="button" data-k="off" title="Hide tags (View › Show Breakdown Tags)">✕</button></div>
+      <label><input type="checkbox" data-k="sug"${sug ? " checked" : ""}> Include suggestions <span style="opacity:.6">(dotted)</span></label>
+      <div class="bdtCs">${E.CATS.filter((c) => count[c.id]).map((c) => `<button type="button" data-c="${c.id}" class="${hide[c.id] ? "off" : ""}" style="--cc:${c.color}" title="${hide[c.id] ? "Show" : "Hide"} ${esc(c.label.toLowerCase())}"><i></i>${esc(c.short)}<small>${count[c.id]}</small></button>`).join("") || `<span class="bdtNote">Nothing found yet.</span>`}</div>
+      ${canHighlight ? `<div class="bdtNote">Solid = tagged by hand. Select words and press Tag to add.</div>` : `<div class="bdtNote">This browser can't colour text. Update it to see tags in the script.</div>`}`;
+    if(html !== lastKeyHtml){ key.innerHTML = html; lastKeyHtml = html; }
+    key.hidden = false;
+  }catch(_e){ try{ console.error(_e); }catch(_x){} }
 }
+key.addEventListener("mousedown", (e) => { if(!e.target.closest("input")) e.preventDefault(); });
+key.addEventListener("click", (e) => {
+  const c = e.target.closest("[data-c]");
+  if(c){ const h = hiddenCats(), i = h.indexOf(c.dataset.c); if(i >= 0) h.splice(i, 1); else h.push(c.dataset.c); lsSet(HIDE_KEY, JSON.stringify(h)); lastKeyHtml = ""; paint(); return; }
+  const k = e.target.closest("[data-k=off]"); if(k) setShow(false);
+});
+key.addEventListener("change", (e) => { if(e.target.dataset.k === "sug"){ lsSet(SUG_KEY, e.target.checked ? "1" : "0"); lastKeyHtml = ""; paint(); } });
+function setShow(on){ lsSet(SHOW_KEY, on ? "1" : "0"); lastKeyHtml = ""; paint(); }
+// View › Show Breakdown Tags
+const viewItem = document.getElementById("mToggleTags");
+function syncMenu(){
+  if(!viewItem) return;
+  const on = showColours(); viewItem.setAttribute("aria-checked", on ? "true" : "false");
+  const t = viewItem.querySelector(".tick"); if(t) t.textContent = on ? "✓" : "";
+}
+if(viewItem) viewItem.addEventListener("click", () => setShow(!showColours()));
+document.addEventListener("keydown", (e) => {
+  if((e.ctrlKey || e.metaKey) && e.altKey && (e.code === "KeyT" || e.key.toLowerCase() === "t")){ e.preventDefault(); e.stopPropagation(); setShow(!showColours()); }
+}, true);
+
 // Redraw when the script loads or changes, and when tags change in another tab
 function watch(){
   const ed = editor(); if(!ed){ setTimeout(watch, 400); return; }
-  try{ new MutationObserver(() => paint()).observe(ed, { childList: true, subtree: true, characterData: true }); }catch(_e){}
+  try{ new MutationObserver(() => { if(showColours()) paint(); }).observe(ed, { childList: true, subtree: true, characterData: true }); }catch(_e){}
   paint();
 }
-window.addEventListener("storage", (e) => { if(e.key === STORE_KEY || e.key === SHOW_KEY) paint(); });
+window.addEventListener("storage", (e) => { if(e.key === STORE_KEY || e.key === SHOW_KEY || e.key === SUG_KEY || e.key === HIDE_KEY){ lastKeyHtml = ""; paint(); } });
 if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", watch); else watch();
 
-window.CampBdTag = { open: open, paint: paint, store: load };
+window.CampBdTag = { open: open, paint: paint, store: load, show: setShow };
 })();

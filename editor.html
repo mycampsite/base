@@ -2312,6 +2312,10 @@ html,body{ background: var(--uiBg) !important; }
             <span class="label">Show Comments</span>
             <span class="tick" aria-hidden="true">✓</span>
           </button>
+          <button class="item itemToggle" id="mToggleTags" role="menuitemcheckbox" aria-checked="false" type="button" title="Colour every breakdown tag in the script, suggestions included (Ctrl/Cmd+Alt+T)">
+            <span class="label">Show Breakdown Tags</span>
+            <span class="tick" aria-hidden="true"></span>
+          </button>
           <button class="item itemToggle" id="mToggleGrammar" role="menuitemcheckbox" aria-checked="false" type="button" title="Checks wording using an online service (LanguageTool). Your lines are sent to their server while this is on.">
             <span class="label">Online Grammar Check</span>
             <span class="tick" aria-hidden="true"></span>
@@ -18124,6 +18128,7 @@ function clearHighlights(){
 </script>
 
 <script src="camp-core.js"></script>
+<script src="breakdown.js"></script>
 <script src="elements.js"></script>
 <script src="bdtag.js" defer></script>
 <script>
