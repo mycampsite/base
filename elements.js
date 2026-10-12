@@ -839,7 +839,10 @@ function enrich(bd, model, store, opts) {
       const i = flags.indexOf(f);
       if (!has && gone && i >= 0) flags.splice(i, 1);
     });
-    return Object.assign({}, s, { cast: cast, ocast: s.cast || [], flags: flags, needs: needs, specials: specials });
+    // the sheet's own numbers travel with the scene: the plan's timetable uses Est. minutes; story day, BG count and notes go to the schedule
+    let bgN = 0; (els.background || []).forEach(function (k) { bgN += (m.qty && m.qty[k]) || 0; });
+    return Object.assign({}, s, { cast: cast, ocast: s.cast || [], flags: flags, needs: needs, specials: specials,
+      est: m.est, storyDay: m.day, syn: m.syn, note: m.note, dir: m.dir, bgN: bgN, castNo: (els.cast || []).map(function (k) { return model.elements[k].no; }).filter(Boolean).sort(function (a, b) { return a - b; }) });
   });
   return Object.assign({}, bd, { scenes: scenes, fromElements: true });
 }

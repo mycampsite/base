@@ -225,5 +225,37 @@ test("elements shape the plan: shared specials group together, warnings use the 
   void plan;
 });
 
+test("timetable: call, shoot and wrap per scene with the meal at six hours (matches a real day)", () => {
+  // Day 1 of a real schedule: call 6:00, scenes of 2h30, 2h, 1h30, 2h; meal 12:00-12:30; wrap 5:00 pm
+  const by = { a: { id: "a", n: 12, loc: "DINER", est: 150 }, b: { id: "b", n: 14, loc: "DINER", est: 120 }, c: { id: "c", n: 1, loc: "DINER", est: 90 }, d: { id: "d", n: 21, loc: "DINER", est: 120 } };
+  const t = P.dayTimes({ scenes: ["a", "b", "c", "d"], call: "06:00" }, by, { call: "07:00" });
+  const sc = t.rows.filter((r) => r.type === "scene");
+  assert.deepStrictEqual(sc.map((r) => [r.call, r.shoot, r.wrap]), [["06:00", "07:00", "09:30"], ["09:30", "10:00", "12:00"], ["12:30", "13:00", "14:30"], ["14:30", "15:00", "17:00"]]);
+  const meal = t.rows.find((r) => r.type === "meal");
+  assert.deepStrictEqual([meal.start, meal.end], ["12:00", "12:30"]);
+  assert.strictEqual(t.rows.indexOf(meal), 2);
+  assert.strictEqual(t.call, "06:00"); assert.strictEqual(t.wrap, "17:00"); assert.strictEqual(t.est, 480);
+});
+test("timetable: the meal comes early rather than after six hours when the next scene is long (day 3)", () => {
+  const by = { a: { id: "a", loc: "HWY", est: 120 }, b: { id: "b", loc: "HWY", est: 105 }, c: { id: "c", loc: "HWY", est: 120 } };
+  const t = P.dayTimes({ scenes: ["a", "b", "c"], call: "06:00" }, by, { call: "07:00", times: { prep: 30 } });
+  const meal = t.rows.find((r) => r.type === "meal");
+  assert.deepStrictEqual([meal.start, meal.end], ["10:45", "11:15"]);
+  assert.strictEqual(t.rows.filter((r) => r.type === "scene")[2].shoot, "11:45");
+});
+test("timetable: a company move when the location changes; settings, defaults and empty days", () => {
+  const by = { a: { id: "a", loc: "STREET", est: 60 }, b: { id: "b", loc: "BRIDGE", est: 60 }, c: { id: "c", loc: "BRIDGE", eighths: 12 } };
+  const t = P.dayTimes({ scenes: ["a", "b", "c"] }, by, { call: "07:00" });
+  const mv = t.rows.find((r) => r.type === "move");
+  assert.deepStrictEqual([mv.from, mv.to, mv.start, mv.end], ["STREET", "BRIDGE", "09:00", "09:30"]);
+  assert.strictEqual(t.rows.filter((r) => r.type === "scene")[2].est, 90);   // no Est.: about an hour a page (1 4/8 pages)
+  assert.ok(!P.dayTimes({ scenes: ["a", "b"] }, by, { call: "07:00", times: { move: 0 } }).rows.some((r) => r.type === "move"));
+  const e = P.dayTimes({ scenes: [] }, by, { call: "07:00" }); assert.strictEqual(e.wrap, ""); assert.strictEqual(e.rows.length, 0);
+  assert.deepStrictEqual(P.timeSettings({ times: { prep: "45", turn: -5, meal: "x" } }), Object.assign({}, P.TIME_DEFAULTS, { prep: 45 }));
+  assert.strictEqual(P.toHM(25 * 60 + 5), "01:05");
+  const tt = P.timetable({ settings: { days: 2, call: "07:00" }, days: [{ scenes: ["a"] }, { scenes: [] }] }, by);
+  assert.strictEqual(tt.length, 2); assert.strictEqual(tt[0].rows[0].shoot, "08:00"); assert.strictEqual(tt[1].wrap, "");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

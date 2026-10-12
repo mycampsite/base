@@ -364,6 +364,47 @@ function moveSceneIn(plan, id, toDay, at){
   if(toDay >= 0 && plan.days[toDay]){ const list = plan.days[toDay].scenes; if(at < 0 || at > list.length) list.push(id); else list.splice(at, 0, id); }
   return { plan, from };
 }
+// ---------- the day's timetable: call, shoot and wrap for each scene, plus the meal and company moves ----------
+// Worked out, never stored: change the call time, the order or a scene's Est. minutes and it follows.
+//   prep    minutes from crew call to the first shot (lighting, rehearsal)
+//   turn    minutes to reset between scenes (turnaround / new setup)
+//   meal    meal break length; mealBy = it starts no later than this many minutes after call
+//   move    company move when the location changes (0 = never add one)
+const TIME_DEFAULTS = { prep: 60, turn: 30, meal: 30, mealBy: 360, move: 30 };
+const toMin = (hm) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(hm || "")); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+const toHM = (min) => { const m = ((Math.round(min) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
+// a scene's shooting time: its Est. minutes from the breakdown, else about an hour a page (at least 15 minutes)
+function estOf(s){ const e = Number(s && s.est); return e > 0 ? Math.round(e) : Math.max(15, Math.round((Number(s && s.eighths) || 0) / 8 * 60 / 5) * 5); }
+function timeSettings(settings){
+  const t = Object.assign({}, TIME_DEFAULTS), src = (settings && settings.times) || {};
+  Object.keys(TIME_DEFAULTS).forEach((k) => { const v = Number(src[k]); if(isFinite(v) && v >= 0 && v <= 1440) t[k] = Math.round(v); });
+  return t;
+}
+function dayTimes(day, byId, settings){
+  const T = timeSettings(settings);
+  const call = toMin((day && day.call) || (settings && settings.call) || DEFAULTS.call);
+  const sc = ((day && day.scenes) || []).map((id) => byId[id]).filter(Boolean);
+  const rows = []; let t = call, est = 0, meal = null, prevLoc = "", lateMeal = false;
+  sc.forEach((s, i) => {
+    const e = estOf(s), loc = String(s.loc || "");
+    if(i > 0 && T.move > 0 && loc && prevLoc && loc !== prevLoc){ rows.push({ type: "move", from: prevLoc, to: loc, start: toHM(t), end: toHM(t + T.move), min: T.move }); t += T.move; }
+    const setup = i === 0 ? T.prep : T.turn;
+    // the meal goes in before the scene that would run past the meal limit, once the day is close to it
+    if(!meal && i > 0 && T.meal > 0 && t + setup + e > call + T.mealBy && t >= call + T.mealBy - 150){
+      meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal }; rows.push(meal); t += T.meal;
+    }
+    rows.push({ type: "scene", id: s.id, n: s.n, call: toHM(t), shoot: toHM(t + setup), wrap: toHM(t + setup + e), est: e });
+    t += setup + e; est += e; if(loc) prevLoc = loc;
+    if(!meal && T.meal > 0 && t >= call + T.mealBy && i < sc.length - 1){ lateMeal = t > call + T.mealBy; meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal, late: lateMeal }; rows.push(meal); t += T.meal; }
+  });
+  return { call: toHM(call), wrap: sc.length ? toHM(t) : "", est, length: sc.length ? t - call : 0, rows, lateMeal };
+}
+// Every day's timetable, as sent with Sync (scene ids and HH:MM times only)
+function timetable(plan, byId){
+  const pl = normalize(plan), dates = planDates(pl);
+  return pl.days.map((d, i) => Object.assign({ day: i + 1, date: dates[i] || "" }, dayTimes(d, byId, pl.settings)));
+}
+
 // Put new scenes on their suggested days (skips any already placed or with no room)
 function placeScenes(plan, ids, breakdown){
   (ids || []).forEach((id) => { const i = suggestDay(id, plan, breakdown); if(i >= 0 && !plan.days.some((d) => d.scenes.indexOf(id) >= 0)) plan.days[i].scenes.push(id); });
@@ -476,6 +517,6 @@ function dayShots(day, shotMap){
 }
 
 const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
-  moveSceneIn, placeScenes, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
+  moveSceneIn, placeScenes, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);

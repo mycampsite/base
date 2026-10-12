@@ -130,6 +130,14 @@ const css = `
 .strip .t span{ color:var(--uiMuted); font-weight:600; white-space:nowrap; }
 .strip .l{ color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .strip .c{ color:var(--uiMuted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.strip .tm{ display:flex; justify-content:space-between; gap:6px; margin-top:4px; font-size:10.5px; color:#ddd; font-variant-numeric:tabular-nums; }
+.strip .tm span{ color:var(--uiMuted); }
+.brk{ font-size:10.5px; color:var(--uiMuted); padding:3px 8px; margin:2px 0; border-radius:6px; border:1px dashed rgba(255,255,255,.18); text-align:center; }
+.brk.meal{ background:rgba(127,182,255,.07); }
+.brk.late{ color:#f1c76b; border-color:rgba(241,199,107,.45); }
+.brk.move{ background:rgba(241,199,107,.06); }
+.colCall{ flex-wrap:wrap; }
+.colCall .wrapT{ white-space:nowrap; margin-left:auto; color:var(--uiText); font-weight:600; font-variant-numeric:tabular-nums; }
 .strip .nd{ display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
 .strip .nd i{ display:block; width:7px; height:7px; border-radius:50%; background:var(--c,#666); }
 .dtPick{ position:relative; display:inline-flex; align-items:center; gap:5px; margin-left:6px; font-size:11.5px; color:var(--uiText); cursor:pointer; border-radius:7px; padding:2px 7px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); }
@@ -263,6 +271,7 @@ const H = () => window.__CampHub;
 // Call times: a dropdown in 15-minute steps, shown in 12- or 24-hour time (a per-device choice)
 const H24_KEY = "Camp_PROD_24H_V1";
 const is24 = () => lsGet(H24_KEY) === "1";
+const fmtMins = (m) => { m = Math.round(Number(m) || 0); return m >= 60 ? Math.floor(m / 60) + "h" + (m % 60 ? " " + String(m % 60).padStart(2, "0") : "") : m + "m"; };
 function fmtTime(hm){
   const m = /^(\d{2}):(\d{2})$/.exec(hm || ""); if(!m) return hm || "";
   if(is24()) return hm;
@@ -400,7 +409,7 @@ function draw(pid){
   if(sc.doc && sc.akey !== akey){ sc.bd = B.analyze(sc.doc, aopts); sc.akey = akey; }
   // the Breakdown tab's element sheets shape each scene's cast and needs (see CampElements.enrich)
   const bd = window.CampBdPanel && window.CampBdPanel.enriched ? window.CampBdPanel.enriched(pid, scriptId, p, sc.doc, sc.bd, sc.modified, aopts) : sc.bd;
-  const byId = P.sceneMap(bd); S.lastBd = bd;
+  const byId = P.sceneMap(bd); S.lastBd = bd; S.lastBdPid = pid;
   S.lastScriptId = scriptId;
   if(!S.shots[scriptId]) loadShots(scriptId);
   const shotMap = (S.shots[scriptId] && S.shots[scriptId].map) || {};
@@ -423,6 +432,7 @@ function draw(pid){
   const pl = rec.plan, st = pl.settings, dates = P.planDates(pl);
   const badOrder = dates.some((d, i) => i && d && dates[i - 1] && d <= dates[i - 1]);
   const stats = pl.days.map((d) => P.dayStats(d, byId, st.maxEighths));
+  const times = pl.days.map((d) => P.dayTimes(d, byId, pl.settings));
   const warns = P.validate(pl, bd);
   const scheduled = bd.scenes.filter((s) => s.id).length - rec.unscheduled.length;
   const nWarn = warns.filter((w) => w.level === "warn").length;
@@ -475,21 +485,25 @@ function draw(pid){
     </ul><div style="color:var(--uiMuted);margin-top:4px">Check each day still works, then accept. Call sheets update on the next Sync.</div></div></div>` : "";
   const warnBox = warns.length && S.warnOpen ? `<div class="ctlWarn">${warns.map((w) => `<div class="${w.level}">${w.level === "warn" ? "⚠ " : "• "}${esc(w.text)}</div>`).join("")}</div>` : "";
 
-  const strip = (id) => {
+  const strip = (id, tr) => {
     const s = byId[id]; if(!s) return "";
     const isNew = n && n.added.indexOf(id) >= 0;
     const rv = revOf[id];
     return `<button class="strip${S.pick === id ? " pick" : ""}${isNew ? " new" : ""}${rv ? " rev" : ""}${S.landed && S.landed.id === id ? " landed" : ""}" type="button" data-sid="${esc(id)}" draggable="${canEdit}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}">
       <div class="t">Sc ${s.n} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}<span>${shotMap[id] ? shotMap[id].length + " sh · " : ""}${P.fmtEighths(s.eighths)} pg</span></div>
       <div class="l">${esc(s.set || s.loc || "")}</div>
-      <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div>${needDots(s.needs)}${rv ? `<div class="revTag" title="${esc(revText(rv))}">⚠ Revised: ${esc(rv.what.join(", "))}</div>` : ""}</button>`;
+      <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div>${needDots(s.needs)}${tr ? `<div class="tm" title="Call ${esc(fmtTime(tr.call))} · shoot ${esc(fmtTime(tr.shoot))} · wrap ${esc(fmtTime(tr.wrap))} (${fmtMins(tr.est)} of shooting)">${esc(fmtTime(tr.shoot))} – ${esc(fmtTime(tr.wrap))}<span>${fmtMins(tr.est)}</span></div>` : ""}${rv ? `<div class="revTag" title="${esc(revText(rv))}">⚠ Revised: ${esc(rv.what.join(", "))}</div>` : ""}</button>`;
   };
   const shotsOn = Object.keys(shotMap).length > 0;
   const unsched = rec.unscheduled.slice().sort((a, b) => byId[a].n - byId[b].n);
   let tabDay = S.dayTab[pid]; if(tabDay == null || tabDay < -1 || tabDay >= pl.days.length) tabDay = pl.days.length ? 0 : -1;
+  // a day's strips in order, with the meal and any company move between them (these aren't strips, so drag and drop ignore them)
+  const dayRows = (tt) => tt.rows.map((r) => r.type === "scene" ? strip(r.id, r)
+    : r.type === "meal" ? `<div class="brk meal${r.late ? " late" : ""}" title="${r.late ? "Past six hours from call: a meal penalty may apply" : "Meal break"}">Meal · ${esc(fmtTime(r.start))} – ${esc(fmtTime(r.end))}</div>`
+    : `<div class="brk move" title="Company move: ${esc(r.from)} → ${esc(r.to)}">Move to ${esc(r.to)} · ${r.min} min</div>`).join("");
   const cols = [`<div class="col${unsched.length ? "" : " none"}${tabDay === -1 ? " sel" : ""}" data-day="-1"><div class="colHead"><b>Unscheduled</b><span class="dt">${unsched.length}</span>
       <div class="colMeta"><span>${P.fmtEighths(unsched.reduce((a, id) => a + byId[id].eighths, 0))} pages</span></div></div>
-      <div class="strips">${unsched.length ? unsched.map(strip).join("") : `<div class="colEmpty">Every scene has a day ✓</div>`}</div></div>`]
+      <div class="strips">${unsched.length ? unsched.map((id) => strip(id)).join("") : `<div class="colEmpty">Every scene has a day ✓</div>`}</div></div>`]
     .concat(pl.days.map((d, i) => {
       const x = stats[i], pct = Math.min(100, Math.round(x.eighths / st.maxEighths * 100));
       return `<div class="col${x.over ? " over" : ""}${S.landed && S.landed.day === i ? " bump" : ""}${tabDay === i ? " sel" : ""}" data-day="${i}">
@@ -497,8 +511,8 @@ function draw(pid){
           <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc${shotsOn ? " · " + P.dayShots(d, shotMap).total + " shots" : ""} · ${x.cast.length} cast</span></div>
           <div class="cap"><i style="width:${pct}%"></i></div>
           ${needsRow(x.needs)}
-          <div class="colCall">Call ${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
-        <div class="strips">${d.scenes.length ? d.scenes.map(strip).join("") : `<div class="colEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`}</div></div>`;
+          <div class="colCall">Call ${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}${times[i].wrap ? `<span class="wrapT" title="Estimated wrap: ${fmtMins(times[i].est)} of shooting plus setups${times[i].rows.some((r) => r.type === "meal") ? ", the meal" : ""}${times[i].rows.some((r) => r.type === "move") ? " and company moves" : ""}">Wrap ${esc(fmtTime(times[i].wrap))}</span>` : ""}${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
+        <div class="strips">${d.scenes.length ? dayRows(times[i]) : `<div class="colEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`}</div></div>`;
     })).join("");
   const dayTabs = `<div class="dayTabs" role="tablist" aria-label="Shoot days">
       <button type="button" role="tab" class="${tabDay === -1 ? "on" : ""}${unsched.length ? " warn" : ""}" data-a="dtab" data-i="-1" aria-selected="${tabDay === -1}">Unscheduled<i>${unsched.length}</i></button>
@@ -864,5 +878,7 @@ function syncNow(pid, btn){
   Promise.resolve(hub.syncSheets(pid, scriptId, btn)).finally(() => { delete S.busy[pid]; rerender(); });
 }
 const isStale = (pid) => { const p = H().project(pid); return !!(p && P.callsheetsStale(p.production)); };
-window.CampProdPanel = { syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
+// Each day's call / shoot / wrap times for Sync (null until the plan has been drawn for this project in this tab)
+function timetable(pid){ try{ if(!S.lastBd || S.lastBdPid !== pid) return null; return P.timetable(planOf(pid), P.sceneMap(S.lastBd)); }catch(_e){ return null; } }
+window.CampProdPanel = { syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, timetable, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
 })();
