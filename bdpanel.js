@@ -109,7 +109,7 @@ const css = `
 #bdctl .shHead{ display:flex; align-items:baseline; gap:12px; padding:12px 14px 4px; }
 #bdctl .shHead h3{ margin:0; font-size:15px; letter-spacing:.04em; font-family:ui-monospace,"Courier Prime","Courier New",monospace; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
 #bdctl .shHead .pr{ font-size:11.5px; color:var(--uiMuted); white-space:nowrap; }
-#bdctl .shFields{ display:grid; grid-template-columns:86px 92px minmax(150px,2fr) 100px 92px minmax(90px,1fr) minmax(90px,1fr) minmax(110px,1fr) 80px; margin:8px 14px 0; border:1px solid var(--uiBorder); border-left:5px solid var(--sc,#ddd); border-radius:10px; overflow:hidden; background:#181818; }
+#bdctl .shFields{ display:grid; grid-template-columns:86px 92px minmax(150px,2fr) 100px 92px minmax(90px,1fr) minmax(90px,1fr) 80px; margin:8px 14px 0; border:1px solid var(--uiBorder); border-left:5px solid var(--sc,#ddd); border-radius:10px; overflow:hidden; background:#181818; }
 #bdctl .shFields .f{ padding:8px 10px; border-left:1px solid var(--uiBorder); display:flex; flex-direction:column; gap:6px; min-width:0; justify-content:space-between; }
 #bdctl .shFields .f:first-child{ border-left:0; background:color-mix(in srgb, var(--sc,#ddd) 14%, #181818); }
 #bdctl .shFields .lb{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--uiMuted); white-space:nowrap; }
@@ -295,7 +295,7 @@ const printCss = `
   #bdctl .stBody{ max-height:none !important; } #bdctl .stHd small{ display:none !important; }
   #bdctl .stBody mark{ box-shadow:inset 0 -2px 0 var(--cc) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   #bdctl .shSide{ position:static !important; border:0 !important; }
-  #bdctl .shFields{ grid-template-columns:repeat(9,auto) !important; border-color:#000 !important; }
+  #bdctl .shFields{ grid-template-columns:repeat(8,auto) !important; border-color:#000 !important; }
   #bdctl .shFields .f, #bdctl .cat, #bdctl table.ct td, #bdctl table.ct th{ border-color:#999 !important; }
   #bdctl .cat{ break-inside:avoid; border-left:4px solid var(--cc) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   #bdctl .cat .ci{ color:var(--cc) !important; filter:none !important; }
@@ -449,11 +449,14 @@ function render(pid){
     return;
   }
   S.forceDraw = false; S.waitBlur = false;
-  const body = box.querySelector(".bdBody"), list = box.querySelector(".bdList");
+  const body = box.querySelector(".bdBody"), list = box.querySelector(".bdList"), sheet = box.querySelector(".bdSheet");
   const top = body ? body.scrollTop : 0, ltop = list ? list.scrollTop : 0, lleft = list ? list.scrollLeft : 0;
+  const stop = sheet ? sheet.scrollTop : 0, ssel = S.sel, sview = S.view;
   draw(pid);
-  const b2 = box.querySelector(".bdBody"), l2 = box.querySelector(".bdList");
+  const b2 = box.querySelector(".bdBody"), l2 = box.querySelector(".bdList"), s2 = box.querySelector(".bdSheet");
   if(b2 && top) b2.scrollTop = top;
+  // same scene still open: stay where you were on the sheet (a new scene starts at the top)
+  if(s2 && stop && ssel === S.sel && sview === S.view) s2.scrollTop = stop;
   if(l2){ if(ltop) l2.scrollTop = ltop; if(lleft) l2.scrollLeft = lleft; }
   // keep the open scene showing in the list
   const on = l2 && l2.querySelector(".bdSc.on");
@@ -591,7 +594,6 @@ function sheetsView(b, can){
       ${fld("Pages (1/8)", `<b title="A page is 8 eighths">${E.fmtEighths(s.eighths)}</b>`)}
       ${fld("Story day", `<input type="text" id="shDay" maxlength="40" value="${esc(s.dayAuto ? "" : s.day)}" placeholder="${esc(s.day)}"${dis}>`)}
       ${fld("Est. minutes", `<input type="number" id="shEst" min="5" max="1440" step="5" value="${s.estAuto ? "" : s.est}" placeholder="${s.est}"${dis}>`)}
-      ${fld("Unit", `<select id="shUnit"${dis}>${["Main", "2nd unit", "Splinter", "Pick-up"].map((u) => `<option${u === s.unit ? " selected" : ""}>${u}</option>`).join("")}</select>`)}
       ${fld("Elements", `<b>${tot}</b>`)}
     </div>`;
   return `<div class="bdSplit">${listBox}
