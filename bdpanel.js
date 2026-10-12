@@ -328,7 +328,7 @@ function render(pid){
   const on = l2 && l2.querySelector(".bdSc.on");
   if(on){ const a = on.offsetTop - l2.offsetTop, z = a + on.offsetHeight; if(a < l2.scrollTop) l2.scrollTop = a - 6; else if(z > l2.scrollTop + l2.clientHeight) l2.scrollTop = z - l2.clientHeight + 6; }
 }
-function head(chips, acts){ return `<div class="bdTop"><span class="bdTitle">Breakdown</span><div class="bdChips">${chips || ""}</div>${acts || ""}</div>`; }
+function head(chips, acts){ return `<div class="bdTop"><span class="bdTitle">${S.lock === "strips" ? "Stripboard" : "Breakdown"}</span><div class="bdChips">${chips || ""}</div>${acts || ""}</div>`; }
 
 function draw(pid){
   S.pid = pid;
@@ -368,12 +368,14 @@ function draw(pid){
     ${sc.state === "loading" ? `<span class="bdChip">Updating from script…</span>` : ""}${!can ? `<span class="bdChip">View only</span>` : ""}
     ${shareChip(S.share[SKEY(pid, sid)], can)}`;
   const acts = `<div class="bdActs">${scriptSel}
-    <div class="seg" role="tablist">${[["sheets", "Sheets"], ["strips", "Stripboard"], ["elements", "Elements"], ["reports", "Reports"]].map(([v, n]) => `<button type="button" role="tab" class="${S.view === v ? "on" : ""}" data-a="view" data-v="${v}" aria-selected="${S.view === v}">${n}</button>`).join("")}</div>
-    ${can ? `<span class="seg"><button type="button" data-a="undo" title="Undo"${hh.undo.length ? "" : " disabled"}>↶</button><button type="button" data-a="redo" title="Redo"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
+    ${S.lock ? "" : `<div class="seg" role="tablist">${[["sheets", "Sheets"], ["elements", "Elements"], ["reports", "Reports"]].map(([v, n]) => `<button type="button" role="tab" class="${S.view === v ? "on" : ""}" data-a="view" data-v="${v}" aria-selected="${S.view === v}">${n}</button>`).join("")}</div>`}
+    ${can && !S.lock ? `<span class="seg"><button type="button" data-a="undo" title="Undo"${hh.undo.length ? "" : " disabled"}>↶</button><button type="button" data-a="redo" title="Redo"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
     </div>`;
   const note = `<div class="bdNote">Suggestions come from the script. Remove what's wrong, add what's missing. Changes are shared with everyone on the project. <button class="btn sm" type="button" data-a="dismissnote" style="margin-left:8px">Got it</button></div>`;
-  const view = S.view === "elements" ? elementsView(b, can) : S.view === "reports" ? reportsView(b, p) : S.view === "strips" ? stripsView(b, p) : sheetsView(b, can);
-  box.innerHTML = head(chips, acts) + `<div class="bdBody${S.view === "sheets" ? " split" : ""}">${can && !lsGet(NOTE_KEY) ? note : ""}${view}</div>`;
+  // The stripboard lives under Schedule (locked mode); in Breakdown a saved "strips" view falls back to Sheets
+  const V = S.lock === "strips" ? "strips" : S.view === "strips" ? "sheets" : S.view;
+  const view = V === "elements" ? elementsView(b, can) : V === "reports" ? reportsView(b, p) : V === "strips" ? stripsView(b, p) : sheetsView(b, can);
+  box.innerHTML = head(chips, acts) + `<div class="bdBody${V === "sheets" ? " split" : ""}">${can && !lsGet(NOTE_KEY) ? note : ""}${view}</div>`;
   wire(box, pid);
 }
 
@@ -536,7 +538,7 @@ function wire(box, pid){
     const a = ev.target.closest("[data-a]"); if(!a || a.tagName === "SELECT" || a.tagName === "INPUT") return;
     const k = a.dataset.a;
     if(k === "view"){ S.view = a.dataset.v; lsSet(VIEW_KEY, S.view); S.edit = null; S.adding = null; rerender(); return; }
-    if(k === "pick" || k === "goto"){ S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; rerender(); return; }
+    if(k === "pick" || k === "goto"){ S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; if(S.lock){ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); return; } rerender(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
     if(k === "csv"){ const m = model(); if(m) download(((hub.scriptTitle(sid) || "breakdown") + " - breakdown.csv").replace(/[\\/:*?"<>|]/g, "-"), E.csv(m)); return; }
     if(k === "rpby"){ S.rpBy = a.dataset.v; rerender(); return; }
@@ -610,6 +612,6 @@ window.addEventListener("storage", (e) => {
   Object.keys(S.share).forEach((k) => { if(S.share[k] === "off" || S.share[k] === "denied") delete S.stores[k]; });   // no team copy: read this device's again
   S.model = null; rerender();
 });
-function setMode(on){ on = !!on; if(on === S.on) return; S.on = on; if(on){ S.edit = null; S.adding = null; S.seen = {}; S.model = null; } rerender(); const box = document.getElementById("bdctl"); if(box) box.className = on ? "on" : ""; }
+function setMode(on, lock){ on = !!on; lock = on && lock ? lock : null; if(on === S.on && lock === (S.lock || null)) return; S.on = on; S.lock = lock; if(on){ S.edit = null; S.adding = null; S.seen = {}; S.model = null; } rerender(); const box = document.getElementById("bdctl"); if(box) box.className = on ? "on" : ""; }
 window.CampBdPanel = { enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, reloadScript: (id) => loadScript(id, true) };
 })();

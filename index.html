@@ -521,7 +521,7 @@ const TABS = ["scripts", "treatment", "storyboard", "breakdown", "schedule", "do
 // Breakdown, Schedule and Docs share the one production pane; each shows its own part of it
 const PROD_TABS = ["breakdown", "schedule", "docs"];
 const isProdTab = t => PROD_TABS.includes(t);
-const tabOfKey = k => k === "@bd" ? "breakdown" : (k === "@plan" || k === "@cs") ? "schedule" : "docs";
+const tabOfKey = k => k === "@bd" ? "breakdown" : (k === "@plan" || k === "@strip" || k === "@cs") ? "schedule" : "docs";
 // Older saves and links used one "production" tab: send them to the part they were on
 const fixTab = (t, key) => t === "production" ? (key ? tabOfKey(key) : "schedule") : t;
 const LS_LAST = "Camp_HUB_LAST_V2", LS_BANNER = "Camp_HUB_BANNER_HIDDEN_V2";
@@ -956,7 +956,7 @@ function reloadSheet() {
 // The production key for the open tab: keep it if it belongs there, else what was last open on that tab, else its first item
 function pickKey() {
   const c = sheetsByProject[current.pid]; if (!c) return;
-  const has = k => k === "@plan" || k === "@bd" || k === "@cs" || c.list.some(s => s.id === k);
+  const has = k => k === "@plan" || k === "@strip" || k === "@bd" || k === "@cs" || c.list.some(s => s.id === k);
   const tab = isProdTab(current.tab) ? current.tab : tabOfKey(has(lastKey[current.pid]) ? lastKey[current.pid] : "@plan");
   const fits = k => has(k) && tabOfKey(k) === tab;
   if (fits(current.key)) return;
@@ -1110,6 +1110,8 @@ function wireList(pane) {
     r.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === r) location.href = r.dataset.href; });
   });
 }
+// A strip on the Stripboard opens that scene's sheet on the Breakdown tab
+window.addEventListener("camp:open-breakdown", () => { current.tab = "breakdown"; current.key = "@bd"; rememberKey("@bd"); saveLast(); renderBody(); });
 document.querySelectorAll(".mtab").forEach(t => t.addEventListener("click", () => { current.tab = t.dataset.tab; if (isProdTab(current.tab)) pickKey(); saveLast(); renderBody(); }));
 
 // Tabs show the kind of sheet, not the film's title ("Film - Budget" -> "Budget"; the crew sheet is the Production Directory)
@@ -1130,7 +1132,7 @@ function renderTabs() {
   };
   const sep = () => { const i = document.createElement("span"); i.className = "tabSep"; box.appendChild(i); };
   // Breakdown has its own views inside the panel, so it needs no strip of its own
-  if (current.tab === "schedule") { pseudoTab("@plan", "Shoot plan", "Shoot days, scene order and Day Out of Days"); pseudoTab("@cs", "Call sheets", "One Google Doc per shoot day"); }
+  if (current.tab === "schedule") { pseudoTab("@plan", "Shoot plan", "Shoot days, scene order and Day Out of Days"); pseudoTab("@strip", "Stripboard", "The shoot in order, one strip per scene"); pseudoTab("@cs", "Call sheets", "One Google Doc per shoot day"); }
   if (current.tab !== "docs") return;
   c.list.forEach(s => {
     const b = document.createElement("button");
@@ -1180,10 +1182,10 @@ function showFrame() {
   Object.values(frames).forEach(f => { f.classList.add("hidden"); f._loader.classList.add("hidden"); });
   const p = projects[current.pid], c = sheetsByProject[current.pid];
   const s = c && current.key ? c.list.find(x => x.id === current.key) : null;
-  const pseudo = current.key === "@plan" || current.key === "@bd" || current.key === "@cs";
+  const pseudo = current.key === "@plan" || current.key === "@bd" || current.key === "@strip" || current.key === "@cs";
   $("prodPane").classList.toggle("pseudo", pseudo);
   try { window.CampProdPanel && window.CampProdPanel.setMode(current.key === "@plan" ? "plan" : current.key === "@cs" ? "cs" : "off"); } catch (e) { console.error(e); }
-  try { if (window.CampBdPanel) { window.CampBdPanel.setMode(current.key === "@bd"); if (current.key === "@bd") window.CampBdPanel.render(current.pid); } } catch (e) { console.error(e); }
+  try { if (window.CampBdPanel) { window.CampBdPanel.setMode(current.key === "@bd" || current.key === "@strip", current.key === "@strip" ? "strips" : null); if (current.key === "@bd" || current.key === "@strip") window.CampBdPanel.render(current.pid); } } catch (e) { console.error(e); }
   { const names = ((sheetsByProject[current.pid] || {}).list || []).map(x => x.name || ""), has = re => names.some(n => re.test(n));
     const all = has(/budget/i) && has(/schedule/i) && has(/shot ?list/i) && has(/production (docs|directory)/i);
     $("createDocs").classList.toggle("hidden", !(p && isOwner(p)) || all || current.tab !== "docs"); }
