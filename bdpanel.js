@@ -365,7 +365,7 @@ function draw(pid){
   const acts = `<div class="bdActs">${scriptSel}
     <div class="seg" role="tablist">${[["sheets", "Sheets"], ["strips", "Stripboard"], ["elements", "Elements"], ["reports", "Reports"]].map(([v, n]) => `<button type="button" role="tab" class="${S.view === v ? "on" : ""}" data-a="view" data-v="${v}" aria-selected="${S.view === v}">${n}</button>`).join("")}</div>
     ${can ? `<span class="seg"><button type="button" data-a="undo" title="Undo"${hh.undo.length ? "" : " disabled"}>↶</button><button type="button" data-a="redo" title="Redo"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
-    <button class="btn sm" type="button" data-a="csv" title="Download the breakdown as a CSV file. The same sheets are in the Schedule Google Sheet after Sync">CSV</button>
+    <button class="btn sm" type="button" data-a="gsheet" title="Update the Breakdown and Elements tabs in the Schedule Google Sheet and open them">Google Sheet ↗</button>
     <button class="btn sm" type="button" data-a="reload" title="Read the latest script">Refresh</button></div>`;
   const note = `<div class="bdNote">Suggestions come from the script. Remove what's wrong, add what's missing. Changes are shared with everyone on the project. <button class="btn sm" type="button" data-a="dismissnote" style="margin-left:8px">Got it</button></div>`;
   const view = S.view === "elements" ? elementsView(b, can) : S.view === "reports" ? reportsView(b, p) : S.view === "strips" ? stripsView(b, p) : sheetsView(b, can);
@@ -495,7 +495,7 @@ function stripsView(b, p){
 /* ---------- reports: by category, or what each shoot day needs ---------- */
 function reportsView(b, p){
   const by = S.rpBy === "day" ? "day" : "cat";
-  const seg = `<div class="bdTools"><div class="seg">${[["cat", "By category"], ["day", "By shoot day"]].map(([v, n]) => `<button type="button" class="${by === v ? "on" : ""}" data-a="rpby" data-v="${v}">${n}</button>`).join("")}</div></div>`;
+  const seg = `<div class="bdTools"><button class="btn sm" type="button" data-a="csv" title="Download this as a CSV file">Download CSV</button><div class="seg">${[["cat", "By category"], ["day", "By shoot day"]].map(([v, n]) => `<button type="button" class="${by === v ? "on" : ""}" data-a="rpby" data-v="${v}">${n}</button>`).join("")}</div></div>`;
   if(by === "day"){
     const pd = planDays(b, p);
     if(!pd) return seg + `<div class="bdEmpty">No shoot plan yet. Start it on the Plan tab to see what each day needs.</div>`;
@@ -534,6 +534,11 @@ function wire(box, pid){
     if(k === "view"){ S.view = a.dataset.v; lsSet(VIEW_KEY, S.view); S.edit = null; S.adding = null; rerender(); return; }
     if(k === "pick" || k === "goto"){ S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; rerender(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
+    if(k === "gsheet"){
+      if(!hub.openBreakdownSheet){ hub.toast("Sync from the Production tab to update the sheet.", "err", 4000); return; }
+      if(!hub.isOwner(p)){ hub.toast("Only the project owner can update the Google Sheet.", "err", 4000); return; }
+      hub.openBreakdownSheet(pid, sid); return;
+    }
     if(k === "csv"){ const m = model(); if(m) download(((hub.scriptTitle(sid) || "breakdown") + " - breakdown.csv").replace(/[\\/:*?"<>|]/g, "-"), E.csv(m)); return; }
     if(k === "rpby"){ S.rpBy = a.dataset.v; rerender(); return; }
     if(k === "dismissnote"){ lsSet(NOTE_KEY, "1"); rerender(); return; }

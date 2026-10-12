@@ -218,6 +218,17 @@ const key = document.createElement("div"); key.className = "bdtKey"; key.hidden 
 style.textContent += `
 .bdtKey{ position:fixed; right:14px; bottom:14px; z-index:9990; width:260px; max-width:calc(100vw - 28px); max-height:46vh; overflow:auto; background:#1c1d21; color:rgba(255,255,255,.92); border:1px solid rgba(255,255,255,.16); border-radius:12px; box-shadow:0 14px 36px rgba(0,0,0,.5); font:12.5px/1.4 Inter,system-ui,sans-serif; padding:10px; }
 .bdtKey[hidden]{ display:none; }
+.bdtKey.inPanel{ position:static; width:auto; max-width:none; max-height:none; overflow:visible; background:transparent; border:0; border-radius:0; box-shadow:none; padding:0; color:inherit; }
+.bdtKey.inPanel .bdtHd{ display:none; }
+.bdtKey .bdtSc{ margin-top:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,.12); }
+.bdtKey .bdtScH{ font-size:11px; opacity:.6; margin-bottom:5px; }
+.bdtKey .bdtRow{ display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px; }
+.bdtKey .bdtRow i{ width:8px; height:8px; border-radius:50%; background:var(--cc); flex:none; }
+.bdtKey .bdtRow .nm{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bdtKey .bdtRow small{ opacity:.55; font-size:10.5px; }
+.bdtKey .bdtRow button{ background:none; border:0; color:inherit; opacity:.55; cursor:pointer; font-size:13px; padding:0 3px; }
+.bdtKey .bdtRow button:hover{ opacity:1; }
+.bdtKey .bdtRow.sug .nm{ opacity:.8; font-style:italic; }
 .bdtKey .bdtHd{ display:flex; align-items:center; gap:6px; font-weight:600; margin-bottom:6px; }
 .bdtKey .bdtHd button{ margin-left:auto; background:none; border:0; color:inherit; opacity:.6; cursor:pointer; font-size:13px; }
 .bdtKey label{ display:flex; gap:6px; align-items:center; font-size:12px; opacity:.85; margin-bottom:6px; cursor:pointer; }
@@ -262,7 +273,7 @@ function doPaint(){
     clearAll();
     const ed = editor();
     document.body.classList.toggle("bdTagsOn", !!(ed && showColours()));
-    if(!ed || !showColours()){ key.hidden = true; return; }
+    if(!ed || !showColours()){ key.hidden = true; const f = document.getElementById("bdtField"); if(f) f.hidden = true; return; }
     const doc = docFromPage(), bd = B ? B.analyze(doc) : { scenes: [], cast: [] }, m = E.build(doc, bd, load());
     const hide = {}; hiddenCats().forEach((c) => { hide[c] = 1; });
     const sug = showSug();
@@ -293,22 +304,53 @@ function doPaint(){
       Object.keys(hand).forEach((c) => CSS.highlights.set("bd-" + c, new Highlight(...hand[c])));
       Object.keys(auto).forEach((c) => CSS.highlights.set("bds-" + c, new Highlight(...auto[c])));
     }
-    // the key: categories in this script, click to hide / show
-    const html = `<div class="bdtHd">Breakdown tags<button type="button" data-k="off" title="Hide tags (View › Show Breakdown Tags)">✕</button></div>
+    lastModel = m; lastCount = count; lastHide = hide; lastSugOn = sug;
+    renderKey();
+  }catch(_e){ try{ console.error(_e); }catch(_x){} }
+}
+
+// The key (and this scene's tags) live in the right-hand panel under Font; they float over the page when that panel is closed
+let lastModel = null, lastCount = {}, lastHide = {}, lastSugOn = true, curScene = "n1";
+function sceneRows(m, sk){
+  const sc = m && m.scenes.find((x) => x.key === sk); if(!sc) return "";
+  const rows = [];
+  E.CATS.forEach((c) => (sc.els[c.id] || []).forEach((k) => {
+    const e = m.elements[k], hand = sc.src[k] !== "auto";
+    rows.push(`<div class="bdtRow${hand ? "" : " sug"}" style="--cc:${c.color}"><i></i><span class="nm" title="${esc(c.label)}">${esc(e.name)}</span><small>${hand ? "tagged" : "suggested"}</small>${hand ? "" : `<button type="button" data-k="keep" data-e="${esc(k)}" title="Keep: make it a tag of your own">✓</button>`}<button type="button" data-k="rm" data-e="${esc(k)}" title="Take out of this scene">✕</button></div>`);
+  }));
+  return `<div class="bdtSc"><div class="bdtScH">This scene · ${esc(sceneTitle(sk))}</div>${rows.join("") || `<div class="bdtNote">Nothing found yet.</div>`}</div>`;
+}
+function renderKey(){
+  const field = document.getElementById("bdtField");
+  if(!lastModel || !showColours()){ key.hidden = true; if(field) field.hidden = true; return; }
+  const m = lastModel, count = lastCount, hide = lastHide, sug = lastSugOn;
+  const r = readSelection(); if(r) curScene = r.sk;
+  if(!m.scenes.some((x) => x.key === curScene) && m.scenes.length) curScene = m.scenes[0].key;   // nothing clicked yet: the first scene
+  const html = `<div class="bdtHd">Breakdown tags<button type="button" data-k="off" title="Hide tags (View › Show Breakdown Tags)">✕</button></div>
       <label><input type="checkbox" data-k="sug"${sug ? " checked" : ""}> Include suggestions <span style="opacity:.6">(light)</span></label>
       <div class="bdtCs">${E.CATS.filter((c) => count[c.id]).map((c) => `<button type="button" data-c="${c.id}" class="${hide[c.id] ? "off" : ""}" style="--cc:${c.color}" title="${hide[c.id] ? "Show" : "Hide"} ${esc(c.label.toLowerCase())}"><i></i>${esc(c.short)}<small>${count[c.id]}</small></button>`).join("") || `<span class="bdtNote">Nothing found yet.</span>`}</div>
-      ${canHighlight ? `<div class="bdtNote">Strong colour = tagged by hand, light = suggested. Comments show as underlines while tags are on. Select words and press Tag to add.</div>` : `<div class="bdtNote">This browser can't colour text. Update it to see tags in the script.</div>`}`;
-    if(html !== lastKeyHtml){ key.innerHTML = html; lastKeyHtml = html; }
-    key.hidden = false;
-  }catch(_e){ try{ console.error(_e); }catch(_x){} }
+      ${canHighlight ? `<div class="bdtNote">Strong colour = tagged by hand, light = suggested. Comments show as underlines while tags are on. Select words and press Tag to add.</div>` : `<div class="bdtNote">This browser can't colour text. Update it to see tags in the script.</div>`}${sceneRows(m, curScene)}`;
+  const host = document.getElementById("bdtPanel"), side = host && host.closest("#panel");
+  const docked = !!(host && side && side.offsetParent !== null);
+  if(docked){ if(key.parentNode !== host) host.appendChild(key); field.hidden = false; }
+  else { if(key.parentNode !== document.body) document.body.appendChild(key); if(field) field.hidden = true; }
+  key.classList.toggle("inPanel", docked);
+  if(html !== lastKeyHtml){ key.innerHTML = html; lastKeyHtml = html; }
+  key.hidden = false;
 }
 key.addEventListener("mousedown", (e) => { if(!e.target.closest("input")) e.preventDefault(); });
 key.addEventListener("click", (e) => {
   const c = e.target.closest("[data-c]");
   if(c){ const h = hiddenCats(), i = h.indexOf(c.dataset.c); if(i >= 0) h.splice(i, 1); else h.push(c.dataset.c); lsSet(HIDE_KEY, JSON.stringify(h)); lastKeyHtml = ""; paint(); return; }
-  const k = e.target.closest("[data-k=off]"); if(k) setShow(false);
+  const k = e.target.closest("[data-k=off]"); if(k){ setShow(false); return; }
+  const act = e.target.closest("[data-k=keep],[data-k=rm]"); if(!act || !lastModel) return;
+  const sc = lastModel.scenes.find((x) => x.key === curScene), ek = act.dataset.e, el = lastModel.elements[ek]; if(!sc || !el) return;
+  if(act.dataset.k === "rm"){ save(E.untag(load(), curScene, ek)); queue({ t: "untag", sk: curScene, k: ek }); say("Took " + el.name + " out of this scene."); }
+  else { const q = (sc.hits[ek] || [])[0] || el.name; save(E.tag(load(), curScene, el.cat, el.name, q)); queue({ t: "tag", sk: curScene, c: el.cat, n: el.name, q: q }); say("Kept " + el.name + "."); }
+  lastKeyHtml = ""; paint();
 });
 key.addEventListener("change", (e) => { if(e.target.dataset.k === "sug"){ lsSet(SUG_KEY, e.target.checked ? "1" : "0"); lastKeyHtml = ""; paint(); } });
+document.addEventListener("selectionchange", () => { if(showColours() && lastModel) renderKey(); });
 function setShow(on){ lsSet(SHOW_KEY, on ? "1" : "0"); lastKeyHtml = ""; paint(); }
 // View › Show Breakdown Tags
 const viewItem = document.getElementById("mToggleTags");

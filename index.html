@@ -1894,6 +1894,21 @@ window.__CampHub = {
   // Rebuild the schedule (with Day Out of Days) and the budget from the plan, then show them
   hasSheets: pid => { const c = sheetsByProject[pid]; return c ? (c.state === "loading" && !c.list.length ? null : c.list.length > 0) : null; },
   createDocs: btn => createDocsFlow(btn),
+  // Update the Schedule sheet's Breakdown + Elements tabs from the Breakdown tab, then open them in Google Sheets
+  openBreakdownSheet: async (pid, fileId) => {
+    const w = window.open("", "_blank");   // opened first, so the browser doesn't block it
+    try {
+      toast("Updating the Breakdown sheet… this can take a minute.", "ok", 240000);
+      const r = await exportDoc("schedule", fileId);
+      if (!r || !r.url) throw new Error("Google didn't send the sheet back.");
+      const u = r.url + (r.breakdownGid != null ? "#gid=" + r.breakdownGid : "");
+      if (w) w.location.href = u; else window.open(u, "_blank");
+      toast("Opened in Google Sheets.", "ok");
+    } catch (err) {
+      try { if (w) w.close(); } catch (_e) {}
+      toast((err && err.message) || "Couldn't update the sheet.", "err", 7000);
+    }
+  },
   // Only the call sheets (one Google Doc per shoot day)
   makeCallsheets: async (pid, fileId, btn) => run(btn, async () => {
     toast("Making the call sheets from the plan… this can take a minute.", "ok", 240000);
