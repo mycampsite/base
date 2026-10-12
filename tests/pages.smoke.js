@@ -80,6 +80,13 @@ let BASE = "";
     await p.keyboard.press("Escape"); await p.evaluate(() => document.getElementById("mToggleTags").click()); await p.waitForTimeout(300);
     await expect(p, () => document.querySelector(".bdtKey").hidden && (!window.CSS.highlights || !window.CSS.highlights.has("bd-cast")), "View › Show Breakdown Tags turns them off");
   });
+  await page(browser, "editor: Australian spellcheck flags color and teh, not realise or colour", "/editor.html?fileId=f1", async (p) => {
+    await p.evaluate(() => { const l = [...document.querySelectorAll("#scriptEditor .line")].find((x) => x.dataset.type === "action"); l.textContent = "We realise the colour is wrong, the color teh."; });
+    await p.waitForFunction(() => window.CampSpell && window.CampSpell.refresh, null, { timeout: 8000 });
+    await p.waitForTimeout(4000);
+    const words = await p.evaluate(() => { const h = CSS.highlights.get("camp-spell"); return h ? [...h].map((r) => r.toString()) : []; });
+    if(!(words.includes("color") && words.includes("teh") && !words.includes("realise") && !words.includes("colour"))) throw new Error("flagged: " + JSON.stringify(words));
+  });
   await page(browser, "storyboard opens", "/storyboard.html?fileId=f1");
   await page(browser, "treatment builds its pages, and Export shows the preview first", "/treatment.html?fileId=f1", async (p) => {
     await expect(p, () => document.querySelectorAll(".navItem").length > 2 && !!document.querySelector("#stage .tpage"), "pages on the stage");

@@ -18136,6 +18136,7 @@ function clearHighlights(){
 <script src="breakdown.js"></script>
 <script src="elements.js"></script>
 <script src="bdtag.js" defer></script>
+<script src="spell.js" defer></script>
 <script>
 /* ---------- Camp banner: menu, sign out, email chip, back to the hub ---------- */
 (function(){
@@ -18336,6 +18337,7 @@ function clearHighlights(){
   #qMenu button:hover, #qMenu .qSub:hover > button{ background:rgba(128,128,128,.18); }
   #qMenu .qRow button{ text-align:center; }
   #qMenu .qItem{ display:block; width:100%; height:28px; padding:0 9px; }
+  #qMenu .qSpellW{ font-weight:700; }
   #qMenu .qSep{ height:1px; margin:3px 4px; background:var(--uiBorder); }
   #qMenu .qSub{ position:relative; }
   #qMenu .qSub > button::after{ content:"›"; float:right; opacity:.55; }
@@ -18347,6 +18349,7 @@ function clearHighlights(){
   #qMenu .qFly button:not(.on){ padding-left:calc(9px + 1.1em); }
 </style>
 <div id="qMenu" hidden role="menu">
+  <div id="qSpell"></div>
   <div class="qRow">
     <button type="button" data-q="mBold" title="Bold"><b>B</b></button>
     <button type="button" data-q="mItalic" title="Italic"><i>I</i></button>
@@ -18388,9 +18391,18 @@ function clearHighlights(){
   ed.addEventListener("contextmenu", (e) => {
     if(e.defaultPrevented) return;                                  // spelling / grammar menu already took it
     if(e.target.closest && e.target.closest(".proof-miss,.proof-gram")) return;
-    try{ if(typeof __isNativeSpellMode === "function" && __isNativeSpellMode()) return; }catch(_e){}
     if(document.body.classList.contains("previewLock")) return;
     e.preventDefault();
+    const sp = document.getElementById("qSpell"); sp.innerHTML = "";
+    const hit = window.CampSpell && window.CampSpell.hit(e.clientX, e.clientY);
+    if(hit){
+      const sg = window.CampSpell.suggest(hit.w);
+      const mk = (txt, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "qItem " + (cls || ""); b.textContent = txt; b.addEventListener("click", () => { hide(); fn(); }); sp.appendChild(b); };
+      if(sg.length) sg.forEach(w => mk(w, "qSpellW", () => window.CampSpell.replace(hit, w))); else mk("No suggestions", "", () => {});
+      mk("Add to dictionary", "", () => window.CampSpell.add(hit.w));
+      mk("Ignore", "", () => window.CampSpell.ignore(hit.w));
+      const sep = document.createElement("div"); sep.className = "qSep"; sp.appendChild(sep);
+    }
     const cur = (document.getElementById("typeSel") || {}).value;
     m.querySelectorAll(".qFly button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
     m.querySelector(".qSub").classList.remove("open");
