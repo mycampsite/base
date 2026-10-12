@@ -7,6 +7,8 @@ const proj={id:"p1",name:"P",production:{scriptId:"f1",settings:{days:2},days:[{
 window.__CampHub={project:()=>proj,canEdit:()=>true,isOwner:()=>true,scriptIds:()=>["f1"],scriptModified:()=>"m1",scriptTitle:()=>"S",
  ripGet:async(q)=>q.action==="load"?{ok:true,doc}:{ok:true,shots:[]},
  writeProduction:async(pid,plan)=>{proj.production=Object.assign(JSON.parse(JSON.stringify(plan)),{updatedAt:Date.now()});},
+ writeBreakdown:async(pid,sid,paths)=>{ if(window.__denyBd) throw new Error("PERMISSION_DENIED: Permission denied"); proj.breakdown=proj.breakdown||{}; const root=proj.breakdown[sid]=proj.breakdown[sid]||{};
+   Object.keys(paths).forEach(p=>{ const ks=p.split("/"); let n=root; ks.slice(0,-1).forEach(k=>{ n=n[k]=n[k]||{}; }); if(paths[p]===null) delete n[ks[ks.length-1]]; else n[ks[ks.length-1]]=JSON.parse(JSON.stringify(paths[p])); }); },
  toast(){},prompt:async()=>"FARM",confirm:async()=>true,hasSheets:()=>true,createDocs(){},layoutChanged(){},syncState(){}};
 </script>
 <script src="../../production.js"></script><script src="../../breakdown.js"></script><script src="../../elements.js"></script><script src="../../bdpanel.js"></script>

@@ -1,8 +1,8 @@
 /* bdtag.js — tag script text for the breakdown, from the editor.
    Select words (SHOTGUN, a red dress, the old ute…), press Ctrl/Cmd+Alt+B or the Tag button, pick a category.
    The element is added to that scene's breakdown sheet (the Breakdown tab shows it), and the words are
-   coloured in the script by category. Nothing is written into the script itself: tags live in the same
-   per-script store as the Breakdown tab (elements.js), and the colours are drawn with the browser's
+   coloured in the script by category. Nothing is written into the script itself: tags go into this device's
+   copy of the breakdown plus a queue the hub uploads to the team (bdpanel.js), and the colours are drawn with the browser's
    highlight layer, so printing, exports and the saved script are untouched.
    Needs: elements.js. Works on editor.html. */
 (function(){
@@ -20,6 +20,9 @@ const canHighlight = typeof CSS !== "undefined" && CSS.highlights && typeof High
 
 function load(){ try{ const v = JSON.parse(lsGet(STORE_KEY) || "{}"); return v && typeof v === "object" ? v : {}; }catch(_e){ return {}; } }
 function save(st){ lsSet(STORE_KEY, JSON.stringify(st || {})); }
+// The hub uploads these to the team's copy (Breakdown tab) the next time it's open, or straight away if it is
+const PEND_KEY = "Camp_BD_PENDING_V1_" + fileId;
+function queue(op){ try{ const l = JSON.parse(lsGet(PEND_KEY) || "[]"); (Array.isArray(l) ? l : []).push(op); lsSet(PEND_KEY, JSON.stringify(l.slice(-500))); }catch(_e){ lsSet(PEND_KEY, JSON.stringify([op])); } }
 const showColours = () => lsGet(SHOW_KEY) !== "0";
 
 /* ---------- styles ---------- */
@@ -129,6 +132,7 @@ function add(){
   const i = pop.querySelector("#bdtName"), name = i ? i.value.trim() : "";
   if(!name){ if(i) i.focus(); return; }
   save(E.tag(load(), cur.sk, cat, name, cur.quote));
+  queue({ t: "tag", sk: cur.sk, c: cat, n: name, q: cur.quote || "" });
   lsSet(LAST_KEY, cat);
   say("Tagged " + name + " as " + E.CAT[cat].label.toLowerCase() + ".");
   cur.name = ""; cur.quote = ""; drawPop(); place(); paint();
@@ -141,7 +145,7 @@ pop.addEventListener("click", (e) => {
   const a = e.target.closest("[data-a]"); if(!a) return;
   if(a.dataset.a === "close") close();
   else if(a.dataset.a === "add") add();
-  else if(a.dataset.a === "rm"){ save(E.untag(load(), cur.sk, a.dataset.k)); drawPop(); paint(); }
+  else if(a.dataset.a === "rm"){ save(E.untag(load(), cur.sk, a.dataset.k)); queue({ t: "untag", sk: cur.sk, k: a.dataset.k }); drawPop(); paint(); }
 });
 pop.addEventListener("change", (e) => { if(e.target.dataset && e.target.dataset.a === "show"){ lsSet(SHOW_KEY, e.target.checked ? "1" : "0"); paint(); } });
 pop.addEventListener("keydown", (e) => {

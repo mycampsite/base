@@ -3,7 +3,8 @@
    (rename, merge, recategorise, ignore, notes) and per-category reports with a CSV export.
    It reads the script with breakdown.js, builds elements with elements.js, and shows them.
    Needs: breakdown.js, production.js, elements.js and window.__CampHub (set up by index.html).
-   Your edits are saved by `storage` below (this device, per project and script). */
+   Edits are shared with the team at projects/<pid>/breakdown/<scriptId> (Firebase), one small entry at a time,
+   and this device keeps a copy so the editor can colour tags (see `local` and `sync` below). */
 (function(){
 "use strict";
 const B = window.CampBreakdown, P = window.CampProduction, E = window.CampElements;
@@ -13,18 +14,28 @@ const lsSet = (k, v) => { try{ localStorage.setItem(k, v); }catch(_e){} };
 const H = () => window.__CampHub;
 const VIEW_KEY = "Camp_BD_VIEW_V1", NOTE_KEY = "Camp_BD_NOTE_V1";
 
-/* ---------- where edits live (one place to change) ---------- */
-// One store per script, so the editor (which only knows the script) and this tab see the same edits.
-const storage = {
+/* ---------- where edits live ----------
+   The team's copy: projects/<pid>/breakdown/<scriptId> in Firebase. The hub already listens to the whole
+   project, so it arrives live as project.breakdown. This device keeps:
+     Camp_BD_V1_<sid>          a copy of the store (the editor reads it to colour tags)
+     Camp_BD_PENDING_V1_<sid>  tags made in the editor, waiting for the hub to upload them
+     Camp_BD_UNSYNCED_V1_<sid> "1" when this device has edits the team doesn't (made offline, before sync
+                               existed, or while the database refused them); they're merged in, never dropped */
+const local = {
   key: (sid) => "Camp_BD_V1_" + sid,
   load(pid, sid){
     try{
       let raw = lsGet(this.key(sid));
-      if(raw == null){ raw = lsGet("Camp_BD_V1_" + pid + "_" + sid); if(raw != null) lsSet(this.key(sid), raw); }   // edits made before the editor could tag
+      if(raw == null){ raw = lsGet("Camp_BD_V1_" + pid + "_" + sid); if(raw != null){ lsSet(this.key(sid), raw); this.dirty(sid, true); } }   // device-only edits from before
       const v = JSON.parse(raw || "{}"); return v && typeof v === "object" ? v : {};
     }catch(_e){ return {}; }
   },
-  save(pid, sid, st){ lsSet(this.key(sid), JSON.stringify(st || {})); }
+  save(sid, st){ lsSet(this.key(sid), JSON.stringify(st || {})); },
+  pending(sid){ try{ const v = JSON.parse(lsGet("Camp_BD_PENDING_V1_" + sid) || "[]"); return Array.isArray(v) ? v : []; }catch(_e){ return []; } },
+  clearPending(sid, n){ const rest = this.pending(sid).slice(n); if(rest.length) lsSet("Camp_BD_PENDING_V1_" + sid, JSON.stringify(rest)); else { try{ localStorage.removeItem("Camp_BD_PENDING_V1_" + sid); }catch(_e){} } },
+  // never synced from this device and there's something here: treat it as unshared
+  isDirty(sid){ const d = lsGet("Camp_BD_UNSYNCED_V1_" + sid); if(d != null) return d === "1"; const raw = lsGet(this.key(sid)); return !!(raw && raw !== "{}"); },
+  dirty(sid, on){ lsSet("Camp_BD_UNSYNCED_V1_" + sid, on ? "1" : "0"); }
 };
 
 const S = {
@@ -37,6 +48,9 @@ const S = {
   cat: "all", q: "", rpBy: "cat",                    // Elements view filter
   adding: null,                         // { sk, cat } adding an element by hand
   edit: null,                           // element key being edited
+  share: {},                            // pid|scriptId -> "ok" | "denied" | "error" | "off" (no database)
+  seen: {},                             // pid|scriptId -> the team copy last taken in (JSON)
+  inflight: {},                         // pid|scriptId -> changes sent and not yet confirmed
   scriptPick: {},                       // pid -> script chosen here (this device only; the shared plan isn't touched)
   hist: {}                              // pid|scriptId -> { undo:[json], redo:[json] }
 };
@@ -166,7 +180,7 @@ const DN = { D: "Day", N: "Night", M: "Dawn/Dusk" };
 const fmtMin = (m) => m >= 60 ? Math.floor(m / 60) + "h" + (m % 60 ? " " + String(m % 60).padStart(2, "0") : "") : m + "m";
 const SKEY = (pid, sid) => pid + "|" + sid;
 let rafId = 0;
-function rerender(){ cancelAnimationFrame(rafId); rafId = requestAnimationFrame(() => { if(S.pid && S.on) render(S.pid); }); }
+function rerender(){ S.forceDraw = true; cancelAnimationFrame(rafId); rafId = requestAnimationFrame(() => { if(S.pid && S.on) render(S.pid); }); }
 
 /* ---------- script ---------- */
 async function loadScript(id, force){
@@ -185,7 +199,52 @@ async function loadScript(id, force){
 }
 // The plan's flag and location choices shape the breakdown everywhere, so use the same ones here
 function planOpts(p){ try{ return P.analyzeOpts(P.normalize(p && p.production)); }catch(_e){ return {}; } }
-function storeOf(pid, sid){ const k = SKEY(pid, sid); return S.stores[k] || (S.stores[k] = storage.load(pid, sid)); }
+function storeOf(pid, sid){ const k = SKEY(pid, sid); return S.stores[k] || (S.stores[k] = local.load(pid, sid)); }
+
+/* ---------- team sync ---------- */
+// Send only the entries that changed. A refusal (no database rule yet, or no permission) keeps the edit
+// on this device, marked unshared, so it's merged in once sharing works.
+function push(pid, sid, paths){
+  const hub = H(), k = SKEY(pid, sid);
+  if(!Object.keys(paths).length) return;
+  if(!hub.writeBreakdown || S.share[k] === "denied" || S.share[k] === "off"){ local.dirty(sid, true); return; }
+  S.inflight[k] = (S.inflight[k] || 0) + 1;
+  const done = () => { S.inflight[k]--; S.seen[k] = undefined; rerender(); };   // look at the team copy again once it's settled
+  Promise.resolve().then(() => hub.writeBreakdown(pid, sid, paths)).then(() => {
+    S.share[k] = "ok"; done();
+  }).catch((err) => {
+    const m = String((err && (err.code || err.message)) || err);
+    S.share[k] = /permission|denied/i.test(m) ? "denied" : "error";
+    local.dirty(sid, true);
+    hub.toast(S.share[k] === "denied" ? "The breakdown isn't shared yet: the database refused it. Your changes are kept on this device." : "Couldn't share that change. It's kept on this device: " + m, "err", 5000);
+    done();
+  });
+}
+// Each draw: take in the team's copy, add anything this device hasn't shared yet, upload the difference
+function sync(pid, sid, p, can){
+  const hub = H(), k = SKEY(pid, sid);
+  if(!hub.writeBreakdown){ S.share[k] = "off"; return; }
+  if(S.share[k] === "denied") return;                                   // keep working on this device's copy
+  // While a change is on its way, the database may briefly show the copy without it (or take it back if
+  // refused): don't take that in, or the change would vanish from this device too. Look again once it settles.
+  if(S.inflight[k] > 0) return;
+  const raw = (p && p.breakdown && p.breakdown[sid]) || null, rj = JSON.stringify(raw);
+  const pend = can ? local.pending(sid) : [], dirty = can && local.isDirty(sid);
+  if(rj === S.seen[k] && !pend.length && !dirty) return;
+  S.seen[k] = rj;
+  const team = E.fromRemote(raw);
+  let next = team;
+  if(dirty) next = E.mergeStores(team, local.load(pid, sid));          // keep both: nothing is dropped
+  if(pend.length) next = E.applyOps(next, pend);
+  if(can){
+    if(pend.length) local.clearPending(sid, pend.length);
+    if(dirty) local.dirty(sid, false);
+    push(pid, sid, E.diff(team, next));                                 // a refusal marks it unshared again
+  }
+  if(!dirty && can) local.dirty(sid, false);                            // this device is now in step with the team
+  if(JSON.stringify(next) !== JSON.stringify(S.stores[k])){ S.stores[k] = next; S.model = null; }
+  local.save(sid, next);
+}
 
 /* ---------- the model: script + edits -> scenes with elements ---------- */
 function modelFor(pid, sid, sc, p){
@@ -201,7 +260,8 @@ function edit(pid, sid, fn, quiet){
   if(JSON.stringify(next) === JSON.stringify(cur)) return;
   const h = S.hist[k] = S.hist[k] || { undo: [], redo: [] };
   h.undo.push(JSON.stringify(cur)); if(h.undo.length > 60) h.undo.shift(); h.redo = [];
-  S.stores[k] = next; storage.save(pid, sid, next); S.model = null;
+  S.stores[k] = next; local.save(sid, next); S.model = null;
+  push(pid, sid, E.diff(cur, next));
   if(!quiet) rerender();
 }
 function stepHist(pid, sid, back){
@@ -209,13 +269,20 @@ function stepHist(pid, sid, back){
   const from = back ? h.undo : h.redo, to = back ? h.redo : h.undo;
   if(!from.length) return;
   to.push(JSON.stringify(storeOf(pid, sid)));
-  const next = JSON.parse(from.pop());
-  S.stores[k] = next; storage.save(pid, sid, next); S.model = null; rerender();
+  const cur = storeOf(pid, sid), next = JSON.parse(from.pop());
+  S.stores[k] = next; local.save(sid, next); S.model = null;
+  push(pid, sid, E.diff(cur, next)); rerender();
 }
 
 /* ---------- rendering ---------- */
 function render(pid){
   const box = document.getElementById("bdctl"); if(!box) return;
+  const ae = document.activeElement;
+  if(ae && box.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.type !== "checkbox" && !S.forceDraw){
+    if(!S.waitBlur){ S.waitBlur = true; ae.addEventListener("blur", () => { S.waitBlur = false; setTimeout(() => { if(S.on && S.pid) render(S.pid); }, 0); }, { once: true }); }
+    return;
+  }
+  S.forceDraw = false; S.waitBlur = false;
   const body = box.querySelector(".bdBody"), list = box.querySelector(".bdList");
   const top = body ? body.scrollTop : 0, ltop = list ? list.scrollTop : 0, lleft = list ? list.scrollLeft : 0;
   draw(pid);
@@ -251,6 +318,7 @@ function draw(pid){
   else if(sc.state === "ok" && modNow && !sc.modified) sc.modified = modNow;
 
   const can = hub.canEdit(p);
+  sync(pid, sid, p, can);
   const b = modelFor(pid, sid, sc, p);
   if(!b.scenes.length){ box.innerHTML = head(`<span class="bdChip">No scenes yet</span>`) + `<div class="bdEmpty">Write a scene heading in the script (INT. HOUSE - DAY) and the breakdown fills in.</div>`; wire(box, pid); return; }
   if(S.sel < 1 || S.sel > b.scenes.length) S.sel = 1;
@@ -259,16 +327,25 @@ function draw(pid){
   const chips = `<span class="bdChip">${b.totals.scenes} scenes · ${E.fmtEighths(b.totals.eighths)} pages</span>
     <span class="bdChip hideSm">${b.totals.elements} elements</span>
     <span class="bdChip hideSm" title="Estimated shooting time, about an hour a page plus allowances for heavy scenes">~${fmtMin(b.totals.est)} to shoot</span>
-    ${sc.state === "loading" ? `<span class="bdChip">Updating from script…</span>` : ""}${!can ? `<span class="bdChip">View only</span>` : ""}`;
+    ${sc.state === "loading" ? `<span class="bdChip">Updating from script…</span>` : ""}${!can ? `<span class="bdChip">View only</span>` : ""}
+    ${shareChip(S.share[SKEY(pid, sid)], can)}`;
   const acts = `<div class="bdActs">${scriptSel}
     <div class="seg" role="tablist">${[["sheets", "Sheets"], ["strips", "Stripboard"], ["elements", "Elements"], ["reports", "Reports"]].map(([v, n]) => `<button type="button" role="tab" class="${S.view === v ? "on" : ""}" data-a="view" data-v="${v}" aria-selected="${S.view === v}">${n}</button>`).join("")}</div>
     ${can ? `<span class="seg"><button type="button" data-a="undo" title="Undo"${hh.undo.length ? "" : " disabled"}>↶</button><button type="button" data-a="redo" title="Redo"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
     <button class="btn sm" type="button" data-a="csv" title="Download the breakdown as a spreadsheet file (CSV)">CSV</button>
     <button class="btn sm" type="button" data-a="reload" title="Read the latest script">Refresh</button></div>`;
-  const note = `<div class="bdNote">Suggestions come from the script. Remove what's wrong, add what's missing. Your changes are kept on this device only for now. <button class="btn sm" type="button" data-a="dismissnote" style="margin-left:8px">Got it</button></div>`;
+  const note = `<div class="bdNote">Suggestions come from the script. Remove what's wrong, add what's missing. Changes are shared with everyone on the project. <button class="btn sm" type="button" data-a="dismissnote" style="margin-left:8px">Got it</button></div>`;
   const view = S.view === "elements" ? elementsView(b, can) : S.view === "reports" ? reportsView(b, p) : S.view === "strips" ? stripsView(b, p) : sheetsView(b, can);
   box.innerHTML = head(chips, acts) + `<div class="bdBody">${can && !lsGet(NOTE_KEY) ? note : ""}${view}</div>`;
   wire(box, pid);
+}
+
+function shareChip(st, can){
+  if(!can) return "";
+  if(st === "denied") return `<span class="bdChip warn" title="Firebase refused the breakdown (the database rule for projects/…/breakdown is missing, or your role can't edit). Changes stay on this device and are merged in once sharing works.">⚠ Not shared · this device only</span>`;
+  if(st === "error") return `<span class="bdChip warn" title="The last change didn't reach the team. It's kept on this device and is sent again on the next change.">⚠ Not sent</span>`;
+  if(st === "off") return `<span class="bdChip">This device only</span>`;
+  return "";
 }
 
 /* ---------- sheets ---------- */
@@ -490,7 +567,12 @@ document.addEventListener("keydown", (e) => {
 });
 
 // Tags made in the editor (another tab) arrive through localStorage
-window.addEventListener("storage", (e) => { if(e.key && e.key.indexOf("Camp_BD_V1_") === 0){ S.stores = {}; S.model = null; rerender(); } });
-function setMode(on){ on = !!on; if(on === S.on) return; S.on = on; if(on){ S.edit = null; S.adding = null; S.stores = {}; S.model = null; } rerender(); const box = document.getElementById("bdctl"); if(box) box.className = on ? "on" : ""; }
+window.addEventListener("storage", (e) => {
+  if(!e.key || !/^Camp_BD_(V1|PENDING_V1|UNSYNCED_V1)_/.test(e.key)) return;
+  S.seen = {};                                                         // look again (and upload the editor's tags)
+  Object.keys(S.share).forEach((k) => { if(S.share[k] === "off" || S.share[k] === "denied") delete S.stores[k]; });   // no team copy: read this device's again
+  S.model = null; rerender();
+});
+function setMode(on){ on = !!on; if(on === S.on) return; S.on = on; if(on){ S.edit = null; S.adding = null; S.seen = {}; S.model = null; } rerender(); const box = document.getElementById("bdctl"); if(box) box.className = on ? "on" : ""; }
 window.CampBdPanel = { render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, reloadScript: (id) => loadScript(id, true) };
 })();

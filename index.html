@@ -492,7 +492,7 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "__API_KEY__",
@@ -549,7 +549,8 @@ let sheetCache = readJson(SHEETS_CACHE, {});
 let projCacheTimer = 0;
 function saveProjectsCache() {
   clearTimeout(projCacheTimer);
-  projCacheTimer = setTimeout(() => { if (me && me.uid) lsSet(PROJ_CACHE, JSON.stringify({ uid: me.uid, projects })); }, 400);
+  // the breakdown can be large and Breakdown keeps its own copy, so it isn't cached with the project list
+  projCacheTimer = setTimeout(() => { if (me && me.uid) lsSet(PROJ_CACHE, JSON.stringify({ uid: me.uid, projects }, (k, v) => k === "breakdown" ? undefined : v)); }, 400);
 }
 
 // Sheet order and dark view are remembered on this device
@@ -1878,6 +1879,9 @@ window.__CampHub = {
   ripPost: body => ripPost(body),
   // The plan lives with the project, so every member sees changes live. ⚠ needs the production rule.
   writeProduction: (pid, plan) => set(ref(db, "projects/" + pid + "/production"), Object.assign({}, plan, { updatedAt: Date.now(), by: (me && me.email) || "" })),
+  // The breakdown (bdpanel.js): only the entries that changed, so teammates editing at once don't overwrite each other.
+  // ⚠ needs the breakdown rule (projects/$pid/breakdown).
+  writeBreakdown: (pid, sid, paths) => update(ref(db, "projects/" + pid + "/breakdown/" + sid), paths),
   toast: (m, kind, ms) => toast(m, kind, ms),
   confirm: (title, text, ok, danger) => confirmDlg(title, text, ok, !!danger),
   prompt: (title, label, value) => dialog({ title, fields: [{ name: "v", label, value: value || "" }], ok: "OK" }).then(v => v ? String(v.v || "").trim() : ""),

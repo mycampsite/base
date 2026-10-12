@@ -451,6 +451,97 @@ function setScene(st, sk, field, val) {
   return st;
 }
 
+
+// ---------- Team sync (Firebase): the store as a tree of small entries, so each edit writes only what changed ----------
+// projects/<pid>/breakdown/<scriptId>/
+//   tags/<scene>/<element>: { c, n, q:[…] }   off/<scene>/<element>: true   drop/<element>: true
+//   alias/<element>: "to"   names/<element>: "Name"   notes/<element>: "text"   scene/<scene>: { syn, day, est, unit, note }
+// Firebase keys can't hold . # $ [ ] / or control characters, so keys are %-encoded.
+function encKey(k) { return String(k).replace(/[%.#$\[\]\/\x00-\x1f\x7f]/g, function (c) { return "%" + ("0" + c.charCodeAt(0).toString(16).toUpperCase()).slice(-2); }); }
+function decKey(k) { return String(k).replace(/%([0-9A-F]{2})/gi, function (_m, h) { return String.fromCharCode(parseInt(h, 16)); }); }
+const MAPS_ = ["alias", "names", "notes"];
+function toRemote(st) {
+  st = st && typeof st === "object" ? st : {};
+  const out = {};
+  Object.keys(st.tags || {}).forEach(function (sk) {
+    (st.tags[sk] || []).forEach(function (t) {
+      if (!t || !CAT[t.c] || !clean(t.n)) return;
+      const v = { c: t.c, n: clean(t.n).slice(0, 60) };
+      if (Array.isArray(t.q) && t.q.length) v.q = t.q.slice(0, 6).map(function (x) { return String(x).slice(0, 80); });
+      ((out.tags = out.tags || {})[encKey(sk)] = out.tags[encKey(sk)] || {})[encKey(key(t.c, t.n))] = v;
+    });
+  });
+  Object.keys(st.off || {}).forEach(function (sk) { (st.off[sk] || []).forEach(function (k) { ((out.off = out.off || {})[encKey(sk)] = out.off[encKey(sk)] || {})[encKey(k)] = true; }); });
+  (st.drop || []).forEach(function (k) { (out.drop = out.drop || {})[encKey(k)] = true; });
+  MAPS_.forEach(function (m) { Object.keys(st[m] || {}).forEach(function (k) { if (st[m][k] != null && st[m][k] !== "") (out[m] = out[m] || {})[encKey(k)] = String(st[m][k]); }); });
+  Object.keys(st.scene || {}).forEach(function (sk) { const v = st.scene[sk]; if (v && Object.keys(v).length) (out.scene = out.scene || {})[encKey(sk)] = JSON.parse(JSON.stringify(v)); });
+  return out;
+}
+function fromRemote(r) {
+  r = r && typeof r === "object" ? r : {};
+  const st = {};
+  const obj = function (x) { return x && typeof x === "object" ? x : {}; };
+  Object.keys(obj(r.tags)).forEach(function (sk) {
+    const list = Object.keys(obj(r.tags[sk])).map(function (ek) {
+      const t = obj(r.tags[sk][ek]); if (!CAT[t.c] || !clean(t.n)) return null;
+      const v = { c: t.c, n: clean(t.n) };
+      const q = Array.isArray(t.q) ? t.q : Object.keys(obj(t.q)).map(function (i) { return t.q[i]; });   // Firebase can return arrays as objects
+      if (q.length) v.q = q.map(String);
+      return v;
+    }).filter(Boolean);
+    if (list.length) (st.tags = st.tags || {})[decKey(sk)] = list;
+  });
+  Object.keys(obj(r.off)).forEach(function (sk) { const l = Object.keys(obj(r.off[sk])).filter(function (k) { return r.off[sk][k]; }).map(decKey); if (l.length) (st.off = st.off || {})[decKey(sk)] = l; });
+  const dr = Object.keys(obj(r.drop)).filter(function (k) { return r.drop[k]; }).map(decKey); if (dr.length) st.drop = dr;
+  MAPS_.forEach(function (m) { Object.keys(obj(r[m])).forEach(function (k) { if (typeof r[m][k] === "string") (st[m] = st[m] || {})[decKey(k)] = r[m][k]; }); });
+  Object.keys(obj(r.scene)).forEach(function (sk) { const v = obj(r.scene[sk]); if (Object.keys(v).length) (st.scene = st.scene || {})[decKey(sk)] = JSON.parse(JSON.stringify(v)); });
+  return st;
+}
+// The entries that differ between two stores, as { "tags/<scene>/<element>": value | null, … } for one update()
+const DEPTH_ = { tags: 3, off: 3, drop: 2, alias: 2, names: 2, notes: 2, scene: 2 };
+function flat(r) {
+  const out = {};
+  Object.keys(DEPTH_).forEach(function (top) {
+    const walk = function (node, path, d) {
+      if (d === DEPTH_[top] || !node || typeof node !== "object") { out[path] = JSON.stringify(node); return; }
+      Object.keys(node).forEach(function (k) { walk(node[k], path + "/" + k, d + 1); });
+    };
+    if (r[top] != null) walk(r[top], top, 1);
+  });
+  return out;
+}
+function diff(a, b) {
+  const fa = flat(toRemote(a)), fb = flat(toRemote(b)), out = {};
+  Object.keys(fa).forEach(function (p) { if (!(p in fb)) out[p] = null; });
+  Object.keys(fb).forEach(function (p) { if (fa[p] !== fb[p]) out[p] = JSON.parse(fb[p]); });
+  return out;
+}
+// Put two stores together without losing either's entries (b's single values win when both have one)
+function mergeStores(a, b) {
+  const ra = toRemote(a), rb = toRemote(b), out = JSON.parse(JSON.stringify(ra));
+  Object.keys(rb).forEach(function (top) {
+    out[top] = out[top] || {};
+    Object.keys(rb[top]).forEach(function (k) {
+      if ((top === "tags" || top === "off") && out[top][k]) Object.keys(rb[top][k]).forEach(function (e) {
+        const x = out[top][k][e], y = rb[top][k][e];
+        if (top === "tags" && x && y) { const q = (x.q || []).concat((y.q || []).filter(function (w) { return (x.q || []).indexOf(w) < 0; })).slice(0, 6); out[top][k][e] = Object.assign({}, y, q.length ? { q: q } : {}); }
+        else out[top][k][e] = y;
+      });
+      else out[top][k] = rb[top][k];
+    });
+  });
+  return fromRemote(out);
+}
+// Edits the editor made while the hub wasn't watching: [{ t:"tag", sk, c, n, q } | { t:"untag", sk, k }]
+function applyOps(st, ops) {
+  (Array.isArray(ops) ? ops : []).forEach(function (o) {
+    if (!o || typeof o !== "object") return;
+    if (o.t === "tag") st = tag(st, String(o.sk || ""), o.c, o.n, o.q);
+    else if (o.t === "untag" && o.k) st = untag(st, String(o.sk || ""), String(o.k));
+  });
+  return st;
+}
+
 // ---------- Reports ----------
 function fmtEighths(n) { n = Math.round(Number(n) || 0); const p = Math.floor(n / 8), r = n % 8; return p ? (r ? p + " " + r + "/8" : String(p)) : r + "/8"; }
 // One row per element: what it is, which scenes, how many pages — the list each department works from
@@ -471,7 +562,8 @@ function csv(b) {
 const api = { CATS: CATS, CAT: CAT, build: build, suggestScene: suggestScene, sceneTexts: sceneTexts, storyDays: storyDays, estimate: estimate,
   key: key, norm: norm, display: display, sceneKey: sceneKey, resolve: resolve,
   tag: tag, untag: untag, drop: dropEl, undrop: undrop, rename: rename, merge: merge, unmerge: unmerge, setNote: setNote, setScene: setScene,
-  report: report, csv: csv, fmtEighths: fmtEighths };
+  report: report, csv: csv, fmtEighths: fmtEighths,
+  encKey: encKey, decKey: decKey, toRemote: toRemote, fromRemote: fromRemote, diff: diff, mergeStores: mergeStores, applyOps: applyOps };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.CampElements = api;
 })(typeof window !== "undefined" ? window : this);

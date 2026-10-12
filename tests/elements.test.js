@@ -159,6 +159,46 @@ test("store edits never change the store they were given", () => {
   assert.strictEqual(JSON.stringify(st), before);
 });
 
+test("sync: keys with Firebase-forbidden characters survive the round trip", () => {
+  ["props|mr. smith's gun", "a/b#c$d[e]f", "100%", "x.y"].forEach((k) => {
+    const e = E.encKey(k); assert.ok(!/[.#$\[\]\/]/.test(e), e); assert.strictEqual(E.decKey(e), k);
+  });
+});
+
+test("sync: store -> Firebase tree -> store keeps everything", () => {
+  let st = E.tag({}, "l0", "props", "Mr. Smith's gun", "the GUN");
+  st = E.untag(st, "l4", "props|phone"); st = E.drop(st, "sound|bang");
+  st = E.rename(st, "props|laptop", "props", "Sarah's iPhone"); st = E.setNote(st, "props|sarah's iphone", "Cracked");
+  st = E.setScene(st, "l0", "syn", "A gun."); st = E.setScene(st, "l0", "est", 45);
+  const back = E.fromRemote(JSON.parse(JSON.stringify(E.toRemote(st))));
+  assert.deepStrictEqual(back, st);
+});
+
+test("sync: Firebase arrays that come back as objects are read", () => {
+  const r = { tags: { l0: { [E.encKey("props|gun")]: { c: "props", n: "Gun", q: { 0: "GUN", 1: "a gun" } } } } };
+  assert.deepStrictEqual(E.fromRemote(r).tags.l0[0].q, ["GUN", "a gun"]);
+});
+
+test("sync: an edit writes only the entries it changed", () => {
+  let a = E.tag({}, "l0", "props", "Cup"); a = E.tag(a, "l2", "props", "Phone");
+  const b = E.tag(a, "l0", "props", "Mug");
+  assert.deepStrictEqual(Object.keys(E.diff(a, b)), ["tags/l0/props|mug"]);
+  const c = E.untag(b, "l2", "props|phone");
+  const d = E.diff(b, c);
+  assert.strictEqual(d["tags/l2/props|phone"], null); assert.strictEqual(d["off/l2/props|phone"], true);
+  assert.deepStrictEqual(E.diff(c, c), {});
+  const e = E.setScene(c, "l0", "syn", "x"), f = E.setScene(e, "l0", "syn", "");
+  assert.deepStrictEqual(E.diff(e, f), { "scene/l0": null });
+});
+
+test("sync: merging keeps both sides' tags; editor ops replay on the team's copy", () => {
+  const team = E.tag({}, "l0", "props", "Cup", "a cup"), mine = E.tag(E.tag({}, "l0", "props", "Cup", "the CUP"), "l2", "sound", "Bang");
+  const m = E.mergeStores(team, mine);
+  assert.deepStrictEqual(m.tags.l0[0].q, ["a cup", "the CUP"]); assert.strictEqual(m.tags.l2[0].n, "Bang");
+  const r = E.applyOps(team, [{ t: "tag", sk: "l2", c: "props", n: "Lamp", q: "LAMP" }, { t: "untag", sk: "l0", k: "props|cup" }, null, { t: "nope" }]);
+  assert.strictEqual(r.tags.l2[0].n, "Lamp"); assert.ok(!r.tags.l0); assert.deepStrictEqual(r.off.l0, ["props|cup"]);
+});
+
 test("bad input: empty doc, missing breakdown, junk store", () => {
   assert.strictEqual(E.build(null, null, null).scenes.length, 0);
   const b = run([["scene", "INT. A - DAY"], ["action", "x"]], { tags: { l0: [null, { c: "nope", n: "x" }, { c: "props", n: "  " }] }, alias: { a: "a" }, drop: [] });
