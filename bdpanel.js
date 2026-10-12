@@ -226,7 +226,7 @@ const css = `
 #bdctl .nt{ color:var(--uiMuted); font-size:11.5px; display:block; margin-top:2px; white-space:pre-wrap; }
 /* reports */
 /* stripboard */
-#bdctl .stpHead, #bdctl .stp{ display:grid; grid-template-columns:44px 58px minmax(140px,1fr) 78px 54px 50px minmax(70px,140px) 92px; gap:8px; align-items:center; }
+#bdctl .stpHead, #bdctl .stp{ display:grid; grid-template-columns:44px 58px minmax(140px,1fr) 78px 54px 50px minmax(70px,140px) 130px; gap:8px; align-items:center; }
 #bdctl .stpHead{ font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--uiMuted); padding:12px 10px 6px 15px; }
 #bdctl .stpWrap{ display:flex; flex-direction:column; gap:2px; }
 #bdctl .stp{ text-align:left; width:100%; border:0; border-left:5px solid var(--sc,#ddd); border-radius:4px; padding:5px 10px; background:color-mix(in srgb, var(--sc,#ddd) 16%, #191919); color:inherit; font:inherit; font-size:12.5px; cursor:pointer; }
@@ -737,7 +737,8 @@ function planDays(b, p){
   return { days, unsched: b.scenes.filter((s) => !s.id || !seen[s.id]) };
 }
 function fmtDate(iso){ const d = P.parseISO(iso); return d ? d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : ""; }
-const HEAVY_CATS = ["stunts", "vehicles", "weapons", "animals", "sfx", "vfx", "makeup", "music", "equipment", "labor"];
+// Stripboard "Needs": every category in the scene except cast (cast has its own column)
+const needCatsOf = (s) => E.CATS.filter((c) => c.id !== "cast" && (s.els[c.id] || []).length);
 
 /* ---------- stripboard: the shoot in order, one strip per scene, a banner at the end of each day ---------- */
 function stripsView(b, p){
@@ -747,11 +748,11 @@ function stripsView(b, p){
   const castNo = (k) => b.elements[k].no || "";
   const strip = (s, day) => {
     const cast = (s.els.cast || []).map(castNo).filter(Boolean).sort((x, y) => x - y);
-    const marks = HEAVY_CATS.filter((c) => (s.els[c] || []).length);
+    const marks = needCatsOf(s);
     return `<button type="button" class="stp" data-a="goto" data-n="${s.n}"${drag && s.id ? ` draggable="true" data-sid="${esc(s.id)}" data-day="${day}"` : ""} style="--sc:${stripColor(s)}" title="${esc(s.heading)}${s.syn ? " — " + esc(s.syn) : ""}">
       <span class="n">${s.n}</span><span class="ie">${esc(s.ie || "")}</span><span class="set">${esc(s.set || s.loc || "")}<small>${esc(s.syn || "")}</small></span>
       <span class="dn">${esc(DN[s.dn] || "")}</span><span class="pg">${E.fmtEighths(s.eighths)}</span><span class="sd">${esc(s.day || "")}</span>
-      <span class="cast">${cast.join(", ")}</span><span class="mk">${marks.map((c) => `<i title="${esc(E.CAT[c].label)}" style="background:${E.CAT[c].color}"></i>`).join("")}</span></button>`;
+      <span class="cast">${cast.join(", ")}</span><span class="mk">${marks.map((c) => `<i title="${esc(c.label + ": " + s.els[c.id].map((k) => b.elements[k].name).join(", "))}" style="background:${c.color}"></i>`).join("")}</span></button>`;
   };
   const banner = (d) => {
     const e = d.scenes.reduce((a, s) => a + s.eighths, 0), m = d.scenes.reduce((a, s) => a + s.est, 0);

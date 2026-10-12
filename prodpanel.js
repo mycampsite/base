@@ -130,6 +130,8 @@ const css = `
 .strip .t span{ color:var(--uiMuted); font-weight:600; white-space:nowrap; }
 .strip .l{ color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .strip .c{ color:var(--uiMuted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.strip .nd{ display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
+.strip .nd i{ display:block; width:7px; height:7px; border-radius:50%; background:var(--c,#666); }
 .dtPick{ position:relative; display:inline-flex; align-items:center; gap:5px; margin-left:6px; font-size:11.5px; color:var(--uiText); cursor:pointer; border-radius:7px; padding:2px 7px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); }
 .dtPick:hover{ border-color:rgba(255,255,255,.4); }
 .offRow{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--uiMuted); }
@@ -348,12 +350,19 @@ function render(pid){
   if(b2 && top) b2.scrollTop = top;
   if(bd2 && left) bd2.scrollLeft = left;
 }
-// The special things a day needs, from the breakdown's element sheets (animals, stunts, vehicles, effects…)
-const NEED_CATS = ["animals", "wrangler", "stunts", "vehicles", "weapons", "sfx", "mfx", "vfx", "equipment", "camera", "labor"];
+// What a day needs, from the breakdown's element sheets: every category with something in it (cast has its own count),
+// in breakdown order. Found and hand-tagged elements both count. Hover a chip for the names.
+function needCats(){ const E = window.CampElements; return E ? E.CATS.map((c) => c.id).filter((c) => c !== "cast") : []; }
 function needsRow(needs){
   const E = window.CampElements; if(!E || !needs) return "";
-  const chips = NEED_CATS.filter((c) => (needs[c] || []).length).map((c) => `<i style="--c:${E.CAT[c].color}" title="${esc(E.CAT[c].label + ": " + needs[c].join(", "))}">${esc(E.CAT[c].short)} ${needs[c].length}</i>`);
+  const chips = needCats().filter((c) => (needs[c] || []).length).map((c) => `<i style="--c:${E.CAT[c].color}" title="${esc(E.CAT[c].label + ": " + needs[c].join(", "))}">${esc(E.CAT[c].short)} ${needs[c].length}</i>`);
   return chips.length ? `<div class="colNeeds">${chips.join("")}</div>` : "";
+}
+// One dot per category a scene needs, on its strip
+function needDots(needs){
+  const E = window.CampElements; if(!E || !needs) return "";
+  const cs = needCats().filter((c) => (needs[c] || []).length);
+  return cs.length ? `<div class="nd">${cs.map((c) => `<i style="--c:${E.CAT[c].color}" title="${esc(E.CAT[c].label + ": " + needs[c].join(", "))}"></i>`).join("")}</div>` : "";
 }
 function draw(pid){
   S.pid = pid;
@@ -473,7 +482,7 @@ function draw(pid){
     return `<button class="strip${S.pick === id ? " pick" : ""}${isNew ? " new" : ""}${rv ? " rev" : ""}${S.landed && S.landed.id === id ? " landed" : ""}" type="button" data-sid="${esc(id)}" draggable="${canEdit}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}">
       <div class="t">Sc ${s.n} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}<span>${shotMap[id] ? shotMap[id].length + " sh · " : ""}${P.fmtEighths(s.eighths)} pg</span></div>
       <div class="l">${esc(s.set || s.loc || "")}</div>
-      <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div>${rv ? `<div class="revTag" title="${esc(revText(rv))}">⚠ Revised: ${esc(rv.what.join(", "))}</div>` : ""}</button>`;
+      <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div>${needDots(s.needs)}${rv ? `<div class="revTag" title="${esc(revText(rv))}">⚠ Revised: ${esc(rv.what.join(", "))}</div>` : ""}</button>`;
   };
   const shotsOn = Object.keys(shotMap).length > 0;
   const unsched = rec.unscheduled.slice().sort((a, b) => byId[a].n - byId[b].n);
