@@ -932,6 +932,8 @@ const VN=['Front','Side','Back','Low','High','Top'];
 let objs=[],figs=[],ct=cl(CAM0),cv_=cl(CAM0),sel=0,so=-1,mode='draw',cmode='orbit',tn='Empty',customs={};
 let BOUND=null,HOOK={},AC=null;
 const dist=c=>Math.hypot(c.p[0]-c.t[0],c.p[1]-c.t[1],c.p[2]-c.t[2]);
+const aimPan=c=>Math.round(Math.atan2(c.t[0]-c.p[0],c.t[2]-c.p[2])*180/Math.PI),aimTilt=c=>Math.round(Math.atan2(c.t[1]-c.p[1],Math.hypot(c.t[0]-c.p[0],c.t[2]-c.p[2]))*180/Math.PI);
+function setAim(c,pan,tilt){const d=dist(c)||1,a=pan*Math.PI/180,b=Math.max(-85,Math.min(85,tilt))*Math.PI/180;c.t=[c.p[0]+Math.sin(a)*Math.cos(b)*d,c.p[1]+Math.sin(b)*d,c.p[2]+Math.cos(a)*Math.cos(b)*d]}
 function load(d,name){objs=d.o;figs=d.f.map((x,i)=>mkF(i,x));ct=cl(d.c);sel=0;so=-1;tn=name}
 function scanIds(){let mx=uid-1;objs.forEach(o=>{if(o.id>mx)mx=o.id});uid=mx+1}
 // ---- Build from script: choose a location from the scene heading, then add props the action names ----
@@ -1095,7 +1097,7 @@ function panel(){if(!pn)return;if(mode==='draw'||!BOUND){pn.innerHTML='';return}
   h+=(OPT.lock?'<p class="help lockNote">🔒 Camera locked — unlock it under Options.</p>':'')+'<div class="lbl">Frame</div>'+selBox('ar',RATIOS,near)
    +'<div'+(OPT.lock?' class="locked"':'')+'><div class="lbl">View</div>'+pills(VN,'v',null)
    +'<div class="lbl">Camera</div>'+sl('Lens','mm',0,100,0.5,mmToV(mm).toFixed(1),Math.round(mm)+'mm')+sl('Height','cy',0.05,12,0.01,ct.p[1].toFixed(2),ct.p[1].toFixed(2)+' m')
-   +sl('Distance','dol',0.3,20,0.05,d.toFixed(2),d.toFixed(1)+' m')+sl('Roll','roll',-30,30,1,Math.round(ct.roll),Math.round(ct.roll)+'°')+'</div>'
+   +sl('Distance','dol',0.3,20,0.05,d.toFixed(2),d.toFixed(1)+' m')+sl('Roll','roll',-30,30,1,Math.round(ct.roll),Math.round(ct.roll)+'°')+sl('Pan','pan',-180,180,1,aimPan(ct),aimPan(ct)+'°')+sl('Tilt','tilt',-85,85,1,aimTilt(ct),aimTilt(ct)+'°')+'</div>'
    +sec('dof','Depth of field',chk('dof','Depth of field')+'<div class="row2"><div style="flex:1;min-width:0"><div class="lbl">Aperture</div>'+selBox('fstop',[1.4,2,2.8,4,5.6,8,11,16].map(v=>[v,'f/'+v]),OPT.fstop)+'</div><div style="flex:1;min-width:0"><div class="lbl">Focus on</div>'+selBox('focus',[[-1,'Auto (subject)']].concat(figs.map((p,i)=>[i,p.n])),OPT.focus)+'</div></div>')
    +sec('camMore','Options','<div class="lbl">Drag to</div>'+pills([['orbit','Orbit'],['look','Look'],['move','Move']],'cm',cmode)+'<div class="lbl">Look</div>'+pills([['0','Day'],['1','Night']],'nt',OPT.night?'1':'0')+chk('guides','Thirds guide')+chk('names','Nameplates')+'<div class="lockRow'+(OPT.lock?' on':'')+'">'+chk('lock','Lock camera')+'</div>')}
  else if(mode==='set'){
@@ -1119,7 +1121,7 @@ function panel(){if(!pn)return;if(mode==='draw'||!BOUND){pn.innerHTML='';return}
  pn.innerHTML=h}
 let sliding=false;
 function syncCam(){if(!pn||mode!=='cam'||sliding)return;const set=(k,v,t)=>{const el=pn.querySelector(`[data-k="${k}"]`);if(!el)return;el.value=v;el.nextElementSibling.textContent=t};
- const mm=mmOf(ct.fov),d=dist(ct);set('mm',mmToV(mm),Math.round(mm)+'mm');set('cy',ct.p[1],ct.p[1].toFixed(2)+' m');set('dol',d,d.toFixed(1)+' m');set('roll',Math.round(ct.roll),Math.round(ct.roll)+'°')}
+ const mm=mmOf(ct.fov),d=dist(ct);set('mm',mmToV(mm),Math.round(mm)+'mm');set('cy',ct.p[1],ct.p[1].toFixed(2)+' m');set('dol',d,d.toFixed(1)+' m');set('roll',Math.round(ct.roll),Math.round(ct.roll)+'°');set('pan',aimPan(ct),aimPan(ct)+'°');set('tilt',aimTilt(ct),aimTilt(ct)+'°')}
 function addFig(want){const id=nextIdentity(want),ix=0,x=ct.t[0]+(Math.random()-0.5)*0.6,z=ct.t[2]+(Math.random()-0.5)*0.6;
  const taken=figs.map(g=>g._pose),pool=IDLE.filter(p=>!taken.includes(p)),pose=(pool.length?pool:IDLE)[Math.floor(Math.random()*(pool.length||IDLE.length))];
  const f=mkF(ix,[x,z,Math.atan2(ct.p[0]-x,ct.p[2]-z)/R,pose]);f._pose=pose;f.n=id[0];f.col=id[1];f.h=kidH(f.n);f.tw+=Math.round((Math.random()-0.5)*12);f.hd+=Math.round((Math.random()-0.5)*30);figs.push(f);sel=figs.length-1}
@@ -1162,11 +1164,13 @@ function act(d){const f=figs[sel],o=objs.find(x=>x.id===so);let camMoved=false;
  if(a==='ps'){pasteClip();return}
  if(a==='fx'&&f){pushUndo();removeFig(sel)}
  panel();kick();if(camMoved)camEnd()}
-function onPanelInput(e){const el=e.target,k=el.dataset.k;if(el.dataset.fc&&figs[sel]){figs[sel].col=el.value;kick();return}if(!k)return;if(OPT.lock&&['mm','cy','dol','roll'].includes(k))return;const v=+el.value,out=el.nextElementSibling,f=figs[sel],o=objs.find(x=>x.id===so);
+function onPanelInput(e){const el=e.target,k=el.dataset.k;if(el.dataset.fc&&figs[sel]){figs[sel].col=el.value;kick();return}if(!k)return;if(OPT.lock&&['mm','cy','dol','roll','pan','tilt'].includes(k))return;const v=+el.value,out=el.nextElementSibling,f=figs[sel],o=objs.find(x=>x.id===so);
  if(k==='mm'){const mm=vToMm(v);ct.fov=fovOf(mm);out.textContent=Math.round(mm)+'mm'}
  else if(k==='cy'){ct.t[1]+=v-ct.p[1];ct.p[1]=v;out.textContent=v.toFixed(2)+' m'}
  else if(k==='dol'){const q=V(ct.p[0]-ct.t[0],ct.p[1]-ct.t[1],ct.p[2]-ct.t[2]).normalize().multiplyScalar(v);ct.p=[ct.t[0]+q.x,Math.max(0.03,ct.t[1]+q.y),ct.t[2]+q.z];out.textContent=v.toFixed(1)+' m'}
  else if(k==='roll'){ct.roll=v;out.textContent=v+'°'}
+ else if(k==='pan'){setAim(ct,v,aimTilt(ct));out.textContent=v+'°'}
+ else if(k==='tilt'){setAim(ct,aimPan(ct),v);out.textContent=v+'°'}
  else if(k==='sun'){OPT.sun=v;out.textContent=v+'°'}
  else if(o&&(k==='sz'||k==='w'||k==='d')){o[k]=v;out.textContent=v.toFixed(2)+'×'}
  else if(o&&k==='r'){o.r=v;out.textContent=v+'°'}
@@ -1175,7 +1179,7 @@ function onPanelInput(e){const el=e.target,k=el.dataset.k;if(el.dataset.fc&&figs
  else if(f&&(k==='py'||k==='ly')){f[k]=v;out.textContent=v.toFixed(2)+' m'}
  else if(f){f[k]=v;out.textContent=v+'°'}
  kick()}
-function onPanelChange(e){const el=e.target;if(el.dataset.sel){if(el.value!=='')act({[el.dataset.sel]:el.value});return}if(el.dataset.k&&['mm','cy','dol','roll'].includes(el.dataset.k)){camEnd();return}
+function onPanelChange(e){const el=e.target;if(el.dataset.sel){if(el.value!=='')act({[el.dataset.sel]:el.value});return}if(el.dataset.k&&['mm','cy','dol','roll','pan','tilt'].includes(el.dataset.k)){camEnd();return}
  if(el.dataset.fc){return}
  if(el.dataset.o){pushUndo();OPT[el.dataset.o]=el.checked;if(el.dataset.o==='lock')panel();kick();return}
  if(el.dataset.n&&figs[sel]){const v=el.value.trim().slice(0,24);if(v&&v!==figs[sel].n){pushUndo();const c=castOf(v);figs[sel].n=c?c.n:v;if(c)figs[sel].col=c.col;if(figs[sel].h===1)figs[sel].h=kidH(figs[sel].n)}panel();kick()}}
@@ -1243,7 +1247,7 @@ return {replaceState,busy,buildFromScript,locFor,propsIn,setInteractive,setCast,
 window.SB3D={
  ready(){if(API)return Promise.resolve(API);if(loading)return loading;
   loading=new Promise((res,rej)=>{const go=()=>{try{API=build();Object.assign(window.SB3D,API);res(API)}catch(e){rej(e)}};
-   if(window.THREE)return go();const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';s.onload=go;s.onerror=()=>{loading=null;rej(new Error("Couldn't load the 3D library — check your connection."))};document.head.appendChild(s)});
+   if(window.THREE)return go();const add=(src,bad)=>{const s=document.createElement('script');s.src=src;s.onload=go;s.onerror=bad;document.head.appendChild(s)};add('vendor/three.min.js',()=>add('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',()=>{loading=null;rej(new Error("Couldn't load the 3D library — check your connection."))}))});
   return loading},
  loaded(){return !!API}
 };
@@ -2755,6 +2759,15 @@ window.SB3D={
       b.onclick = () => { if(S.drawOn && S.tool === t.id){ setDrawOn(false); return; } S.tool = t.id; savePrefs(); setDrawOn(true); };
       tg.appendChild(b);
     });
+    { // 3D blocking switch also lives in the toolbar, so it is always in view (the side panel drops below the drawing on narrow screens)
+      const k = S.curShotKey, on3 = !!(k && blockingOn(k));
+      const b3 = document.createElement("button");
+      b3.type = "button"; b3.id = "tb3d"; b3.className = "tool-btn" + (on3 ? " active" : ""); b3.setAttribute("aria-pressed", on3 ? "true" : "false");
+      b3.title = "3D blocking — a 3D set, figures and camera under your drawing"; b3.style.cssText = "width:auto;padding:0 9px;font-size:12px;font-weight:600;";
+      b3.textContent = "3D";
+      b3.onclick = () => { if(S.curShotKey) toggleBlocking(S.curShotKey); };
+      tg.appendChild(b3);
+    }
     const cg = document.getElementById("colorGroup");
     cg.innerHTML = "";
     INK_COLORS.forEach(([c, name]) => {
