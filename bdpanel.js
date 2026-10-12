@@ -170,6 +170,12 @@ const css = `
 #bdctl table.ct .c-nt .mu{ opacity:.45; }
 #bdctl table.ct .c-sc{ width:30px; text-align:center; color:var(--uiMuted); font-size:11px; }
 #bdctl table.ct .c-x{ width:28px; text-align:center; }
+#bdctl table.ct .c-h{ width:26px; text-align:center; padding-left:0; padding-right:0; }
+#bdctl .star{ border:0; background:none; cursor:pointer; font-size:14px; line-height:1; padding:0 3px; color:var(--uiMuted); opacity:.35; }
+#bdctl tr:hover .star, #bdctl .star:focus-visible{ opacity:.9; }
+#bdctl .star.on{ color:#f1c76b; opacity:1; }
+#bdctl .star:disabled{ cursor:default; }
+@media (hover:none){ #bdctl .star{ opacity:.8; } }
 #bdctl table.ct .c-x button{ border:0; background:none; color:var(--uiMuted); cursor:pointer; font-size:12px; padding:0 4px; line-height:1; opacity:.6; }
 #bdctl table.ct tr:hover .c-x button{ opacity:1; }
 #bdctl table.ct .c-x button:hover{ color:#fff; }
@@ -558,16 +564,17 @@ function sheetsView(b, can){
       const e = b.elements[k], tip = (e.auto ? "Found in the script: " + e.why.join(", ") : "Added by hand") + (e.scenes.length > 1 ? " · in scenes " + e.scenes.join(", ") : "");
       return `<tr class="${e.manual && !e.auto ? "man" : ""}" title="${esc(tip)}">
         <td class="c-no">${isCast && e.no ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}</td>
-        <td class="c-nm"><b data-a="edit" data-k="${esc(k)}">${esc(e.name)}</b>${e.hero ? ` <span class="hero" title="Hero prop: in CAPS or handled in several scenes. Plan doubles and continuity.">★</span>` : ""}</td>
+        <td class="c-nm"><b data-a="edit" data-k="${esc(k)}">${esc(e.name)}</b></td>
         <td class="c-q">${s.qty && s.qty[k] ? s.qty[k] : isCast ? "" : "1"}</td>
         <td class="c-nt">${e.note ? esc(e.note) : `<span class="mu">—</span>`}</td>
         <td class="c-sc" title="${e.scenes.length} scene${e.scenes.length === 1 ? "" : "s"}">${e.scenes.length > 1 ? e.scenes.length : ""}</td>
+        <td class="c-h">${can || e.hero ? `<button type="button" class="star${e.hero ? " on" : ""}" data-a="hero" data-k="${esc(k)}" data-on="${e.hero ? 0 : 1}" aria-pressed="${e.hero}" aria-label="${e.hero ? "Remove hero from " : "Make "}${esc(e.name)}${e.hero ? "" : " a hero"}" title="${e.hero ? "Hero" + (e.heroSet ? "" : " (found automatically)") + ": plan doubles and continuity. Click to turn off" : "Make this a hero: plan doubles and continuity"}"${can ? "" : " disabled"}>${e.hero ? "★" : "☆"}</button>` : ""}</td>
         <td class="c-x">${can ? `<button type="button" data-a="rm" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Take ${esc(e.name)} out of this scene" title="Take out of this scene">✕</button>` : ""}</td></tr>`;
     }).join("");
     const names = (b.byCat[c.id] || []).map((k) => b.elements[k].name);
     const addRow = adding === c.id ? `<div class="addRow"><input type="text" id="bdAdd" list="bdDL" maxlength="60" placeholder="${esc(c.short)} name" autocomplete="off"><datalist id="bdDL">${names.map((n) => `<option value="${esc(n)}">`).join("")}</datalist><button class="btn sm primary" type="button" data-a="addok" data-c="${c.id}" data-sk="${esc(s.key)}">Add</button><button class="btn sm" type="button" data-a="addcancel">✕</button></div>` : "";
     return `<div class="cat${keys.length ? "" : " isEmpty"}" style="--cc:${c.color}"><div class="ch">${catIcon(c.id)}<span class="nm">${esc(c.label)}</span><span class="k">${keys.length}</span>${can ? `<button class="add" type="button" data-a="add" data-c="${c.id}" data-sk="${esc(s.key)}" aria-label="Add ${esc(c.label)}" title="Add ${esc(c.label.toLowerCase())}">+ Add</button>` : ""}</div>
-      ${rows ? `<table class="ct"><thead><tr><th class="c-no">${isCast ? "ID" : ""}</th><th class="c-nm">${isCast ? "Character" : "Element"}</th><th class="c-q">${isCast ? "" : "Qty"}</th><th class="c-nt">Notes</th><th class="c-sc" title="How many scenes it's in">Sc</th><th class="c-x"></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="none">No ${esc(c.short.toLowerCase())} in this scene</div>`}${addRow}</div>`;
+      ${rows ? `<table class="ct"><thead><tr><th class="c-no">${isCast ? "ID" : ""}</th><th class="c-nm">${isCast ? "Character" : "Element"}</th><th class="c-q">${isCast ? "" : "Qty"}</th><th class="c-nt">Notes</th><th class="c-sc" title="How many scenes it's in">Sc</th><th class="c-h" title="Hero">★</th><th class="c-x"></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="none">No ${esc(c.short.toLowerCase())} in this scene</div>`}${addRow}</div>`;
   };
   const dis = can ? "" : " disabled";
   const qc = E.CAT[S.qCat] ? S.qCat : "props";
@@ -714,7 +721,7 @@ function elementsView(b, can){
         <button class="btn sm" type="button" data-a="edmerge" data-k="${esc(k)}">Merge</button>
         <button class="btn sm" type="button" data-a="eddrop" data-k="${esc(k)}" title="Remove this element from every scene">Ignore everywhere</button>
         <button class="btn sm" type="button" data-a="edcancel">Cancel</button></div></td></tr>` : "";
-    return `${grp}<tr class="er${S.edit === k ? " on" : ""}" style="--cc:${c.color}"><td>${e.no && e.cat === "cast" ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}<b>${esc(e.name)}</b>${e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
+    return `${grp}<tr class="er${S.edit === k ? " on" : ""}" style="--cc:${c.color}"><td>${e.no && e.cat === "cast" ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}<b>${esc(e.name)}</b>${can ? `<button type="button" class="star${e.hero ? " on" : ""}" data-a="hero" data-k="${esc(k)}" data-on="${e.hero ? 0 : 1}" aria-pressed="${e.hero}" aria-label="${e.hero ? "Remove hero from " : "Make "}${esc(e.name)}${e.hero ? "" : " a hero"}" title="${e.hero ? "Hero: plan doubles and continuity. Click to turn off" : "Make this a hero"}" style="margin-left:6px">${e.hero ? "★" : "☆"}</button>` : e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.hero && !e.heroSet ? `<span class="tag" title="Found automatically: written in CAPS or handled in several scenes">auto</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
       ${grouped ? "" : `<td><span class="cpill">${esc(c.short)}</span></td>`}
       <td><div class="scBtns">${e.scenes.map((n) => `<button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${n}">${n}</button>`).join("")}</div></td>
       <td class="num">${E.fmtEighths(e.eighths)}</td>
@@ -822,6 +829,7 @@ function wire(box, pid){
     if(k === "qadd"){ quickAdd(box, a.dataset.sk, ed); return; }
     if(k === "addok"){ commitAdd(box, a.dataset.sk, a.dataset.c, ed); return; }
     if(k === "rm"){ const sk = a.dataset.sk, key = a.dataset.k; ed((st) => E.untag(st, sk, key)); return; }
+    if(k === "hero"){ const key = a.dataset.k, on = a.dataset.on === "1"; ed((st) => E.setHero(st, key, on)); return; }
     if(k === "edit"){ S.edit = a.dataset.k; S.view = "elements"; lsSet(VIEW_KEY, S.view); S.cat = "all"; rerender(); setTimeout(() => { const i = box.querySelector("#edName"); if(i){ i.focus(); i.select(); i.scrollIntoView({ block: "nearest" }); } }, 30); return; }
     if(k === "edcancel"){ S.edit = null; rerender(); return; }
     if(k === "edsave"){

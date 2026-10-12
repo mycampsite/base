@@ -125,6 +125,7 @@ let BASE = "";
     await expect(p, () => /ANA/.test(document.querySelector(".bdSheet").innerText), "cast on the sheet");
     await expect(p, () => !!document.querySelector(".shText mark"), "the scene text with tagged words coloured");
     await expect(p, () => !!document.getElementById("shDir"), "the director's notes box");
+    await expect(p, () => !!document.querySelector("table.ct .star"), "a hero star on each element");
     await p.selectOption("#bdQCat", "props"); await p.fill("#bdQuick", "lantern"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
     await expect(p, () => /Lantern/.test(document.querySelector(".bdSheet").innerText), "the hand-added prop");
     await expect(p, () => { const b = __CampHub.project().breakdown; const sid = b && Object.keys(b)[0]; return !!sid && JSON.stringify(b[sid].tags || {}).indexOf("props|lantern") >= 0; }, "the tag shared to the team's copy");

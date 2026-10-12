@@ -308,5 +308,35 @@ test("background counts come only from the script: no invented crowd of 50", () 
   assert.ok(vals.every((n) => n === 12 || n === 2), "only counts written out");
 });
 
+test("hero: switch it on for any element, off for an automatic one, and it syncs and follows renames", () => {
+  const lines = [["scene", "INT. A - DAY"], ["action", "She puts on a raincoat. She picks up the KNIFE."]];
+  const sk = run(lines, {}).scenes[0].key;
+  let b = run(lines, E.tag({}, sk, "wardrobe", "Raincoat"));
+  assert.strictEqual(b.elements["wardrobe|raincoat"].hero, false);     // wardrobe isn't automatic
+  assert.strictEqual(b.elements["weapons|knife"].hero, true);            // CAPS prop: automatic
+  assert.ok(b.elements["weapons|knife"].heroAuto && !b.elements["weapons|knife"].heroSet);
+  let st = E.tag({}, sk, "wardrobe", "Raincoat"); st = E.setHero(st, "wardrobe|raincoat", true);
+  st = E.setHero(st, "weapons|knife", false);
+  b = run(lines, st);
+  assert.strictEqual(b.elements["wardrobe|raincoat"].hero, true);
+  assert.strictEqual(b.elements["weapons|knife"].hero, false);
+  assert.ok(b.elements["weapons|knife"].heroAuto && b.elements["weapons|knife"].heroSet);
+  // it reaches the Schedule sheet payload and the plan's specials
+  assert.ok(E.sheetPayload(b).els.some((x) => x.n === "Raincoat" && x.h === 1));
+  // sync round trip and diff
+  const back = E.fromRemote(JSON.parse(JSON.stringify(E.toRemote(st))));
+  assert.deepStrictEqual(back, st);
+  assert.ok(Object.keys(E.diff({}, st)).some((k) => /^heroes\//.test(k)));
+  assert.deepStrictEqual(E.mergeStores(E.setHero({}, "props|a", true), E.setHero({}, "props|b", true)).heroes, { "props|a": "1", "props|b": "1" });
+  // back to automatic
+  st = E.setHero(st, "weapons|knife", null); assert.strictEqual(run(lines, st).elements["weapons|knife"].hero, true);
+  assert.ok(!E.setHero(E.setHero({}, "props|a", true), "props|a", null).heroes);
+  // rename and merge carry it
+  let r = E.rename(E.setHero({}, "props|lamp", true), "props|lamp", "props", "Desk lamp");
+  assert.strictEqual(r.heroes["props|desk lamp"], "1"); assert.ok(!r.heroes["props|lamp"]);
+  r = E.merge(E.setHero({}, "props|lamp", true), ["props|lamp"], "props|light");
+  assert.strictEqual(r.heroes["props|light"], "1");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
