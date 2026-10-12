@@ -153,6 +153,23 @@ const css = `
 #bdctl table.bdT th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--uiMuted); padding:6px 8px; border-bottom:1px solid var(--uiBorder); position:sticky; top:0; background:#171717; }
 #bdctl table.bdT td{ padding:6px 8px; border-top:1px solid var(--uiBorder); vertical-align:top; }
 #bdctl .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:baseline; }
+#bdctl .bdTools .cnt{ margin-left:auto; font-size:11.5px; color:var(--uiMuted); }
+#bdctl table.bdT{ table-layout:fixed; }
+#bdctl table.bdT th{ z-index:1; }
+#bdctl table.bdT .num{ text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+#bdctl table.bdT tr.er:hover td{ background:rgba(255,255,255,.03); }
+#bdctl table.bdT tr.er.on td{ background:color-mix(in srgb, var(--cc) 10%, transparent); }
+#bdctl table.bdT td:first-child{ overflow:hidden; text-overflow:ellipsis; }
+#bdctl table.bdT tr.grp td{ padding:14px 8px 5px; border-top:0; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--uiText); }
+#bdctl table.bdT tr.grp i{ display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--cc); margin-right:7px; }
+#bdctl table.bdT tr.grp span{ color:var(--uiMuted); margin-left:7px; font-weight:600; }
+#bdctl table.bdT tr.grp + tr td{ border-top-color:color-mix(in srgb, var(--cc) 45%, transparent); }
+#bdctl .cpill{ display:inline-block; font-size:11px; padding:1px 8px; border-radius:999px; border:1px solid color-mix(in srgb, var(--cc) 50%, #222); background:color-mix(in srgb, var(--cc) 12%, #161616); white-space:nowrap; }
+#bdctl .cno{ display:inline-block; min-width:18px; margin-right:6px; padding:0 4px; border-radius:4px; background:var(--cc, #e03131); color:#fff; font-size:11px; font-weight:700; text-align:center; }
+#bdctl td.act{ text-align:right; }
+#bdctl .edBtn{ border:1px solid var(--uiBorder); background:transparent; color:var(--uiMuted); border-radius:6px; padding:2px 9px; font:inherit; font-size:11.5px; cursor:pointer; opacity:.55; }
+#bdctl tr.er:hover .edBtn, #bdctl .edBtn:focus-visible{ opacity:1; color:var(--uiText); border-color:rgba(255,255,255,.35); }
+@media (hover:none){ #bdctl .edBtn{ opacity:1; } }
 #bdctl .scBtns{ display:flex; flex-wrap:wrap; gap:3px; }
 #bdctl .scBtn{ border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:inherit; border-radius:6px; padding:0 6px; font-size:11.5px; cursor:pointer; font-family:inherit; }
 #bdctl .scBtn:hover{ border-color:rgba(255,255,255,.4); }
@@ -184,11 +201,13 @@ const css = `
   #bdctl .stp .ie, #bdctl .stp .dn, #bdctl .stp .sd, #bdctl .stp .mk{ display:none; }
   #bdctl .stp .cast{ grid-column:2 / 4; font-size:11.5px; }
 }
-#bdctl .rpGrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:12px; padding-top:12px; }
-#bdctl .rp{ border:1px solid color-mix(in srgb, var(--cc) 50%, #222); border-radius:12px; overflow:hidden; background:#1b1b1b; }
+#bdctl .rpGrid{ columns:320px; column-gap:12px; padding-top:12px; }
+#bdctl .rp{ break-inside:avoid; margin-bottom:12px; border:1px solid color-mix(in srgb, var(--cc) 50%, #222); border-radius:12px; overflow:hidden; background:#1b1b1b; }
+#bdctl .rp tr:hover td{ background:rgba(255,255,255,.03); }
 #bdctl .rp h4{ margin:0; padding:7px 12px; font-size:12.5px; background:color-mix(in srgb, var(--cc) 22%, #181818); display:flex; justify-content:space-between; }
 #bdctl .rp table{ width:100%; border-collapse:collapse; font-size:12px; }
 #bdctl .rp td{ padding:4px 12px; border-top:1px solid var(--uiBorder); vertical-align:top; }
+#bdctl .rp td:first-child{ white-space:nowrap; }
 #bdctl .rp td:last-child{ color:var(--uiMuted); text-align:right; white-space:nowrap; }
 @media (max-width:760px){
   #bdctl .bdBody{ padding:0 10px 90px; }
@@ -207,6 +226,7 @@ const css = `
   #bdctl .shCats{ grid-template-columns:1fr; }
   #bdctl input, #bdctl select, #bdctl textarea{ font-size:16px; }
   #bdctl .bdChip.hideSm{ display:none; }
+  #bdctl #bdQ{ width:100% !important; }
 }`;
 const style = document.createElement("style"); style.textContent = css; document.head.appendChild(style);
 
@@ -505,9 +525,13 @@ function elementsView(b, can){
   const chips = [`<button type="button" class="catChip${S.cat === "all" ? " on" : ""}" data-a="cat" data-c="all">All<small>${b.totals.elements}</small></button>`]
     .concat(E.CATS.filter((c) => counts[c.id]).map((c) => `<button type="button" class="catChip${S.cat === c.id ? " on" : ""}" style="--cc:${c.color}" data-a="cat" data-c="${c.id}">${esc(c.short)}<small>${counts[c.id]}</small></button>`)).join("");
   keys.sort((a, c) => { const A = b.elements[a], C = b.elements[c], ia = E.CATS.findIndex((x) => x.id === A.cat), ic = E.CATS.findIndex((x) => x.id === C.cat); return (ia - ic) || b.byCat[A.cat].indexOf(a) - b.byCat[A.cat].indexOf(c); });
+  const grouped = S.cat === "all" && !q;
+  let lastCat = "";
   const rows = keys.map((k) => {
     const e = b.elements[k], c = E.CAT[e.cat];
-    const form = S.edit === k && can ? `<tr><td colspan="5"><div class="edForm">
+    const grp = grouped && e.cat !== lastCat ? `<tr class="grp" style="--cc:${c.color}"><td colspan="${grouped ? 4 : 5}"><i></i>${esc(c.label)}<span>${counts[e.cat]}</span></td></tr>` : "";
+    lastCat = e.cat;
+    const form = S.edit === k && can ? `<tr><td colspan="${grouped ? 4 : 5}"><div class="edForm">
         <label>Name<input type="text" id="edName" maxlength="60" value="${esc(e.name)}"></label>
         <label>Category<select id="edCat">${E.CATS.map((x) => `<option value="${x.id}"${x.id === e.cat ? " selected" : ""}>${esc(x.label)}</option>`).join("")}</select></label>
         <label>Note (shows on every sheet)<input type="text" id="edNote" maxlength="2000" value="${esc(e.note)}" style="min-width:220px"></label>
@@ -516,16 +540,16 @@ function elementsView(b, can){
         <button class="btn sm" type="button" data-a="edmerge" data-k="${esc(k)}">Merge</button>
         <button class="btn sm" type="button" data-a="eddrop" data-k="${esc(k)}" title="Remove this element from every scene">Ignore everywhere</button>
         <button class="btn sm" type="button" data-a="edcancel">Cancel</button></div></td></tr>` : "";
-    return `<tr><td><span class="dot" style="background:${c.color}"></span><b>${e.no && e.cat === "cast" ? e.no + ". " : ""}${esc(e.name)}</b>${e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
-      <td style="color:var(--uiMuted)">${esc(c.short)}</td>
+    return `${grp}<tr class="er${S.edit === k ? " on" : ""}" style="--cc:${c.color}"><td>${e.no && e.cat === "cast" ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}<b>${esc(e.name)}</b>${e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
+      ${grouped ? "" : `<td><span class="cpill">${esc(c.short)}</span></td>`}
       <td><div class="scBtns">${e.scenes.map((n) => `<button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${n}">${n}</button>`).join("")}</div></td>
-      <td style="white-space:nowrap">${E.fmtEighths(e.eighths)}</td>
-      <td>${can ? `<button class="btn sm" type="button" data-a="edit" data-k="${esc(k)}">Edit</button>` : ""}</td></tr>${form}`;
+      <td class="num">${E.fmtEighths(e.eighths)}</td>
+      <td class="act">${can ? `<button class="edBtn" type="button" data-a="edit" data-k="${esc(k)}" aria-label="Edit ${esc(e.name)}" title="Rename, recategorise, merge or ignore">Edit</button>` : ""}</td></tr>${form}`;
   }).join("");
   const dropped = (storeOf(S.pid, S.sid).drop || []);
   const ignored = dropped.length ? `<div style="margin-top:14px;font-size:12px;color:var(--uiMuted)"><b style="color:var(--uiText)">Ignored</b> ${dropped.map((k) => `<button type="button" class="scBtn" style="margin:2px" data-a="undrop" data-k="${esc(k)}" title="Bring back"${can ? "" : " disabled"}>${esc(k.split("|").slice(1).join("|"))} ✕</button>`).join("")}</div>` : "";
-  return `<div class="bdTools"><input type="text" id="bdQ" placeholder="Search elements" value="${esc(S.q)}" style="width:200px" autocomplete="off"><div class="catChips">${chips}</div></div>
-    ${rows ? `<table class="bdT"><thead><tr><th>Element</th><th>Category</th><th>Scenes</th><th>Pages</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="bdEmpty">Nothing matches.</div>`}${ignored}`;
+  return `<div class="bdTools"><input type="text" id="bdQ" placeholder="Search elements and notes" value="${esc(S.q)}" style="width:220px" autocomplete="off"><div class="catChips">${chips}</div><span class="cnt">${keys.length === b.totals.elements ? keys.length + " elements" : keys.length + " of " + b.totals.elements}</span></div>
+    ${rows ? `<table class="bdT"><colgroup><col>${grouped ? "" : `<col style="width:130px">`}<col style="width:38%"><col style="width:70px"><col style="width:64px"></colgroup><thead><tr><th>Element</th>${grouped ? "" : "<th>Category</th>"}<th>Scenes</th><th class="num">Pages</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="bdEmpty">Nothing matches.</div>`}${ignored}`;
 }
 
 /* ---------- reports ---------- */
@@ -569,7 +593,7 @@ function stripsView(b, p){
 /* ---------- reports: by category, or what each shoot day needs ---------- */
 function reportsView(b, p){
   const by = S.rpBy === "day" ? "day" : "cat";
-  const seg = `<div class="bdTools"><button class="btn sm" type="button" data-a="csv" title="Download this as a CSV file">Download CSV</button><div class="seg">${[["cat", "By category"], ["day", "By shoot day"]].map(([v, n]) => `<button type="button" class="${by === v ? "on" : ""}" data-a="rpby" data-v="${v}">${n}</button>`).join("")}</div></div>`;
+  const seg = `<div class="bdTools"><div class="seg">${[["cat", "By category"], ["day", "By shoot day"]].map(([v, n]) => `<button type="button" class="${by === v ? "on" : ""}" data-a="rpby" data-v="${v}">${n}</button>`).join("")}</div><button class="btn sm" type="button" data-a="csv" title="Download the whole breakdown as a CSV file" style="margin-left:auto">Download CSV</button></div>`;
   if(by === "day"){
     const pd = planDays(b, p);
     if(!pd) return seg + `<div class="bdEmpty">No shoot plan yet. Start it on the Schedule tab to see what each day needs.</div>`;
