@@ -208,5 +208,22 @@ test("places: group, join, chain, rename, take out and split", () => {
   assert.ok(["A", "B"].indexOf(P.locRoot({ A: "B", B: "A" }, "A")) >= 0);
 });
 
+test("elements shape the plan: shared specials group together, warnings use the needs", () => {
+  const mk = (id, n, loc, extra) => Object.assign({ id, n, loc, set: loc, dn: "D", eighths: 8, cast: [], flags: [], needs: {}, specials: [] }, extra);
+  const bd = { fromElements: true, cast: [{ name: "KID", minor: true, age: 9 }], totals: { eighths: 32 }, scenes: [
+    mk("a", 1, "BARN", { specials: ["animals|horse"], needs: { animals: ["Horse"] } }),
+    mk("b", 2, "HOUSE", { specials: [], needs: {} }),
+    mk("c", 3, "FIELD", { specials: ["animals|horse"], needs: { animals: ["Horse"] }, cast: ["KID"] }),
+    mk("d", 4, "SHOP", { specials: [], needs: {} })] };
+  const plan = P.normalize({ days: [{ scenes: ["a"] }, { scenes: ["b"] }], settings: { days: 2, maxEighths: 16 } });
+  assert.ok(P.fitScore(bd.scenes[2], [bd.scenes[0]]) > P.fitScore(bd.scenes[2], [bd.scenes[1]]), "the same horse on one day scores higher");
+  assert.deepStrictEqual(P.dayStats({ scenes: ["a", "c"] }, P.sceneMap(bd), 24).needs.animals, ["Horse"]);
+  const w = P.validate(P.normalize({ days: [{ scenes: ["c"] }], settings: { days: 1 } }), bd).map((x) => x.code);
+  assert.ok(w.indexOf("NOWRANGLER") >= 0, "animals with no wrangler tagged");
+  const bd2 = JSON.parse(JSON.stringify(bd)); bd2.scenes[2].needs.weapons = ["Shotgun"];
+  assert.ok(P.validate(P.normalize({ days: [{ scenes: ["c"] }], settings: { days: 1 } }), bd2).some((x) => x.code === "KIDWEAPON"));
+  void plan;
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

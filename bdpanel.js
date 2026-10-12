@@ -276,6 +276,22 @@ function stepHist(pid, sid, back){
   push(pid, sid, E.diff(cur, next)); rerender();
 }
 
+/* ---------- the breakdown as the plan's source of truth ---------- */
+// The Plan tab asks for the script analysis with the element sheets applied (cast, flags and needs per scene),
+// so Auto-schedule, warnings, Day Out of Days and day cards all follow what's in the breakdown.
+const EN = {};
+function enriched(pid, sid, p, doc, bd, modified, opts){
+  try{
+    if(!doc || !bd || !p || !sid) return bd;
+    sync(pid, sid, p, H().canEdit(p));
+    const st = storeOf(pid, sid), sj = JSON.stringify(st), c = EN[sid];
+    if(c && c.bd === bd && c.sj === sj && c.mod === modified) return c.out;
+    const model = E.build(doc, bd, st), out = E.enrich(bd, model, st, opts);
+    EN[sid] = { bd, sj, mod: modified, out };
+    return out;
+  }catch(_e){ return bd; }
+}
+
 /* ---------- rendering ---------- */
 function render(pid){
   const box = document.getElementById("bdctl"); if(!box) return;
@@ -576,5 +592,5 @@ window.addEventListener("storage", (e) => {
   S.model = null; rerender();
 });
 function setMode(on){ on = !!on; if(on === S.on) return; S.on = on; if(on){ S.edit = null; S.adding = null; S.seen = {}; S.model = null; } rerender(); const box = document.getElementById("bdctl"); if(box) box.className = on ? "on" : ""; }
-window.CampBdPanel = { render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, reloadScript: (id) => loadScript(id, true) };
+window.CampBdPanel = { enriched, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, reloadScript: (id) => loadScript(id, true) };
 })();

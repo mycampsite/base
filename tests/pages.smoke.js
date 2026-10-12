@@ -90,6 +90,19 @@ let BASE = "";
     await p.click("[data-a=lcok]"); await p.waitForTimeout(500);
     await expect(p, () => (window.__CampHub.project().production.locMerge || []).length === 2, "two locations grouped into HOUSE");
   });
+  await page(browser, "plan follows the breakdown: a hand-tagged animal reaches the day card", "/tests/fixtures/plan.html?popout=1", async (p) => {
+    await p.evaluate(() => { localStorage.clear(); CampProdPanel.render("p1"); });
+    await p.waitForTimeout(700);
+    await p.evaluate(() => {
+      const k = doc.lines.find((l) => l.type === "scene").id;
+      localStorage.setItem("Camp_BD_V1_f1", JSON.stringify(CampElements.tag({}, k, "stunts", "Horse fall")));
+      __CampHub.project().production.days[0].scenes = [k];
+      window.dispatchEvent(new StorageEvent("storage", { key: "Camp_BD_V1_f1" }));
+      CampProdPanel.render("p1");
+    });
+    await p.waitForTimeout(500);
+    await expect(p, () => /Stunts 1/.test(document.querySelector(".board").innerText), "the stunt shows as a need on the day");
+  });
   await page(browser, "breakdown panel: sheets, add and remove an element, elements manager", "/tests/fixtures/bd.html", async (p) => {
     await p.evaluate(() => { localStorage.clear(); CampBdPanel.setMode(true); CampBdPanel.render("p1"); });
     await p.waitForTimeout(700); await p.evaluate(() => CampBdPanel.render("p1")); await p.waitForTimeout(300);

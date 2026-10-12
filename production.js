@@ -177,7 +177,9 @@ function dayStats(day, byId, maxEighths){
   const locs = uniq(sc.map((s) => s.loc || "").filter(Boolean));
   const cast = uniq([].concat(...sc.map((s) => s.cast || [])));
   const dn = uniq(sc.map((s) => s.dn || "D"));
-  return { scenes: sc.length, eighths, locs, cast, dn, over: eighths > maxEighths, moves: Math.max(0, locs.length - 1) };
+  const needs = {};
+  sc.forEach((x) => Object.keys(x.needs || {}).forEach((c) => { (needs[c] = needs[c] || []); x.needs[c].forEach((n) => { if(needs[c].indexOf(n) < 0) needs[c].push(n); }); }));
+  return { scenes: sc.length, eighths, locs, cast, dn, over: eighths > maxEighths, moves: Math.max(0, locs.length - 1), needs };
 }
 
 // ---------- automatic scheduling ----------
@@ -209,6 +211,9 @@ function fitScore(s, sc){
   score += shared * 4 - fresh * 1;
   const heavy = [].concat(...sc.map(heavyOf));
   score += overlap(heavyOf(s), heavy) * 3;
+  // the same booked element (a horse, a hero car, a crane) on one day is hired once
+  const sp = [].concat(...sc.map((x) => x.specials || []));
+  score += overlap(s.specials || [], sp) * 2;
   return score;
 }
 // Chain scenes so each is next to the one it shares most cast with (keeps an actor's scenes together)
@@ -218,7 +223,7 @@ function chainByCast(list){
   while(rest.length){
     const last = out[out.length - 1];
     let bi = 0, bs = -1;
-    rest.forEach((s, i) => { const v = overlap(s.cast || [], last.cast || []) * 10 + overlap(heavyOf(s), heavyOf(last)) * 3 - i * 0.01; if(v > bs){ bs = v; bi = i; } });
+    rest.forEach((s, i) => { const v = overlap(s.cast || [], last.cast || []) * 10 + overlap(heavyOf(s), heavyOf(last)) * 3 + overlap(s.specials || [], last.specials || []) * 2 - i * 0.01; if(v > bs){ bs = v; bi = i; } });
     out.push(rest.splice(bi, 1)[0]);
   }
   return out;
@@ -327,6 +332,27 @@ function validate(plan, breakdown){
     const label = who.map((n) => n + (kids[n].age != null ? " (" + kids[n].age + ")" : " (age?)")).join(", ");
     out.push({ level: night.length ? "warn" : "info", code: "MINOR", day: i + 1, text: "Day " + (i + 1) + ": " + label + " under 18. Check permit, chaperone and work-hour limits" + (night.length ? ". Night scene" + (night.length > 1 ? "s " : " ") + night.join(", ") + " with a minor" : "") });
   });
+  // What the breakdown says each day needs (only when the element sheets are feeding the plan)
+  if(breakdown && breakdown.fromElements){
+    const stats = plan.days.map((d) => dayStats(d, byId, max));
+    const kidDays = stats.map((x) => x.cast.some((n) => kids[n]));
+    stats.forEach((x, i) => {
+      const n = x.needs || {};
+      if(kidDays[i] && (n.weapons || []).length) out.push({ level: "warn", code: "KIDWEAPON", day: i + 1, text: "Day " + (i + 1) + ": a child is in the cast and the day has weapons (" + n.weapons.join(", ") + "). Check the armourer and safety plan" });
+      if(kidDays[i] && (n.stunts || []).length) out.push({ level: "warn", code: "KIDSTUNT", day: i + 1, text: "Day " + (i + 1) + ": a child is in the cast and the day has stunts (" + n.stunts.slice(0, 3).join(", ") + "). Check the coordinator and child stunt double" });
+      if((n.animals || []).length && !(n.wrangler || []).length) out.push({ level: "info", code: "NOWRANGLER", day: i + 1, text: "Day " + (i + 1) + " has " + n.animals.slice(0, 3).join(", ") + " but no animal wrangler is tagged" });
+    });
+    // special elements spread over many days: grouping them hires the wrangler, coordinator or vehicle fewer times
+    const where = {};
+    plan.days.forEach((d, i) => (d.scenes || []).forEach((id) => { const sc = byId[id]; if(sc) (sc.specials || []).forEach((k) => { (where[k] = where[k] || {})[i + 1] = 1; }); }));
+    Object.keys(where).forEach((k) => {
+      const dsn = Object.keys(where[k]).map(Number).sort((a, b) => a - b);
+      if(dsn.length >= 3 && /^(animals|wrangler|stunts|vehicles|sfx|mfx|vfx|equipment)\|/.test(k)) {
+        const cat = k.split("|")[0], label = k.split("|").slice(1).join("|");
+        out.push({ level: "info", code: "SPREAD", text: label.charAt(0).toUpperCase() + label.slice(1) + " (" + cat + ") is needed on " + dsn.length + " days (" + dsn.join(", ") + "). Grouping them saves hiring it each time" });
+      }
+    });
+  }
   return out;
 }
 
@@ -384,9 +410,9 @@ function syncWithScript(plan, knownList, breakdown, scriptId){
 }
 
 // ---------- script revisions on the stripboard ----------
-// What matters to a shoot day about a scene: its length, cast, location (before any merging of rooms)
+// What matters to a shoot day about a scene: its length, cast (as the script has it, not the breakdown's edits), location (before any merging of rooms)
 // and day/night. Scene numbers are left out: inserting a scene renumbers everything after it.
-function sceneLook(s){ return { id: s.id, e: Math.max(0, Math.round(Number(s.eighths) || 0)), c: (s.cast || []).slice().sort().join("|"), l: String(s.oloc || s.loc || ""), dn: String(s.dn || "") }; }
+function sceneLook(s){ return { id: s.id, e: Math.max(0, Math.round(Number(s.eighths) || 0)), c: (s.ocast || s.cast || []).slice().sort().join("|"), l: String(s.oloc || s.loc || ""), dn: String(s.dn || "") }; }
 // Compares scheduled scenes with how they looked when last checked. Scenes seen for the first time,
 // and unscheduled scenes, are simply (re)recorded: a change only matters once a scene is on a day.
 // `reset` (switching script) records everything afresh. Returns the new base, whether it differs from

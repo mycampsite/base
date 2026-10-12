@@ -100,6 +100,8 @@ const css = `
 .cap{ height:4px; border-radius:3px; background:rgba(255,255,255,.08); margin-top:6px; overflow:hidden; }
 .cap i{ display:block; height:100%; background:#8fe3a6; }
 .col.over .cap i{ background:#ff8b83; }
+.colNeeds{ display:flex; flex-wrap:wrap; gap:3px; margin-top:6px; }
+.colNeeds i{ font-style:normal; font-size:10px; line-height:1; padding:3px 5px; border-radius:8px; color:#fff; background:var(--c,#666); opacity:.9; white-space:nowrap; }
 .colCall{ display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11.5px; color:var(--uiMuted); }
 .ctlTime{ display:flex; gap:6px; align-items:center; }
 .ctlTime select{ flex:1; }
@@ -345,6 +347,13 @@ function render(pid){
   if(b2 && top) b2.scrollTop = top;
   if(bd2 && left) bd2.scrollLeft = left;
 }
+// The special things a day needs, from the breakdown's element sheets (animals, stunts, vehicles, effects…)
+const NEED_CATS = ["animals", "wrangler", "stunts", "vehicles", "weapons", "sfx", "mfx", "vfx", "equipment", "camera", "labor"];
+function needsRow(needs){
+  const E = window.CampElements; if(!E || !needs) return "";
+  const chips = NEED_CATS.filter((c) => (needs[c] || []).length).map((c) => `<i style="--c:${E.CAT[c].color}" title="${esc(E.CAT[c].label + ": " + needs[c].join(", "))}">${esc(E.CAT[c].short)} ${needs[c].length}</i>`);
+  return chips.length ? `<div class="colNeeds">${chips.join("")}</div>` : "";
+}
 function draw(pid){
   S.pid = pid;
   try{ const h = H(); if(h && h.syncState) h.syncState(); }catch(_e){}
@@ -379,7 +388,9 @@ function draw(pid){
   // the plan's flag and location choices shape the breakdown everywhere (re-read when they change)
   const aopts = P.analyzeOpts(plan), akey = JSON.stringify(aopts);
   if(sc.doc && sc.akey !== akey){ sc.bd = B.analyze(sc.doc, aopts); sc.akey = akey; }
-  const bd = sc.bd, byId = P.sceneMap(bd); S.lastBd = bd;
+  // the Breakdown tab's element sheets shape each scene's cast and needs (see CampElements.enrich)
+  const bd = window.CampBdPanel && window.CampBdPanel.enriched ? window.CampBdPanel.enriched(pid, scriptId, p, sc.doc, sc.bd, sc.modified, aopts) : sc.bd;
+  const byId = P.sceneMap(bd); S.lastBd = bd;
   S.lastScriptId = scriptId;
   if(!S.shots[scriptId]) loadShots(scriptId);
   const shotMap = (S.shots[scriptId] && S.shots[scriptId].map) || {};
@@ -475,6 +486,7 @@ function draw(pid){
         <div class="colHead"><b>Day ${i + 1}</b><label class="dtPick${d.date ? " pinned" : ""}" title="${d.date ? "Set to this date. Click to change it" : "Click to choose this day's date. The days after it follow on"}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>${esc(fmtDate(dates[i]) || "Set date")}</span><input type="date" value="${esc(dates[i] || "")}" data-date="${i}"${dis}></label>${d.date && canEdit ? `<button type="button" class="unpin" data-a="unpin" data-day="${i}" title="Unpin: follow on from the day before">✕</button>` : ""}
           <div class="colMeta"><span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg</span><span>${x.scenes} sc${shotsOn ? " · " + P.dayShots(d, shotMap).total + " shots" : ""} · ${x.cast.length} cast</span></div>
           <div class="cap"><i style="width:${pct}%"></i></div>
+          ${needsRow(x.needs)}
           <div class="colCall">Call ${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
         <div class="strips">${d.scenes.length ? d.scenes.map(strip).join("") : `<div class="colEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`}</div></div>`;
     })).join("");

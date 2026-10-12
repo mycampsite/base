@@ -240,5 +240,30 @@ test("reports and CSV: one row per scene, one column per category", () => {
   assert.strictEqual(E.fmtEighths(13), "1 5/8");
 });
 
+test("enrich: element sheets drive each scene's cast, flags and needs for the plan", () => {
+  const P = require("../production.js");
+  const d = require("./fixtures/sample-script.js"), bd = B.analyze(d);
+  const sk = bd.scenes[4].id;                                            // paddock: Ellie, Frank, pony, kelpie
+  let st = {}, m = E.build(d, bd, st), en = E.enrich(bd, m, st, {});
+  const s5 = en.scenes[4];
+  assert.ok(s5.flags.indexOf("animals") >= 0, "animal elements give the animals flag");
+  assert.ok(s5.needs.animals.length >= 1 && s5.needs.stunts.length >= 1);
+  assert.ok(s5.specials.length >= 2, "special elements are listed for booking");
+  assert.deepStrictEqual(s5.ocast, bd.scenes[4].cast, "the script's own cast is kept for revision checks");
+  // ignoring an animal in the sheet takes its flag off when none are left
+  const animals = (m.scenes[4].els.animals || []).slice();
+  animals.forEach((k) => { st = E.untag(st, sk, k); });
+  m = E.build(d, bd, st); en = E.enrich(bd, m, st, {});
+  assert.strictEqual((m.scenes[4].els.animals || []).length, 0);
+  // a cast member removed from a scene comes off that day
+  const k0 = (m.scenes[4].els.cast || [])[0], nm = m.elements[k0].name;
+  st = E.untag(st, sk, k0); m = E.build(d, bd, st); en = E.enrich(bd, m, st, {});
+  assert.ok(en.scenes[4].cast.indexOf(nm) < 0, "removed cast is off the scene");
+  assert.ok(P.dood(P.normalize({ days: [{ scenes: [sk] }] }), en).every((r) => r.name !== nm || r.workDays === 0));
+  // the plan's ignore choice keeps a flag off even when an element would add it
+  const ig = E.enrich(bd, E.build(d, bd, {}), {}, { flags: { animals: "ignore" } });
+  assert.ok(ig.scenes[4].flags.filter((f) => f === "animals").length === 0 || bd.scenes[4].flags.indexOf("animals") >= 0);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

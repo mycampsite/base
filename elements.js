@@ -729,6 +729,49 @@ function build(doc, bd, store) {
     totals: { scenes: scenes.length, elements: Object.keys(els).length, eighths: scenes.reduce(function (a, s) { return a + (s.eighths || 0); }, 0), est: scenes.reduce(function (a, s) { return a + s.est; }, 0) } };
 }
 
+
+// ---------- Feed the breakdown into scheduling (the element sheets are the one source of truth) ----------
+// Returns a copy of the script analysis (breakdown.js) where each scene's cast and flags follow the elements,
+// so edits made in the Breakdown tab or the editor reach auto-schedule, warnings, Day Out of Days and call sheets.
+//   cast   = the cast who are elements of the scene (removing one from the sheet takes them off that day)
+//   flags  = the old flags, plus one for each special category the scene has elements in
+//            (a flag the plan ignores stays off; a flag whose elements were all removed by hand comes off)
+//   needs  = { category: [element names] } for everything except cast
+//   specials = element keys that need booking (animals, stunts, vehicles, effects, hero props, equipment…)
+const NEED_FLAG_ = { animals: "animals", wrangler: "animals", stunts: "stunts", vehicles: "vehicles", weapons: "weapons", sfx: "sfx", mfx: "sfx", vfx: "vfx" };
+const SPECIAL_ = { animals: 1, wrangler: 1, stunts: 1, vehicles: 1, weapons: 1, sfx: 1, mfx: 1, vfx: 1, equipment: 1, camera: 1, security: 1, labor: 1 };
+function enrich(bd, model, store, opts) {
+  if (!bd || !model) return bd;
+  const alias = (store && store.alias) || {}, off = (store && store.off) || {}, fst = (opts && opts.flags) || {};
+  const by = {}; model.scenes.forEach(function (m) { by[m.key] = m; });
+  const scenes = (bd.scenes || []).map(function (s) {
+    const sk = sceneKey(s), m = by[sk]; if (!m) return s;
+    const els = m.els || {}, needs = {}, specials = [];
+    Object.keys(els).forEach(function (c) {
+      if (c === "cast") return;
+      needs[c] = els[c].map(function (k) { return model.elements[k].name; });
+      els[c].forEach(function (k) { if (SPECIAL_[c] || model.elements[k].hero) specials.push(k); });
+    });
+    const here = {}; (els.cast || []).forEach(function (k) { here[k] = 1; });
+    const cast = (bd.cast || []).map(function (c) { return c.name; }).filter(function (n) { return here[resolve(alias, key("cast", n))]; });
+    const flags = (s.flags || []).slice(), removed = {};
+    (off[sk] || []).forEach(function (k) { removed[String(k).split("|")[0]] = 1; });
+    Object.keys(NEED_FLAG_).forEach(function (c) {
+      const f = NEED_FLAG_[c], has = (els[c] || []).length > 0, i = flags.indexOf(f);
+      const ignored = fst[f] === "ignore" || fst[f + "@" + s.id] === "ignore";
+      if (has && i < 0 && !ignored) flags.push(f);
+    });
+    ["animals", "stunts", "vehicles", "weapons", "sfx", "vfx"].forEach(function (f) {
+      const cs = Object.keys(NEED_FLAG_).filter(function (c) { return NEED_FLAG_[c] === f; });
+      const has = cs.some(function (c) { return (els[c] || []).length > 0; }), gone = cs.some(function (c) { return removed[c]; });
+      const i = flags.indexOf(f);
+      if (!has && gone && i >= 0) flags.splice(i, 1);
+    });
+    return Object.assign({}, s, { cast: cast, ocast: s.cast || [], flags: flags, needs: needs, specials: specials });
+  });
+  return Object.assign({}, bd, { scenes: scenes, fromElements: true });
+}
+
 // ---------- Store edits (pure: each returns a new store) ----------
 function copy(st) { return JSON.parse(JSON.stringify(st && typeof st === "object" ? st : {})); }
 function tag(st, sk, cat, name, quote) {
@@ -904,7 +947,7 @@ function csv(b) {
   return [head].concat(rows).map(function (r) { return r.map(q).join(","); }).join("\n");
 }
 
-const api = { CATS: CATS, CAT: CAT, build: build, suggestScene: suggestScene, sceneTexts: sceneTexts, storyDays: storyDays, estimate: estimate,
+const api = { CATS: CATS, CAT: CAT, build: build, enrich: enrich, suggestScene: suggestScene, sceneTexts: sceneTexts, storyDays: storyDays, estimate: estimate,
   key: key, norm: norm, display: display, sceneKey: sceneKey, resolve: resolve,
   tag: tag, untag: untag, drop: dropEl, undrop: undrop, rename: rename, merge: merge, unmerge: unmerge, setNote: setNote, setScene: setScene,
   report: report, csv: csv, fmtEighths: fmtEighths,
