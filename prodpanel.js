@@ -789,6 +789,18 @@ function wire(box, pid, ctx){
     moveScene(pid, id, Number(c.dataset.day), at);
   };
 }
+// For the Stripboard: move a scene to a day (or -1 = Unscheduled), in front of another scene or at the end.
+// Goes through moveScene, so it saves, joins undo and says what happened exactly like a drag on the Plan.
+function moveSceneBefore(pid, id, toDay, beforeId){
+  const hub = H(), p = hub && hub.project(pid);
+  if(!p || !hub.canEdit(p) || !id) return false;
+  const plan = planOf(pid);
+  if(toDay >= 0 && !plan.days[toDay]) return false;
+  let at = -1;
+  if(toDay >= 0 && beforeId && beforeId !== id){ const list = plan.days[toDay].scenes.filter((x) => x !== id); at = list.indexOf(beforeId); }
+  moveScene(pid, id, toDay, at);
+  return true;
+}
 function moveScene(pid, id, toDay, at){
   const { plan, from } = P.moveSceneIn(planOf(pid), id, toDay, at);
   save(pid, plan);
@@ -843,5 +855,5 @@ function syncNow(pid, btn){
   Promise.resolve(hub.syncSheets(pid, scriptId, btn)).finally(() => { delete S.busy[pid]; rerender(); });
 }
 const isStale = (pid) => { const p = H().project(pid); return !!(p && P.callsheetsStale(p.production)); };
-window.CampProdPanel = { syncNow, isStale, render, setMode, csError, reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
+window.CampProdPanel = { syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
 })();

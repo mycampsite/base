@@ -237,6 +237,10 @@ const css = `
 #bdctl .stp .mk i{ width:9px; height:9px; border-radius:2px; display:block; }
 #bdctl .stpDay{ display:flex; gap:10px; align-items:center; background:#000; border:1px solid #333; border-radius:4px; padding:6px 12px; margin:2px 0 8px; font-size:12px; }
 #bdctl .stpDay span{ margin-left:auto; color:var(--uiMuted); }
+#bdctl .stpWrap.canDrag .stp[draggable]{ cursor:grab; }
+#bdctl .stp.dragging{ opacity:.35; }
+#bdctl .stp.dropBefore{ box-shadow:0 -3px 0 0 #7fb6ff; }
+#bdctl .stpDay.dropEnd{ border-color:#7fb6ff; box-shadow:0 0 0 1px #7fb6ff; }
 #bdctl .stpDay.un{ background:rgba(241,199,107,.08); border-color:rgba(241,199,107,.35); margin-top:10px; }
 #bdctl .stpLegend{ display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:12px; font-size:12px; color:var(--uiMuted); }
 #bdctl .stpLegend b{ color:var(--uiText); margin-right:3px; }
@@ -600,7 +604,8 @@ function sheetsView(b, can){
           <div class="shCats">${cats || `<div class="bdEmpty" style="grid-column:1/-1;padding:6px 0">Nothing found in this scene yet.${can ? " Add what it needs above." : ""}</div>`}</div></div>
         <aside class="shSide">
           <div class="fld"><label for="shSyn">Scene summary <span class="hint">from the script, edit to replace</span></label><textarea id="shSyn" rows="3" maxlength="2000"${dis}>${esc(s.syn)}</textarea></div>
-          <div class="fld"><label for="shNote">Production notes</label><textarea id="shNote" rows="5" maxlength="2000"${dis}>${esc(s.note)}</textarea></div>
+          <div class="fld"><label for="shNote">Production notes</label><textarea id="shNote" rows="4" maxlength="2000"${dis}>${esc(s.note)}</textarea></div>
+          <div class="fld"><label for="shDir">Director's notes</label><textarea id="shDir" rows="4" maxlength="2000"${dis}>${esc(s.dir || "")}</textarea></div>
         </aside>
       </div>
     </div></div>`;
@@ -721,7 +726,7 @@ function elementsView(b, can){
 // The shoot plan's days as scene lists (only scenes that are still in the script), plus the leftovers
 function planDays(b, p){
   if(!p || !p.production) return null;
-  const pl = P.normalize(p.production), dates = P.planDates(pl), byId = {};
+  const PP = window.CampProdPanel, pl = PP && PP.planOf && S.pid ? PP.planOf(S.pid) : P.normalize(p.production), dates = P.planDates(pl), byId = {};
   b.scenes.forEach((s) => { if(s.id) byId[s.id] = s; });
   const seen = {};
   const days = pl.days.map((d, i) => ({ n: i + 1, date: dates[i] || "", scenes: d.scenes.map((id) => { seen[id] = 1; return byId[id]; }).filter(Boolean) }));
@@ -733,26 +738,27 @@ const HEAVY_CATS = ["stunts", "vehicles", "weapons", "animals", "sfx", "vfx", "m
 /* ---------- stripboard: the shoot in order, one strip per scene, a banner at the end of each day ---------- */
 function stripsView(b, p){
   const pd = planDays(b, p);
+  const drag = S.lock === "strips" && H().canEdit(p) && !!(window.CampProdPanel && window.CampProdPanel.moveSceneBefore);
   if(!pd) return `<div class="bdEmpty">No shoot plan yet. Start it on the Schedule tab and the stripboard appears here in shoot order.</div>`;
   const castNo = (k) => b.elements[k].no || "";
-  const strip = (s) => {
+  const strip = (s, day) => {
     const cast = (s.els.cast || []).map(castNo).filter(Boolean).sort((x, y) => x - y);
     const marks = HEAVY_CATS.filter((c) => (s.els[c] || []).length);
-    return `<button type="button" class="stp" data-a="goto" data-n="${s.n}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}${s.syn ? " — " + esc(s.syn) : ""}">
+    return `<button type="button" class="stp" data-a="goto" data-n="${s.n}"${drag && s.id ? ` draggable="true" data-sid="${esc(s.id)}" data-day="${day}"` : ""} style="--sc:${stripColor(s)}" title="${esc(s.heading)}${s.syn ? " — " + esc(s.syn) : ""}">
       <span class="n">${s.n}</span><span class="ie">${esc(s.ie || "")}</span><span class="set">${esc(s.set || s.loc || "")}<small>${esc(s.syn || "")}</small></span>
       <span class="dn">${esc(DN[s.dn] || "")}</span><span class="pg">${E.fmtEighths(s.eighths)}</span><span class="sd">${esc(s.day || "")}</span>
       <span class="cast">${cast.join(", ")}</span><span class="mk">${marks.map((c) => `<i title="${esc(E.CAT[c].label)}" style="background:${E.CAT[c].color}"></i>`).join("")}</span></button>`;
   };
   const banner = (d) => {
     const e = d.scenes.reduce((a, s) => a + s.eighths, 0), m = d.scenes.reduce((a, s) => a + s.est, 0);
-    return `<div class="stpDay"><b>End of Day ${d.n}</b>${d.date ? " · " + esc(fmtDate(d.date)) : ""}<span>${d.scenes.length} sc · ${E.fmtEighths(e)} pg · ~${fmtMin(m)}</span></div>`;
+    return `<div class="stpDay"${drag ? ` data-dropday="${d.n - 1}" title="Drop here to put a scene at the end of Day ${d.n}"` : ""}><b>End of Day ${d.n}</b>${d.date ? " · " + esc(fmtDate(d.date)) : ""}<span>${d.scenes.length} sc · ${E.fmtEighths(e)} pg · ~${fmtMin(m)}</span></div>`;
   };
   const legend = (b.byCat.cast || []).filter((k) => b.elements[k].no).map((k) => `<span><b>${b.elements[k].no}</b> ${esc(b.elements[k].name)}</span>`).join("");
   return `<div class="stpHead"><span class="n">Sc</span><span class="ie">I/E</span><span class="set">Set · synopsis</span><span class="dn">D/N</span><span class="pg">Pages</span><span class="sd">Story</span><span class="cast">Cast</span><span class="mk">Needs</span></div>
-    <div class="stpWrap">${pd.days.map((d) => d.scenes.map(strip).join("") + banner(d)).join("")}
-    ${pd.unsched.length ? `<div class="stpDay un"><b>Unscheduled</b><span>${pd.unsched.length} sc · ${E.fmtEighths(pd.unsched.reduce((a, s) => a + s.eighths, 0))} pg</span></div>${pd.unsched.map(strip).join("")}` : ""}</div>
+    <div class="stpWrap${drag ? " canDrag" : ""}">${pd.days.map((d) => d.scenes.map((s) => strip(s, d.n - 1)).join("") + banner(d)).join("")}
+    ${pd.unsched.length || drag ? `<div class="stpDay un"${drag ? ` data-dropday="-1" title="Drop here to take a scene off the schedule"` : ""}><b>Unscheduled</b><span>${pd.unsched.length} sc · ${E.fmtEighths(pd.unsched.reduce((a, s) => a + s.eighths, 0))} pg</span></div>${pd.unsched.map((s) => strip(s, -1)).join("")}` : ""}</div>
     ${legend ? `<div class="stpLegend"><b>Cast</b>${legend}</div>` : ""}
-    <div class="bdEmpty" style="padding:8px 0">Move scenes between days in Schedule › Shoot plan. Click a strip to open its sheet.</div>`;
+    <div class="bdEmpty" style="padding:8px 0">${drag ? "Drag a strip to move it: onto another strip to go in front of it, onto a day's banner to go at the end of that day. Click a strip to open its sheet." : "Move scenes between days in Schedule › Shoot plan. Click a strip to open its sheet."}</div>`;
 }
 
 /* ---------- reports: by category, or what each shoot day needs ---------- */
@@ -844,9 +850,36 @@ function wire(box, pid){
     const sk = (model() && model().scenes[S.sel - 1] || {}).key; if(!sk) return;
     if(t.id === "shSyn"){ const cur = model().scenes[S.sel - 1], v = t.value.trim(); edit(pid, sid, (st) => E.setScene(st, sk, "syn", cur && cur.synAuto && v === cur.syn ? "" : v), true); }
     else if(t.id === "shNote") edit(pid, sid, (st) => E.setScene(st, sk, "note", t.value), true);
+    else if(t.id === "shDir") edit(pid, sid, (st) => E.setScene(st, sk, "dir", t.value), true);
     else if(t.id === "shDay"){ edit(pid, sid, (st) => E.setScene(st, sk, "day", t.value.trim())); }
     else if(t.id === "shEst"){ edit(pid, sid, (st) => E.setScene(st, sk, "est", t.value)); }
     else if(t.id === "shUnit"){ edit(pid, sid, (st) => E.setScene(st, sk, "unit", t.value === "Main" ? "" : t.value)); }
+  };
+  // Stripboard drag: hand the move to the Plan panel (same save, undo and feedback as dragging on the Plan)
+  box.ondragstart = (e) => {
+    const st = e.target.closest && e.target.closest(".stp[data-sid]"); if(!st) return;
+    S.sdrag = st.dataset.sid; e.dataTransfer.effectAllowed = "move";
+    try{ e.dataTransfer.setData("text/plain", S.sdrag); }catch(_e){}
+    setTimeout(() => st.classList.add("dragging"), 0);
+  };
+  const clearDrop = () => box.querySelectorAll(".dropBefore, .dropEnd").forEach((x) => x.classList.remove("dropBefore", "dropEnd"));
+  box.ondragend = () => { S.sdrag = null; clearDrop(); box.querySelectorAll(".stp.dragging").forEach((x) => x.classList.remove("dragging")); };
+  box.ondragover = (e) => {
+    if(!S.sdrag) return;
+    const t = e.target.closest && (e.target.closest(".stp[data-sid]") || e.target.closest("[data-dropday]")); if(!t) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = "move";
+    if(t.classList.contains(t.dataset.sid ? "dropBefore" : "dropEnd")) return;
+    clearDrop(); t.classList.add(t.dataset.sid ? "dropBefore" : "dropEnd");
+  };
+  box.ondrop = (e) => {
+    const id = S.sdrag; if(!id) return;
+    const t = e.target.closest && (e.target.closest(".stp[data-sid]") || e.target.closest("[data-dropday]"));
+    S.sdrag = null; clearDrop(); if(!t) return;
+    e.preventDefault();
+    const toDay = Number(t.dataset.sid ? t.dataset.day : t.dataset.dropday), before = t.dataset.sid && t.dataset.sid !== id ? t.dataset.sid : null;
+    if(t.dataset.sid === id) return;                     // dropped on itself
+    if(!isFinite(toDay)) return;
+    if(window.CampProdPanel.moveSceneBefore(pid, id, toDay, before)) rerender();
   };
   // Words picked in the scene text go into the quick-add box (and are kept as the tag's quote)
   box.onmouseup = () => {

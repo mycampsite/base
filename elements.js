@@ -770,7 +770,7 @@ function build(doc, bd, store) {
       syn: clean(meta.syn) || summarise(txOf(s, i), s) || s.syn || "", synAuto: !clean(meta.syn),
       day: clean(meta.day) || d.label || "", dayAuto: !clean(meta.day), storyDay: d.day || 1, flash: !!d.flash,
       est: Number(meta.est) > 0 ? Math.round(Number(meta.est)) : estAuto, estAuto: !(Number(meta.est) > 0),
-      unit: clean(meta.unit) || "Main", note: clean(meta.note), els: per, hits: hits, src: src, qty: qty,
+      unit: clean(meta.unit) || "Main", note: clean(meta.note), dir: clean(meta.dir), els: per, hits: hits, src: src, qty: qty,
       count: Object.keys(per).reduce(function (a, c) { return a + per[c].length; }, 0)
     };
   });
@@ -920,9 +920,9 @@ function unmerge(st, k) { st = copy(st); if (st.alias) delete st.alias[k]; retur
 function setNote(st, k, text) { st = copy(st); st.notes = st.notes || {}; text = String(text || "").slice(0, 2000); if (text.trim()) st.notes[k] = text; else delete st.notes[k]; return st; }
 function setScene(st, sk, field, val) {
   st = copy(st);
-  if (["syn", "day", "est", "unit", "note"].indexOf(field) < 0) return st;
+  if (["syn", "day", "est", "unit", "note", "dir"].indexOf(field) < 0) return st;
   st.scene = st.scene || {}; const m = st.scene[sk] = st.scene[sk] || {};
-  const v = field === "est" ? (Number(val) > 0 ? Math.min(1440, Math.round(Number(val))) : "") : String(val == null ? "" : val).slice(0, field === "note" || field === "syn" ? 2000 : 40);
+  const v = field === "est" ? (Number(val) > 0 ? Math.min(1440, Math.round(Number(val))) : "") : String(val == null ? "" : val).slice(0, field === "note" || field === "syn" || field === "dir" ? 2000 : 40);
   if (v === "" || v == null) delete m[field]; else m[field] = v;
   if (!Object.keys(m).length) delete st.scene[sk];
   return st;
