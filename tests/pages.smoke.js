@@ -123,6 +123,7 @@ let BASE = "";
     await p.waitForTimeout(700); await p.evaluate(() => CampBdPanel.render("p1")); await p.waitForTimeout(300);
     await expect(p, () => document.querySelectorAll(".bdSc").length >= 3 && !!document.querySelector(".bdSheet .cat"), "scene list and a sheet with category boxes");
     await expect(p, () => /ANA/.test(document.querySelector(".bdSheet").innerText), "cast on the sheet");
+    await expect(p, () => !!document.querySelector(".shText mark"), "the scene text with tagged words coloured");
     await p.selectOption("#bdQCat", "props"); await p.fill("#bdQuick", "lantern"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
     await expect(p, () => /Lantern/.test(document.querySelector(".bdSheet").innerText), "the hand-added prop");
     await expect(p, () => { const b = __CampHub.project().breakdown; const sid = b && Object.keys(b)[0]; return !!sid && JSON.stringify(b[sid].tags || {}).indexOf("props|lantern") >= 0; }, "the tag shared to the team's copy");
