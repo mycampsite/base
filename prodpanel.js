@@ -309,7 +309,7 @@ function weatherFor(w, iso){
   const k = w.lat + "," + w.lng + "," + iso, c = WX[k];
   if(c) return c.t;
   WX[k] = { t: null, at: Date.now() };
-  fetch("https://api.open-meteo.com/v1/forecast?daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&latitude=" + w.lat + "&longitude=" + w.lng + "&start_date=" + iso + "&end_date=" + iso)
+  WX[k].p = fetch("https://api.open-meteo.com/v1/forecast?daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&latitude=" + w.lat + "&longitude=" + w.lng + "&start_date=" + iso + "&end_date=" + iso)
     .then((r) => r.json()).then((j) => {
       const d = j && j.daily; let t = "";
       if(d && d.time && d.time.length){ const hi = d.temperature_2m_max[0], lo = d.temperature_2m_min[0]; t = (WX_WORDS[d.weather_code[0]] || "") + (hi != null ? " " + Math.round(hi) + "° / " + Math.round(lo) + "°" : ""); }
@@ -958,11 +958,33 @@ function syncNow(pid, btn){
 }
 const isStale = (pid) => { const p = H().project(pid); return !!(p && P.callsheetsStale(p.production)); };
 // Each day's call / shoot / wrap times for Sync (null until the plan has been drawn for this project in this tab)
-function timetable(pid){
+// The enriched breakdown for a project's plan, as the Shoot plan draws it (reads the script if this tab hasn't yet)
+async function planBd(pid){
+  if(S.lastBd && S.lastBdPid === pid) return S.lastBd;
+  const hub = H(), p = hub.project(pid); if(!p) return null;
+  const ids = hub.scriptIds(p), plan = planOf(pid), scriptId = (plan.scriptId && ids.indexOf(plan.scriptId) >= 0) ? plan.scriptId : ids[0] || "";
+  if(!scriptId) return null;
+  for(let i = 0; i < 120 && !(S.scripts[scriptId] && S.scripts[scriptId].doc && S.scripts[scriptId].state !== "loading"); i++){
+    if(!S.scripts[scriptId] || S.scripts[scriptId].state === "error") await loadScript(scriptId);
+    if(S.scripts[scriptId] && S.scripts[scriptId].state === "error") return null;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  const sc = S.scripts[scriptId]; if(!sc || !sc.doc) return null;
+  const aopts = P.analyzeOpts(plan), akey = JSON.stringify(aopts);
+  if(sc.akey !== akey){ sc.bd = B.analyze(sc.doc, aopts); sc.akey = akey; }
+  return window.CampBdPanel && window.CampBdPanel.enriched ? window.CampBdPanel.enriched(pid, scriptId, p, sc.doc, sc.bd, sc.modified, aopts) : sc.bd;
+}
+// Each day's timetable plus everything the Schedule sheet lays out, for Sync. Waits (a few seconds at most) for forecasts.
+async function timetable(pid){
   try{
-    if(!S.lastBd || S.lastBdPid !== pid) return null;
-    const pl = planOf(pid), byId = P.sceneMap(S.lastBd);
-    return P.timetable(pl, byId).map((d, i) => {
+    const bd = await planBd(pid); if(!bd) return null;
+    const pl = planOf(pid), byId = P.sceneMap(bd);
+    const days = P.timetable(pl, byId);
+    // start any forecasts not fetched yet, then give them a moment
+    days.forEach((d, i) => weatherFor(P.whereOf(pl, i), d.date));
+    const pend = Object.keys(WX).map((k) => WX[k].p).filter(Boolean);
+    if(pend.length) await Promise.race([Promise.allSettled(pend), new Promise((r) => setTimeout(r, 4000))]);
+    return days.map((d, i) => {
       const w = P.whereOf(pl, i), sun = sunFor(w, d.date), wx = weatherFor(w, d.date);
       return Object.assign(d, { where: w ? w.name : "", sunrise: sun ? sun.rise : "", sunset: sun ? sun.set : "", weather: wx || "",
         rows: d.rows.map((r) => { if(r.type !== "scene") return r; const s = byId[r.id] || {};
