@@ -776,6 +776,28 @@ function enrich(bd, model, store, opts) {
   return Object.assign({}, bd, { scenes: scenes, fromElements: true });
 }
 
+// ---------- What the Schedule sheet and call sheets receive (Code.gs reads this as `breakdown`) ----------
+function sheetPayload(model) {
+  const scenes = {}, els = [];
+  model.scenes.forEach(function (m) {
+    const e = {};
+    Object.keys(m.els).forEach(function (c) {
+      e[c] = m.els[c].map(function (k) {
+        const x = model.elements[k], o = { n: x.name };
+        if (m.qty && m.qty[k] > 1) o.q = m.qty[k];
+        if (x.hero) o.h = 1;
+        return o;
+      });
+    });
+    scenes[m.key] = { n: m.n, syn: m.syn, day: m.day, est: m.est, unit: m.unit, note: m.note, e: e };
+  });
+  Object.keys(model.elements).forEach(function (k) {
+    const x = model.elements[k];
+    els.push({ c: x.cat, n: x.name, sc: x.scenes.slice(), note: x.note || "", h: x.hero ? 1 : 0 });
+  });
+  return { v: 1, cats: model.cats.map(function (c) { return [c.id, c.label, c.color]; }), scenes: scenes, els: els };
+}
+
 // ---------- Store edits (pure: each returns a new store) ----------
 function copy(st) { return JSON.parse(JSON.stringify(st && typeof st === "object" ? st : {})); }
 function tag(st, sk, cat, name, quote) {
@@ -951,7 +973,7 @@ function csv(b) {
   return [head].concat(rows).map(function (r) { return r.map(q).join(","); }).join("\n");
 }
 
-const api = { CATS: CATS, CAT: CAT, build: build, enrich: enrich, suggestScene: suggestScene, sceneTexts: sceneTexts, storyDays: storyDays, estimate: estimate,
+const api = { CATS: CATS, CAT: CAT, build: build, enrich: enrich, sheetPayload: sheetPayload, suggestScene: suggestScene, sceneTexts: sceneTexts, storyDays: storyDays, estimate: estimate,
   key: key, norm: norm, display: display, sceneKey: sceneKey, resolve: resolve,
   tag: tag, untag: untag, drop: dropEl, undrop: undrop, rename: rename, merge: merge, unmerge: unmerge, setNote: setNote, setScene: setScene,
   report: report, csv: csv, fmtEighths: fmtEighths,

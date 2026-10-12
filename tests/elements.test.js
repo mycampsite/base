@@ -276,5 +276,16 @@ test("false props: adjectives and adverbs after a body part, abstract nouns, and
   assert.ok(names(b2, 1, "art").indexOf("TV playback") >= 0, "a TV showing something needs playback");
 });
 
+test("sheetPayload: what Sync sends to the Schedule sheet and call sheets", () => {
+  const d = require("./fixtures/sample-script.js"), bd = B.analyze(d), m = E.build(d, bd, {});
+  const pl = E.sheetPayload(m);
+  assert.strictEqual(pl.cats.length, E.CATS.length);
+  const first = pl.scenes[bd.scenes[0].id];
+  assert.ok(first && first.n === 1 && first.e.vehicles && first.e.vehicles.length, "scene 1 has its vehicle");
+  assert.ok(pl.els.some((e) => e.c === "props" && e.n === "Map" && e.h === 1), "the hero prop is marked");
+  assert.ok(JSON.stringify(pl).length < 200000, "small enough to send");
+  JSON.parse(JSON.stringify(pl));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

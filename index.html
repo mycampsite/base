@@ -1483,12 +1483,15 @@ async function exportDoc(kind, fileId, retried) {
   if (!RIP.ep) throw new Error("The script cloud isn't set up on this device. Open the Script library once to set it up.");
   const p = projects[current.pid]; let tz = "";
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (_e) {}
+  // the Breakdown tab's element sheets go with the schedule and call sheets (the Schedule sheet gets Breakdown + Elements tabs)
+  let breakdown = null;
+  if((kind === "schedule" || kind === "callsheets") && window.CampBdPanel && window.CampBdPanel.payload){ try{ breakdown = await window.CampBdPanel.payload(current.pid, fileId); }catch(_e){ breakdown = null; } }
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 240000);
   let res;
   try {
     const r = await fetch(RIP.ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, cache: "no-store", signal: ctl.signal,
       // The Production plan travels with every export, so the schedule and budget follow the panel
-      body: JSON.stringify({ key: lsGet(KEY_KEY) || "", action: kind, fileId, folderId: p.folderId, tz, plan: (p && p.production && p.production.scriptId === fileId) ? p.production : null }) });
+      body: JSON.stringify({ key: lsGet(KEY_KEY) || "", action: kind, fileId, folderId: p.folderId, tz, plan: (p && p.production && p.production.scriptId === fileId) ? p.production : null, breakdown }) });
     res = await r.json();
   } catch (err) {
     throw new Error(err && err.name === "AbortError" ? "Google took too long. Try again: it may be half made, and trying again finishes it." : "Couldn't reach the script cloud.");

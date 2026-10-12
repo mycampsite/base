@@ -292,6 +292,21 @@ function enriched(pid, sid, p, doc, bd, modified, opts){
   }catch(_e){ return bd; }
 }
 
+// The finished breakdown for a script, for Sync / Export (the Schedule sheet and call sheets read it)
+async function payload(pid, sid){
+  const hub = H(), p = hub.project(pid); if(!p || !sid) return null;
+  let sc = S.scripts[sid];
+  let doc = sc && sc.doc;
+  if(!doc){
+    const res = await hub.ripGet({ action: "load", fileId: sid });
+    if(!res || res.ok === false || !res.doc) return null;
+    doc = res.doc;
+  }
+  const bd = B.analyze(doc, planOpts(p));
+  sync(pid, sid, p, hub.canEdit(p));
+  return E.sheetPayload(E.build(doc, bd, storeOf(pid, sid)));
+}
+
 /* ---------- rendering ---------- */
 function render(pid){
   const box = document.getElementById("bdctl"); if(!box) return;
@@ -350,7 +365,7 @@ function draw(pid){
   const acts = `<div class="bdActs">${scriptSel}
     <div class="seg" role="tablist">${[["sheets", "Sheets"], ["strips", "Stripboard"], ["elements", "Elements"], ["reports", "Reports"]].map(([v, n]) => `<button type="button" role="tab" class="${S.view === v ? "on" : ""}" data-a="view" data-v="${v}" aria-selected="${S.view === v}">${n}</button>`).join("")}</div>
     ${can ? `<span class="seg"><button type="button" data-a="undo" title="Undo"${hh.undo.length ? "" : " disabled"}>↶</button><button type="button" data-a="redo" title="Redo"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
-    <button class="btn sm" type="button" data-a="csv" title="Download the breakdown as a spreadsheet file (CSV)">CSV</button>
+    <button class="btn sm" type="button" data-a="csv" title="Download the breakdown as a CSV file. The same sheets are in the Schedule Google Sheet after Sync">CSV</button>
     <button class="btn sm" type="button" data-a="reload" title="Read the latest script">Refresh</button></div>`;
   const note = `<div class="bdNote">Suggestions come from the script. Remove what's wrong, add what's missing. Changes are shared with everyone on the project. <button class="btn sm" type="button" data-a="dismissnote" style="margin-left:8px">Got it</button></div>`;
   const view = S.view === "elements" ? elementsView(b, can) : S.view === "reports" ? reportsView(b, p) : S.view === "strips" ? stripsView(b, p) : sheetsView(b, can);
@@ -592,5 +607,5 @@ window.addEventListener("storage", (e) => {
   S.model = null; rerender();
 });
 function setMode(on){ on = !!on; if(on === S.on) return; S.on = on; if(on){ S.edit = null; S.adding = null; S.seen = {}; S.model = null; } rerender(); const box = document.getElementById("bdctl"); if(box) box.className = on ? "on" : ""; }
-window.CampBdPanel = { enriched, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, reloadScript: (id) => loadScript(id, true) };
+window.CampBdPanel = { enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, reloadScript: (id) => loadScript(id, true) };
 })();
