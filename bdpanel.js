@@ -120,6 +120,8 @@ const css = `
 #bdctl .shGrid{ display:grid; grid-template-columns:minmax(0,1fr) 300px; align-items:start; }
 #bdctl .shMain{ min-width:0; padding:12px 14px 16px; }
 #bdctl .shSide{ border-left:1px solid var(--uiBorder); padding:12px 14px 16px; display:flex; flex-direction:column; gap:12px; position:sticky; top:46px; margin-top:12px; }
+#bdctl .fld{ margin-top:0; }
+#bdctl .fld span{ display:inline; font-size:inherit; color:inherit; margin:0; }
 #bdctl .fld label, #bdctl .shMeta label{ display:flex; flex-direction:column; gap:4px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--uiMuted); }
 #bdctl .fld label{ display:block; margin-bottom:4px; }
 #bdctl .fld .hint{ text-transform:none; letter-spacing:0; opacity:.7; margin-left:4px; }
@@ -147,7 +149,7 @@ const css = `
 #bdctl .stBody ::selection{ background:rgba(127,182,255,.45); }
 #bdctl .shCats{ display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:12px; align-items:start; }
 #bdctl .cat{ border:1px solid color-mix(in srgb, var(--cc) 40%, #262626); border-radius:10px; background:#181818; overflow:hidden; }
-#bdctl .cat.empty{ opacity:.7; }
+#bdctl .cat.isEmpty{ opacity:.7; }
 #bdctl .cat > .ch{ display:flex; align-items:center; gap:8px; padding:7px 8px 7px 10px; background:color-mix(in srgb, var(--cc) 18%, #181818); border-bottom:1px solid color-mix(in srgb, var(--cc) 30%, #262626); }
 #bdctl .cat > .ch .ci{ width:17px; height:17px; color:var(--cc); flex:none; filter:brightness(1.35); }
 #bdctl .cat > .ch .nm{ font-size:13px; font-weight:700; }
@@ -161,7 +163,7 @@ const css = `
 #bdctl table.ct .c-no{ width:34px; text-align:center; padding-left:8px; }
 #bdctl table.ct .c-q{ width:38px; text-align:center; color:var(--uiMuted); font-variant-numeric:tabular-nums; }
 #bdctl table.ct .c-nm{ width:34%; }
-#bdctl table.ct th.c-nt{ overflow:visible; }
+#bdctl table.ct th.c-nt{ overflow:visible; font-size:10px; color:var(--uiMuted); }
 #bdctl table.ct .c-nm b{ font-weight:600; cursor:pointer; word-break:break-word; }
 #bdctl table.ct .c-nm b:hover{ text-decoration:underline; text-underline-offset:2px; }
 #bdctl table.ct .c-nt{ color:var(--uiMuted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -290,7 +292,7 @@ const printCss = `
   #bdctl .bdSheet, #bdctl .bdSheet *{ visibility:visible !important; }
   #bdctl .bdSheet{ position:absolute; left:0; top:0; width:100%; overflow:visible !important; border:0; background:#fff !important; color:#000 !important; }
   #bdctl .bdSheet *{ color:#000 !important; background:transparent !important; box-shadow:none !important; }
-  #bdctl .shBar, #bdctl .qAdd, #bdctl .cat > .ch .add, #bdctl .c-x, #bdctl .addRow, #bdctl .cat.empty{ display:none !important; }
+  #bdctl .shBar, #bdctl .qAdd, #bdctl .cat > .ch .add, #bdctl .c-x, #bdctl .addRow, #bdctl .cat.isEmpty{ display:none !important; }
   #bdctl .shGrid{ grid-template-columns:1fr !important; }
   #bdctl .stBody{ max-height:none !important; } #bdctl .stHd small{ display:none !important; }
   #bdctl .stBody mark{ box-shadow:inset 0 -2px 0 var(--cc) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -564,7 +566,7 @@ function sheetsView(b, can){
     }).join("");
     const names = (b.byCat[c.id] || []).map((k) => b.elements[k].name);
     const addRow = adding === c.id ? `<div class="addRow"><input type="text" id="bdAdd" list="bdDL" maxlength="60" placeholder="${esc(c.short)} name" autocomplete="off"><datalist id="bdDL">${names.map((n) => `<option value="${esc(n)}">`).join("")}</datalist><button class="btn sm primary" type="button" data-a="addok" data-c="${c.id}" data-sk="${esc(s.key)}">Add</button><button class="btn sm" type="button" data-a="addcancel">✕</button></div>` : "";
-    return `<div class="cat${keys.length ? "" : " empty"}" style="--cc:${c.color}"><div class="ch">${catIcon(c.id)}<span class="nm">${esc(c.label)}</span><span class="k">${keys.length}</span>${can ? `<button class="add" type="button" data-a="add" data-c="${c.id}" data-sk="${esc(s.key)}" aria-label="Add ${esc(c.label)}" title="Add ${esc(c.label.toLowerCase())}">+ Add</button>` : ""}</div>
+    return `<div class="cat${keys.length ? "" : " isEmpty"}" style="--cc:${c.color}"><div class="ch">${catIcon(c.id)}<span class="nm">${esc(c.label)}</span><span class="k">${keys.length}</span>${can ? `<button class="add" type="button" data-a="add" data-c="${c.id}" data-sk="${esc(s.key)}" aria-label="Add ${esc(c.label)}" title="Add ${esc(c.label.toLowerCase())}">+ Add</button>` : ""}</div>
       ${rows ? `<table class="ct"><thead><tr><th class="c-no">${isCast ? "ID" : ""}</th><th class="c-nm">${isCast ? "Character" : "Element"}</th><th class="c-q">${isCast ? "" : "Qty"}</th><th class="c-nt">Notes</th><th class="c-sc" title="How many scenes it's in">Sc</th><th class="c-x"></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="none">No ${esc(c.short.toLowerCase())} in this scene</div>`}${addRow}</div>`;
   };
   const dis = can ? "" : " disabled";
