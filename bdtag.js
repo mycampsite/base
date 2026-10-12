@@ -50,7 +50,7 @@ const css = `
 .bdtPop .have button{ border:0; background:none; color:inherit; opacity:.65; cursor:pointer; padding:0 3px; }
 .bdtPop .have button:hover{ opacity:1; }
 .bdtPop .none{ opacity:.5; font-size:12px; }
-${E.CATS.map((c) => `::highlight(bd-${c.id}){ background-color:${c.color}80; color:inherit; }`).join("\n")}
+${E.CATS.map((c) => `::highlight(bd-${c.id}){ background-color:${c.color}4d; color:inherit; text-decoration:underline 2px ${c.color}; text-underline-offset:3px; text-decoration-skip-ink:none; }`).join("\n")}
 @media print{ ${E.CATS.map((c) => `::highlight(bd-${c.id}){ background-color:transparent; text-decoration:none; }`).join(" ")} }`;
 const style = document.createElement("style"); style.textContent = css; document.head.appendChild(style);
 
@@ -245,7 +245,7 @@ style.textContent += `
 .bdtKey .bdtCs button small{ opacity:.6; }
 .bdtKey .bdtCs button.off{ opacity:.4; text-decoration:line-through; }
 .bdtKey .bdtNote{ display:block; width:auto; font-size:11px; opacity:.55; margin-top:6px; font-style:normal; }
-${E.CATS.map((c) => `::highlight(bds-${c.id}){ background-color:${c.color}38; }`).join("\n")}
+${E.CATS.map((c) => `::highlight(bds-${c.id}){ background-color:${c.color}2e; text-decoration:underline 1px dashed ${c.color}; text-underline-offset:3px; }`).join("\n")}
 @media print{ .bdtKey{ display:none !important; } ${E.CATS.map((c) => `::highlight(bds-${c.id}){ background-color:transparent; text-decoration:none; }`).join(" ")} }
 /* While tags are showing, comments step back to a coloured underline so the two don't look alike */
 body.bdTagsOn #scriptEditor .cmt[data-color]{ background:transparent !important; box-shadow:inset 0 -2px 0 0 var(--cmtLine, #e0ad2b) !important; }
