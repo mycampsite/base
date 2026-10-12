@@ -107,6 +107,41 @@ test("day totals: pages add up and match the script total when everything is sch
   assert.strictEqual(sum, total);
 });
 
+test("auto-schedule: night scenes get their own day when there's room (no turnaround)", () => {
+  const b = { scenes: [
+    { n: 1, id: "a", loc: "HOUSE", dn: "D", eighths: 8, cast: ["ANA"] },
+    { n: 2, id: "b", loc: "HOUSE", dn: "N", eighths: 8, cast: ["ANA"] },
+    { n: 3, id: "c", loc: "PARK", dn: "D", eighths: 8, cast: ["ANA"] },
+    { n: 4, id: "d", loc: "STREET", dn: "N", eighths: 8, cast: ["ANA"] }], cast: [{ name: "ANA" }] };
+  const { plan } = P.autoSchedule({ settings: { days: 2, maxEighths: 40 } }, b);
+  const dayOf = (id) => plan.days.findIndex((d) => d.scenes.indexOf(id) >= 0);
+  assert.strictEqual(dayOf("a"), dayOf("c")); assert.strictEqual(dayOf("b"), dayOf("d")); assert.notStrictEqual(dayOf("a"), dayOf("b"));
+  assert.ok(!P.validate(plan, b).some((w) => w.code === "DAYNIGHT"));
+});
+
+test("auto-schedule: after the biggest location comes the one sharing its cast", () => {
+  const b = { scenes: [
+    { n: 1, id: "a", loc: "BIG", dn: "D", eighths: 20, cast: ["ANA"] },
+    { n: 2, id: "b", loc: "OTHER", dn: "D", eighths: 10, cast: ["ZED"] },
+    { n: 3, id: "c", loc: "SMALL", dn: "D", eighths: 4, cast: ["ANA"] }], cast: [] };
+  assert.deepStrictEqual(P.stripOrder(b.scenes).map((s) => s.id), ["a", "c", "b"]);
+});
+
+test("auto-schedule: scenes needing the same special requirement share a day", () => {
+  const b = { scenes: [
+    { n: 1, id: "a", loc: "FARM", dn: "D", eighths: 8, cast: ["ANA"], flags: ["animals"] },
+    { n: 2, id: "b", loc: "SHOP", dn: "D", eighths: 8, cast: ["BEN"] },
+    { n: 3, id: "c", loc: "ROAD", dn: "D", eighths: 8, cast: ["CAL"], flags: ["animals"] }], cast: [] };
+  const plan = P.normalize({ settings: { days: 2, maxEighths: 16 }, days: [{ id: "x", scenes: ["a"] }, { id: "y", scenes: ["b"] }] });
+  const r = P.autoSchedule(plan, b);
+  assert.ok(r.plan.days[0].scenes.indexOf("c") >= 0);   // with the other animal scene, not the shop day
+});
+
+test("a day mixing day and night scenes is noted", () => {
+  const plan = { settings: { days: 1, maxEighths: 40 }, days: [{ id: "a", scenes: ["s1", "s3"] }] };
+  assert.ok(P.validate(plan, bd).some((w) => w.code === "DAYNIGHT" && w.level === "info"));
+});
+
 test("suggested day for a new scene: same location with room first", () => {
   const plan = { settings: { days: 3, maxEighths: 40 }, days: [{ id: "a", scenes: ["s2"] }, { id: "b", scenes: ["s1"] }, { id: "c", scenes: [] }] };
   assert.strictEqual(P.suggestDay("s4", plan, bd), 1);   // HOUSE is on day 2

@@ -34,7 +34,7 @@ const S = {
   stores: {},                           // pid|scriptId -> store
   model: null, modelKey: "",
   sel: 1,                               // scene number open on the Sheets view
-  cat: "all", q: "",                    // Elements view filter
+  cat: "all", q: "", rpBy: "cat",                    // Elements view filter
   adding: null,                         // { sk, cat } adding an element by hand
   edit: null,                           // element key being edited
   scriptPick: {},                       // pid -> script chosen here (this device only; the shared plan isn't touched)
@@ -115,6 +115,29 @@ const css = `
 #bdctl .tag{ font-size:10px; color:var(--uiMuted); border:1px solid var(--uiBorder); border-radius:5px; padding:0 4px; margin-left:6px; }
 #bdctl .nt{ color:var(--uiMuted); font-size:11.5px; display:block; margin-top:2px; white-space:pre-wrap; }
 /* reports */
+/* stripboard */
+#bdctl .stpHead, #bdctl .stp{ display:grid; grid-template-columns:44px 58px minmax(140px,1fr) 78px 54px 50px minmax(70px,140px) 92px; gap:8px; align-items:center; }
+#bdctl .stpHead{ font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--uiMuted); padding:12px 10px 6px 15px; }
+#bdctl .stpWrap{ display:flex; flex-direction:column; gap:2px; }
+#bdctl .stp{ text-align:left; width:100%; border:0; border-left:5px solid var(--sc,#ddd); border-radius:4px; padding:5px 10px; background:color-mix(in srgb, var(--sc,#ddd) 16%, #191919); color:inherit; font:inherit; font-size:12.5px; cursor:pointer; }
+#bdctl .stp:hover{ background:color-mix(in srgb, var(--sc,#ddd) 26%, #191919); }
+#bdctl .stp .n{ font-weight:700; }
+#bdctl .stp .set{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:600; }
+#bdctl .stp .set small{ font-weight:400; color:var(--uiMuted); margin-left:8px; }
+#bdctl .stp .cast{ color:#ddd; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#bdctl .stp .mk{ display:flex; gap:3px; flex-wrap:wrap; }
+#bdctl .stp .mk i{ width:9px; height:9px; border-radius:2px; display:block; }
+#bdctl .stpDay{ display:flex; gap:10px; align-items:center; background:#000; border:1px solid #333; border-radius:4px; padding:6px 12px; margin:2px 0 8px; font-size:12px; }
+#bdctl .stpDay span{ margin-left:auto; color:var(--uiMuted); }
+#bdctl .stpDay.un{ background:rgba(241,199,107,.08); border-color:rgba(241,199,107,.35); margin-top:10px; }
+#bdctl .stpLegend{ display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:12px; font-size:12px; color:var(--uiMuted); }
+#bdctl .stpLegend b{ color:var(--uiText); margin-right:3px; }
+@media (max-width:760px){
+  #bdctl .stpHead{ display:none; }
+  #bdctl .stp{ grid-template-columns:36px 1fr 46px; }
+  #bdctl .stp .ie, #bdctl .stp .dn, #bdctl .stp .sd, #bdctl .stp .mk{ display:none; }
+  #bdctl .stp .cast{ grid-column:2 / 4; font-size:11.5px; }
+}
 #bdctl .rpGrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:12px; padding-top:12px; }
 #bdctl .rp{ border:1px solid color-mix(in srgb, var(--cc) 50%, #222); border-radius:12px; overflow:hidden; background:#1b1b1b; }
 #bdctl .rp h4{ margin:0; padding:7px 12px; font-size:12.5px; background:color-mix(in srgb, var(--cc) 22%, #181818); display:flex; justify-content:space-between; }
@@ -238,12 +261,12 @@ function draw(pid){
     <span class="bdChip hideSm" title="Estimated shooting time, about an hour a page plus allowances for heavy scenes">~${fmtMin(b.totals.est)} to shoot</span>
     ${sc.state === "loading" ? `<span class="bdChip">Updating from script…</span>` : ""}${!can ? `<span class="bdChip">View only</span>` : ""}`;
   const acts = `<div class="bdActs">${scriptSel}
-    <div class="seg" role="tablist">${[["sheets", "Sheets"], ["elements", "Elements"], ["reports", "Reports"]].map(([v, n]) => `<button type="button" role="tab" class="${S.view === v ? "on" : ""}" data-a="view" data-v="${v}" aria-selected="${S.view === v}">${n}</button>`).join("")}</div>
+    <div class="seg" role="tablist">${[["sheets", "Sheets"], ["strips", "Stripboard"], ["elements", "Elements"], ["reports", "Reports"]].map(([v, n]) => `<button type="button" role="tab" class="${S.view === v ? "on" : ""}" data-a="view" data-v="${v}" aria-selected="${S.view === v}">${n}</button>`).join("")}</div>
     ${can ? `<span class="seg"><button type="button" data-a="undo" title="Undo"${hh.undo.length ? "" : " disabled"}>↶</button><button type="button" data-a="redo" title="Redo"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
     <button class="btn sm" type="button" data-a="csv" title="Download the breakdown as a spreadsheet file (CSV)">CSV</button>
     <button class="btn sm" type="button" data-a="reload" title="Read the latest script">Refresh</button></div>`;
   const note = `<div class="bdNote">Suggestions come from the script. Remove what's wrong, add what's missing. Your changes are kept on this device only for now. <button class="btn sm" type="button" data-a="dismissnote" style="margin-left:8px">Got it</button></div>`;
-  const view = S.view === "elements" ? elementsView(b, can) : S.view === "reports" ? reportsView(b) : sheetsView(b, can);
+  const view = S.view === "elements" ? elementsView(b, can) : S.view === "reports" ? reportsView(b, p) : S.view === "strips" ? stripsView(b, p) : sheetsView(b, can);
   box.innerHTML = head(chips, acts) + `<div class="bdBody">${can && !lsGet(NOTE_KEY) ? note : ""}${view}</div>`;
   wire(box, pid);
 }
@@ -322,12 +345,65 @@ function elementsView(b, can){
 }
 
 /* ---------- reports ---------- */
-function reportsView(b){
+// The shoot plan's days as scene lists (only scenes that are still in the script), plus the leftovers
+function planDays(b, p){
+  if(!p || !p.production) return null;
+  const pl = P.normalize(p.production), dates = P.planDates(pl), byId = {};
+  b.scenes.forEach((s) => { if(s.id) byId[s.id] = s; });
+  const seen = {};
+  const days = pl.days.map((d, i) => ({ n: i + 1, date: dates[i] || "", scenes: d.scenes.map((id) => { seen[id] = 1; return byId[id]; }).filter(Boolean) }));
+  return { days, unsched: b.scenes.filter((s) => !s.id || !seen[s.id]) };
+}
+function fmtDate(iso){ const d = P.parseISO(iso); return d ? d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : ""; }
+const HEAVY_CATS = ["stunts", "vehicles", "weapons", "animals", "sfx", "vfx", "makeup", "music", "equipment", "labor"];
+
+/* ---------- stripboard: the shoot in order, one strip per scene, a banner at the end of each day ---------- */
+function stripsView(b, p){
+  const pd = planDays(b, p);
+  if(!pd) return `<div class="bdEmpty">No shoot plan yet. Start it on the Plan tab and the stripboard appears here in shoot order.</div>`;
+  const castNo = (k) => b.elements[k].no || "";
+  const strip = (s) => {
+    const cast = (s.els.cast || []).map(castNo).filter(Boolean).sort((x, y) => x - y);
+    const marks = HEAVY_CATS.filter((c) => (s.els[c] || []).length);
+    return `<button type="button" class="stp" data-a="goto" data-n="${s.n}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}${s.syn ? " — " + esc(s.syn) : ""}">
+      <span class="n">${s.n}</span><span class="ie">${esc(s.ie || "")}</span><span class="set">${esc(s.set || s.loc || "")}<small>${esc(s.syn || "")}</small></span>
+      <span class="dn">${esc(DN[s.dn] || "")}</span><span class="pg">${E.fmtEighths(s.eighths)}</span><span class="sd">${esc(s.day || "")}</span>
+      <span class="cast">${cast.join(", ")}</span><span class="mk">${marks.map((c) => `<i title="${esc(E.CAT[c].label)}" style="background:${E.CAT[c].color}"></i>`).join("")}</span></button>`;
+  };
+  const banner = (d) => {
+    const e = d.scenes.reduce((a, s) => a + s.eighths, 0), m = d.scenes.reduce((a, s) => a + s.est, 0);
+    return `<div class="stpDay"><b>End of Day ${d.n}</b>${d.date ? " · " + esc(fmtDate(d.date)) : ""}<span>${d.scenes.length} sc · ${E.fmtEighths(e)} pg · ~${fmtMin(m)}</span></div>`;
+  };
+  const legend = (b.byCat.cast || []).filter((k) => b.elements[k].no).map((k) => `<span><b>${b.elements[k].no}</b> ${esc(b.elements[k].name)}</span>`).join("");
+  return `<div class="stpHead"><span class="n">Sc</span><span class="ie">I/E</span><span class="set">Set · synopsis</span><span class="dn">D/N</span><span class="pg">Pages</span><span class="sd">Story</span><span class="cast">Cast</span><span class="mk">Needs</span></div>
+    <div class="stpWrap">${pd.days.map((d) => d.scenes.map(strip).join("") + banner(d)).join("")}
+    ${pd.unsched.length ? `<div class="stpDay un"><b>Unscheduled</b><span>${pd.unsched.length} sc · ${E.fmtEighths(pd.unsched.reduce((a, s) => a + s.eighths, 0))} pg</span></div>${pd.unsched.map(strip).join("")}` : ""}</div>
+    ${legend ? `<div class="stpLegend"><b>Cast</b>${legend}</div>` : ""}
+    <div class="bdEmpty" style="padding:8px 0">Move scenes between days on the Plan tab. Click a strip to open its sheet.</div>`;
+}
+
+/* ---------- reports: by category, or what each shoot day needs ---------- */
+function reportsView(b, p){
+  const by = S.rpBy === "day" ? "day" : "cat";
+  const seg = `<div class="bdTools"><div class="seg">${[["cat", "By category"], ["day", "By shoot day"]].map(([v, n]) => `<button type="button" class="${by === v ? "on" : ""}" data-a="rpby" data-v="${v}">${n}</button>`).join("")}</div></div>`;
+  if(by === "day"){
+    const pd = planDays(b, p);
+    if(!pd) return seg + `<div class="bdEmpty">No shoot plan yet. Start it on the Plan tab to see what each day needs.</div>`;
+    const cards = pd.days.filter((d) => d.scenes.length).map((d) => {
+      const rows = E.CATS.map((c) => {
+        const ks = []; d.scenes.forEach((s) => (s.els[c.id] || []).forEach((k) => { if(ks.indexOf(k) < 0) ks.push(k); }));
+        if(!ks.length) return "";
+        return `<tr><td><span class="dot" style="background:${c.color}"></span>${esc(c.short)}</td><td>${ks.map((k) => esc((b.elements[k].no && c.id === "cast" ? b.elements[k].no + ". " : "") + b.elements[k].name)).join(", ")}</td></tr>`;
+      }).join("");
+      return `<div class="rp" style="--cc:#8a8f98"><h4><span>Day ${d.n}${d.date ? " · " + esc(fmtDate(d.date)) : ""}</span><span>Sc ${d.scenes.map((s) => s.n).join(", ")}</span></h4><table>${rows}</table></div>`;
+    }).join("");
+    return seg + `<div class="rpGrid">${cards || `<div class="bdEmpty">No scenes on shoot days yet.</div>`}</div>`;
+  }
   const cards = E.CATS.map((c) => {
     const r = E.report(b, c.id); if(!r.length) return "";
     return `<div class="rp" style="--cc:${c.color}"><h4><span>${esc(c.label)}</span><span>${r.length}</span></h4><table>${r.map((x) => `<tr><td><b>${x.no ? x.no + ". " : ""}${esc(x.name)}</b>${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</td><td>Sc ${x.scenes.length > 8 ? x.scenes.slice(0, 8).join(", ") + " +" + (x.scenes.length - 8) : x.scenes.join(", ")}</td></tr>`).join("")}</table></div>`;
   }).join("");
-  return `<div class="rpGrid">${cards || `<div class="bdEmpty">No elements yet.</div>`}</div>`;
+  return seg + `<div class="rpGrid">${cards || `<div class="bdEmpty">No elements yet.</div>`}</div>`;
 }
 
 /* ---------- interaction ---------- */
@@ -349,6 +425,7 @@ function wire(box, pid){
     if(k === "pick" || k === "goto"){ S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; rerender(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
     if(k === "csv"){ const m = model(); if(m) download(((hub.scriptTitle(sid) || "breakdown") + " - breakdown.csv").replace(/[\\/:*?"<>|]/g, "-"), E.csv(m)); return; }
+    if(k === "rpby"){ S.rpBy = a.dataset.v; rerender(); return; }
     if(k === "dismissnote"){ lsSet(NOTE_KEY, "1"); rerender(); return; }
     if(k === "cat"){ S.cat = a.dataset.c; rerender(); return; }
     if(k === "undo" || k === "redo"){ stepHist(pid, sid, k === "undo"); return; }

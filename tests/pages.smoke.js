@@ -100,6 +100,8 @@ let BASE = "";
     await expect(p, () => !!document.querySelector("table.bdT tbody tr"), "the elements table");
     await p.click('[data-a=view][data-v=reports]'); await p.waitForTimeout(300);
     await expect(p, () => document.querySelectorAll(".rp").length > 0, "category reports");
+    await p.click('[data-a=view][data-v=strips]'); await p.waitForTimeout(300);
+    await expect(p, () => document.querySelectorAll(".stp").length >= 3 && !!document.querySelector(".stpDay"), "the stripboard with day banners");
   });
   await browser.close(); srv.close();
   console.log(`\n${passed} passed, ${failed} failed`);

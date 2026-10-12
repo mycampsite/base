@@ -181,9 +181,71 @@ function dayStats(day, byId, maxEighths){
 }
 
 // ---------- automatic scheduling ----------
-// Places scenes into days the way an AD would start a stripboard: keep each location together,
-// shoot its day scenes before its night scenes, then fill days in order without going over the
-// page limit. Scenes already on a day stay where they are unless `all` is true.
+// Lays out a stripboard the way a 1st AD does, then cuts it into days by the page limit:
+//   1. strips sorted by location (biggest first, then the location sharing most cast with the last one),
+//      day/dawn-dusk before night within a location, then scenes with the same cast side by side;
+//   2. each strip goes to the best day with room: same location (no company move) first, then the same
+//      light (night work gets its own day rather than a turnaround), shared cast (fewer cast days and holds), and shared
+//      special requirements (animals, stunts, children, weapons, water, effects: book the wrangler,
+//      coordinator or chaperone once); ties go to the earliest day.
+// Scenes already on a day stay where they are unless `all` is true.
+const HEAVY_FLAGS = ["animals", "stunts", "minors", "weapons", "water", "vfx", "sfx", "intimacy", "driving", "drone", "blood", "vehicles"];
+function lightOf(s){ return s.dn === "N" ? "N" : s.dn === "M" ? "M" : "D"; }
+function heavyOf(s){ return (s.flags || []).filter((f) => HEAVY_FLAGS.indexOf(f) >= 0); }
+function overlap(a, b){ let n = 0; for(let i = 0; i < a.length; i++) if(b.indexOf(a[i]) >= 0) n++; return n; }
+// How well a scene fits on a day that already has `st` (scene list): higher is better
+function fitScore(s, sc){
+  if(!sc.length) return 0;
+  let score = 0;
+  if(sc.some((x) => x.loc === s.loc)) score += 100;
+  const lights = sc.map(lightOf), L = lightOf(s);
+  if(L !== "M"){
+    const other = L === "N" ? "D" : "N";
+    if(lights.indexOf(other) >= 0 && lights.indexOf(L) < 0) score -= 120;  // day-to-night turnaround: worse than coming back to the location another day
+    else if(lights.indexOf(L) >= 0) score += 20;
+  }
+  const cast = [].concat(...sc.map((x) => x.cast || []));
+  const shared = overlap(s.cast || [], cast), fresh = (s.cast || []).length - shared;
+  score += shared * 4 - fresh * 1;
+  const heavy = [].concat(...sc.map(heavyOf));
+  score += overlap(heavyOf(s), heavy) * 3;
+  return score;
+}
+// Chain scenes so each is next to the one it shares most cast with (keeps an actor's scenes together)
+function chainByCast(list){
+  if(list.length < 3) return list;
+  const out = [list[0]], rest = list.slice(1);
+  while(rest.length){
+    const last = out[out.length - 1];
+    let bi = 0, bs = -1;
+    rest.forEach((s, i) => { const v = overlap(s.cast || [], last.cast || []) * 10 + overlap(heavyOf(s), heavyOf(last)) * 3 - i * 0.01; if(v > bs){ bs = v; bi = i; } });
+    out.push(rest.splice(bi, 1)[0]);
+  }
+  return out;
+}
+function stripOrder(todo){
+  const groups = {};
+  todo.forEach((s) => { const k = s.loc || "?"; (groups[k] = groups[k] || []).push(s); });
+  const sum = (list) => list.reduce((t, s) => t + (s.eighths || 0), 0);
+  const castOf = (list) => Array.from(new Set([].concat(...list.map((s) => s.cast || []))));
+  // biggest location first; after that, whichever location shares most cast with the last one (ties: bigger)
+  const keys = Object.keys(groups).sort((a, b) => sum(groups[b]) - sum(groups[a]) || a.localeCompare(b));
+  const order = keys.length ? [keys.shift()] : [];
+  while(keys.length){
+    const prev = castOf(groups[order[order.length - 1]]);
+    let bi = 0, bs = -1;
+    keys.forEach((k, i) => { const v = overlap(castOf(groups[k]), prev) * 1000 + sum(groups[k]) - i * 0.001; if(v > bs){ bs = v; bi = i; } });
+    order.push(keys.splice(bi, 1)[0]);
+  }
+  const rank = { D: 0, M: 1, N: 2 };
+  const strips = [];
+  order.forEach((k) => {
+    const byLight = { D: [], M: [], N: [] };
+    groups[k].sort((a, b) => a.n - b.n).forEach((s) => byLight[lightOf(s)].push(s));
+    ["D", "M", "N"].sort((a, b) => rank[a] - rank[b]).forEach((L) => chainByCast(byLight[L]).forEach((s) => strips.push(s)));
+  });
+  return strips;
+}
 function autoSchedule(plan, breakdown, opts){
   opts = opts || {};
   plan = normalize(plan);
@@ -191,29 +253,20 @@ function autoSchedule(plan, breakdown, opts){
   if(opts.all) plan.days.forEach((d) => { d.scenes = []; });
   const placed = new Set(); plan.days.forEach((d) => d.scenes.forEach((id) => placed.add(id)));
   const todo = (breakdown && breakdown.scenes || []).filter((s) => s.id && !placed.has(s.id));
-  // group by location, biggest locations first (fewest company moves); D/M before N within a location
-  const groups = {};
-  todo.forEach((s) => { const k = s.loc || "?"; (groups[k] = groups[k] || []).push(s); });
-  const dnRank = { D: 0, M: 1, N: 2 };
-  const order = Object.keys(groups).sort((a, b) => sum(groups[b]) - sum(groups[a]) || a.localeCompare(b));
-  function sum(list){ return list.reduce((t, s) => t + (s.eighths || 0), 0); }
   const used = plan.days.map((d) => dayStats(d, byId, max).eighths);
+  const onDay = plan.days.map((d) => d.scenes.map((id) => byId[id]).filter(Boolean));
   const left = [];
-  order.forEach((k) => {
-    groups[k].sort((a, b) => (dnRank[a.dn] || 0) - (dnRank[b.dn] || 0) || a.n - b.n).forEach((s) => {
-      // prefer a day already at this location, then the earliest day with room
-      let best = -1;
-      for(let i = 0; i < plan.days.length; i++){
-        if(used[i] + s.eighths > max) continue;
-        const atLoc = plan.days[i].scenes.some((id) => byId[id] && byId[id].loc === s.loc);
-        if(atLoc){ best = i; break; }
-        if(best < 0) best = i;
-      }
-      // a single scene longer than a whole day still goes on an empty day (it'll be flagged)
-      if(best < 0) best = used.findIndex((u) => u === 0);
-      if(best < 0){ left.push(s.id); return; }
-      plan.days[best].scenes.push(s.id); used[best] += s.eighths;
-    });
+  stripOrder(todo).forEach((s) => {
+    let best = -1, bs = -Infinity;
+    for(let i = 0; i < plan.days.length; i++){
+      if(used[i] + (s.eighths || 0) > max) continue;
+      const v = fitScore(s, onDay[i]);
+      if(v > bs){ bs = v; best = i; }
+    }
+    // a single scene longer than a whole day still goes on an empty day (it'll be flagged)
+    if(best < 0) best = used.findIndex((u) => u === 0);
+    if(best < 0){ left.push(s.id); return; }
+    plan.days[best].scenes.push(s.id); used[best] += s.eighths || 0; onDay[best].push(s);
   });
   return { plan, unplaced: left };
 }
@@ -261,6 +314,7 @@ function validate(plan, breakdown){
   plan.days.forEach((d, i) => {
     const st = dayStats(d, byId, max);
     if(st.over) out.push({ level: "warn", code: "OVER", day: i + 1, text: "Day " + (i + 1) + " has " + fmtEighths(st.eighths) + " pages (limit " + fmtEighths(max) + ")" });
+    if(st.dn.indexOf("N") >= 0 && st.dn.indexOf("D") >= 0) out.push({ level: "info", code: "DAYNIGHT", day: i + 1, text: "Day " + (i + 1) + " has day and night scenes (check turnaround)" });
     if(st.moves >= 2) out.push({ level: "info", code: "MOVES", day: i + 1, text: "Day " + (i + 1) + " has " + st.moves + " company moves (" + st.locs.join(", ") + ")" });
   });
   // Children (under 18, or described as a child) have their own work-hour, permit and chaperone rules
@@ -393,7 +447,7 @@ function dayShots(day, shotMap){
   return { scenes, total: scenes.reduce((a, s) => a + s.shots.length, 0) };
 }
 
-const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, suggestDay, dood, validate,
+const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
   moveSceneIn, placeScenes, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);
