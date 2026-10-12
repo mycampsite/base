@@ -90,7 +90,8 @@ const css = `
 .ctlWarn{ margin:10px 0 0; display:flex; flex-direction:column; gap:4px; font-size:12.5px; }
 .ctlWarn div{ color:#f1c76b; } .ctlWarn div.info{ color:var(--uiMuted); }
 .board{ display:flex; gap:10px; overflow-x:auto; padding:12px 0 6px; align-items:flex-start; }
-.col{ flex:0 0 228px; background:#1d1d1d; border:1px solid var(--uiBorder); border-radius:12px; display:flex; flex-direction:column; max-height:440px; }
+.col{ flex:0 0 228px; background:#1d1d1d; border:1px solid var(--uiBorder); border-radius:12px; display:flex; flex-direction:column; max-height:none; }
+.col[data-day="-1"]{ max-height:72vh; }
 .col.none{ flex-basis:150px; }
 .col.over{ border-color:rgba(255,139,131,.55); }
 .col.drop{ border-color:var(--focus); box-shadow:0 0 0 2px rgba(91,140,255,.35); }

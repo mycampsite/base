@@ -64,20 +64,24 @@ const css = `
 #bdctl .bdChip{ font-size:11.5px; color:var(--uiMuted); border:1px solid var(--uiBorder); border-radius:999px; padding:2px 9px; white-space:nowrap; }
 #bdctl .bdChip.warn{ color:#f1c76b; border-color:rgba(241,199,107,.4); }
 #bdctl .bdActs{ margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-#bdctl .seg{ display:inline-flex; border:1px solid var(--uiBorder); border-radius:10px; overflow:hidden; }
-#bdctl .seg button{ border:0; background:none; padding:0 13px; height:32px; font-size:12.5px; font-weight:600; cursor:pointer; color:var(--uiMuted); }
-#bdctl .seg button.on{ background:#ececf0; color:#111; }
+#bdctl .seg{ display:inline-flex; gap:2px; padding:3px; border-radius:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); }
+#bdctl .seg button{ border:0; background:transparent; padding:5px 12px; height:auto; border-radius:7px; font-size:12.5px; font-weight:600; cursor:pointer; color:rgba(255,255,255,.6); white-space:nowrap; }
+#bdctl .seg button.on{ background:rgba(255,255,255,.14); color:#fff; }
 #bdctl .bdBody{ flex:1; min-height:0; overflow:auto; padding:0 12px 24px; overscroll-behavior:contain; }
 #bdctl .bdLoad{ flex:1; min-height:min(60vh,520px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; color:var(--uiMuted); font-size:12.5px; }
 #bdctl .bdLoad b{ color:var(--uiText); font-size:14px; font-weight:600; }
 #bdctl .bdEmpty{ padding:22px 6px; color:var(--uiMuted); font-size:13px; line-height:1.55; }
 #bdctl .bdNote{ margin:10px 0 0; padding:8px 12px; border-radius:10px; background:rgba(241,199,107,.08); border:1px solid rgba(241,199,107,.3); font-size:12px; color:#e6d3a0; line-height:1.5; }
 /* sheets view */
-#bdctl .bdSplit{ display:grid; grid-template-columns:250px minmax(0,1fr); gap:14px; padding-top:12px; align-items:start; }
-#bdctl .bdList{ display:flex; flex-direction:column; gap:5px; max-height:calc(100vh - 210px); overflow:auto; position:sticky; top:8px; padding-right:2px; }
+#bdctl .bdBody.split{ overflow:hidden; display:flex; flex-direction:column; }
+#bdctl .bdSplit{ display:grid; grid-template-columns:250px minmax(0,1fr); grid-template-rows:minmax(0,1fr); gap:14px; padding-top:12px; flex:1; min-height:0; }
+#bdctl .bdSheet{ overflow:auto; min-height:0; overscroll-behavior:contain; padding-bottom:20px; }
+#bdctl .shMeta label{ display:flex; flex-direction:column; gap:3px; }
+#bdctl .bdList{ display:flex; flex-direction:column; gap:5px; height:100%; min-height:0; overflow:auto; padding:2px 4px 14px 0; overscroll-behavior:contain; }
 #bdctl .bdSc{ text-align:left; width:100%; border:1px solid rgba(255,255,255,.08); border-left:5px solid var(--sc,#ddd); border-radius:8px; padding:6px 8px; background:color-mix(in srgb, var(--sc,#ddd) 8%, #1b1b1b); cursor:pointer; font:inherit; font-size:12px; color:inherit; }
 #bdctl .bdSc:hover{ border-color:rgba(255,255,255,.25); border-left-color:var(--sc,#ddd); }
-#bdctl .bdSc.on{ outline:2px solid var(--focus); }
+#bdctl .bdSc.on{ background:#ececf0; color:#111; border-color:#fff; box-shadow:0 0 0 2px #fff; }
+#bdctl .bdSc.on .l{ color:#222; } #bdctl .bdSc.on .t span{ color:#444; }
 #bdctl .bdSc .t{ display:flex; justify-content:space-between; gap:6px; font-weight:700; }
 #bdctl .bdSc .t span{ color:var(--uiMuted); font-weight:600; white-space:nowrap; }
 #bdctl .bdSc .l{ color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -322,6 +326,9 @@ function render(pid){
   const b2 = box.querySelector(".bdBody"), l2 = box.querySelector(".bdList");
   if(b2 && top) b2.scrollTop = top;
   if(l2){ if(ltop) l2.scrollTop = ltop; if(lleft) l2.scrollLeft = lleft; }
+  // keep the open scene showing in the list
+  const on = l2 && l2.querySelector(".bdSc.on");
+  if(on){ const a = on.offsetTop - l2.offsetTop, z = a + on.offsetHeight; if(a < l2.scrollTop) l2.scrollTop = a - 6; else if(z > l2.scrollTop + l2.clientHeight) l2.scrollTop = z - l2.clientHeight + 6; }
 }
 function head(chips, acts){ return `<div class="bdTop"><span class="bdTitle">Breakdown</span><div class="bdChips">${chips || ""}</div>${acts || ""}</div>`; }
 
@@ -365,11 +372,10 @@ function draw(pid){
   const acts = `<div class="bdActs">${scriptSel}
     <div class="seg" role="tablist">${[["sheets", "Sheets"], ["strips", "Stripboard"], ["elements", "Elements"], ["reports", "Reports"]].map(([v, n]) => `<button type="button" role="tab" class="${S.view === v ? "on" : ""}" data-a="view" data-v="${v}" aria-selected="${S.view === v}">${n}</button>`).join("")}</div>
     ${can ? `<span class="seg"><button type="button" data-a="undo" title="Undo"${hh.undo.length ? "" : " disabled"}>↶</button><button type="button" data-a="redo" title="Redo"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
-    <button class="btn sm" type="button" data-a="gsheet" title="Update the Breakdown and Elements tabs in the Schedule Google Sheet and open them">Google Sheet ↗</button>
-    <button class="btn sm" type="button" data-a="reload" title="Read the latest script">Refresh</button></div>`;
+    </div>`;
   const note = `<div class="bdNote">Suggestions come from the script. Remove what's wrong, add what's missing. Changes are shared with everyone on the project. <button class="btn sm" type="button" data-a="dismissnote" style="margin-left:8px">Got it</button></div>`;
   const view = S.view === "elements" ? elementsView(b, can) : S.view === "reports" ? reportsView(b, p) : S.view === "strips" ? stripsView(b, p) : sheetsView(b, can);
-  box.innerHTML = head(chips, acts) + `<div class="bdBody">${can && !lsGet(NOTE_KEY) ? note : ""}${view}</div>`;
+  box.innerHTML = head(chips, acts) + `<div class="bdBody${S.view === "sheets" ? " split" : ""}">${can && !lsGet(NOTE_KEY) ? note : ""}${view}</div>`;
   wire(box, pid);
 }
 
@@ -409,7 +415,7 @@ function sheetsView(b, can){
   return `<div class="bdSplit"><div class="bdList" role="list">${list}</div>
     <div class="bdSheet"><div class="shHead" style="--sc:${stripColor(s)}"><h3>Sc ${s.n} · ${esc(s.heading || "(no scene heading)")}</h3><div class="nav">${prev}${next}</div></div>
       <div class="shMeta">
-        <label>Pages<b>${E.fmtEighths(s.eighths)}</b></label>
+        <label title="Length of the scene in script pages (a page is 8 eighths, so 3 7/8 is almost four pages)">Length<b>${E.fmtEighths(s.eighths)} pg</b></label>
         <label>I/E · D/N<b>${esc(s.ie || "—")} · ${esc(DN[s.dn] || "—")}</b></label>
         <label>Set<b>${esc(s.set || s.loc || "—")}</b></label>
         <label>Story day<input type="text" id="shDay" maxlength="40" value="${esc(s.dayAuto ? "" : s.day)}" placeholder="${esc(s.day)}" style="width:90px"${dis}></label>
@@ -534,11 +540,6 @@ function wire(box, pid){
     if(k === "view"){ S.view = a.dataset.v; lsSet(VIEW_KEY, S.view); S.edit = null; S.adding = null; rerender(); return; }
     if(k === "pick" || k === "goto"){ S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; rerender(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
-    if(k === "gsheet"){
-      if(!hub.openBreakdownSheet){ hub.toast("Sync from the Production tab to update the sheet.", "err", 4000); return; }
-      if(!hub.isOwner(p)){ hub.toast("Only the project owner can update the Google Sheet.", "err", 4000); return; }
-      hub.openBreakdownSheet(pid, sid); return;
-    }
     if(k === "csv"){ const m = model(); if(m) download(((hub.scriptTitle(sid) || "breakdown") + " - breakdown.csv").replace(/[\\/:*?"<>|]/g, "-"), E.csv(m)); return; }
     if(k === "rpby"){ S.rpBy = a.dataset.v; rerender(); return; }
     if(k === "dismissnote"){ lsSet(NOTE_KEY, "1"); rerender(); return; }
