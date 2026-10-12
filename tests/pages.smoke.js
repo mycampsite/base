@@ -126,7 +126,7 @@ let BASE = "";
     await p.selectOption("#bdQCat", "props"); await p.fill("#bdQuick", "lantern"); await p.keyboard.press("Enter"); await p.waitForTimeout(300);
     await expect(p, () => /Lantern/.test(document.querySelector(".bdSheet").innerText), "the hand-added prop");
     await expect(p, () => { const b = __CampHub.project().breakdown; const sid = b && Object.keys(b)[0]; return !!sid && JSON.stringify(b[sid].tags || {}).indexOf("props|lantern") >= 0; }, "the tag shared to the team's copy");
-    await p.click('.el [data-a=rm]:near(:text("Lantern"))'); await p.waitForTimeout(300);
+    await p.click('table.ct tr:has-text("Lantern") [data-a=rm]'); await p.waitForTimeout(300);
     await expect(p, () => !/Lantern/.test(document.querySelector(".bdSheet").innerText), "the prop taken out again");
     await expect(p, () => { const b = __CampHub.project().breakdown, r = b[Object.keys(b)[0]]; return JSON.stringify(r.tags || {}).indexOf("lantern") < 0; }, "the removal shared too");
     // a teammate's change arrives through the project and shows up
