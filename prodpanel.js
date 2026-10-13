@@ -448,7 +448,7 @@ function draw(pid){
   if(S.mode === "off"){ return; }
   S.open = true;
   const head = (chips, acts) => `<div class="ctlHead">
-      <span class="ctlTitle">${S.mode === "cs" ? "Call sheets" : "Shoot plan"}</span>
+      
       <div class="ctlChips">${chips || ""}</div>${acts || ""}</div>`;
 
   if(!ids.length){ box.innerHTML = head(`<span class="ctlChip">Add a script to this project to plan the shoot</span>`); wire(box, pid); return; }

@@ -502,7 +502,7 @@ function render(pid){
   if(on){ const a = on.offsetTop - l2.offsetTop, z = a + on.offsetHeight; if(a < l2.scrollTop) l2.scrollTop = a - 6; else if(z > l2.scrollTop + l2.clientHeight) l2.scrollTop = z - l2.clientHeight + 6; }
   pickPaint();
 }
-function head(chips, acts){ return `<div class="bdTop"><span class="bdTitle${S.lock ? "" : " hid"}">${S.lock === "strips" ? "Stripboard" : "Breakdown"}</span><div class="bdChips">${chips || ""}</div>${acts || ""}</div>`; }
+function head(chips, acts){ return `<div class="bdTop"><span class="bdTitle hid">${S.lock === "strips" ? "Stripboard" : "Breakdown"}</span><div class="bdChips">${chips || ""}</div>${acts || ""}</div>`; }
 
 function draw(pid){
   S.pid = pid;
