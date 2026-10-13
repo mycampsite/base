@@ -982,7 +982,7 @@ function quickAdd(box, sk, ed){
 }
 // Remove the tag(s) on the highlighted words from this scene (the element stays in the project; only this scene's tag goes)
 function quickRemove(box, sk, ed){
-  const m = model(), sc = m && m.scenes.find((x) => x.key === sk), i = box.querySelector("#bdQuick"), sel = box.querySelector("#bdQCat");
+  const m = S.model, sc = m && m.scenes.find((x) => x.key === sk), i = box.querySelector("#bdQuick"), sel = box.querySelector("#bdQCat");
   const t = String(S.qQuote || (i && i.value) || "").replace(/\s+/g, " ").trim().toLowerCase();
   if(!sc || t.length < 2){ H().toast("Highlight the tagged words in the scene text first.", "err", 2000); return; }
   const hit = [];
