@@ -439,7 +439,7 @@
         <div class="bar">
           <div class="tabs" id="tabs" role="tablist" aria-label="Sheets"></div>
           <div class="actions">
-            <button id="syncBtn" class="btn hidden" type="button" title="Rebuild the Schedule (with Day Out of Days), the Budget and the call sheets from the plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="lbl">Sync</span></button>
+            <button id="syncBtn" class="btn hidden" type="button" title="Sync: writes the plan to your Google Sheets (Schedule, Day Out of Days, Budget, call sheets). To only re-read the latest script and shots, use Refresh in the Schedule tab."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="lbl">Sync</span></button>
             <button id="createDocs" class="btn hidden" type="button" title="Build a budget, schedule, shot list or crew docs from the script"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Create</span></button>
             <a id="open" class="btn hidden" target="_blank" rel="noopener" title="Open in Google Sheets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><span class="lbl">Open in Sheets</span></a>
             <button id="sheetMenu" class="btn primary" type="button" aria-haspopup="menu" aria-label="Sheet options" title="Sheet options: toolbar, dark view, downloads, shortcuts"><span class="lbl">Sheet</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg></button>
@@ -1168,7 +1168,7 @@ function syncState() {
   b.classList.toggle("hidden", !ok);
   const stale = ok && window.CampProdPanel && window.CampProdPanel.isStale(current.pid);
   b.classList.toggle("primary", !!stale);
-  b.title = stale ? "The plan changed since the Sheets were built: Sync to update the Schedule, Budget and call sheets" : "Rebuild the Schedule (with Day Out of Days), the Budget and the call sheets from the plan";
+  b.title = stale ? "Sync: the plan changed since the Sheets were built. Writes the Schedule, Budget and call sheets to Google Sheets." : "Sync: writes the plan to your Google Sheets (Schedule, Day Out of Days, Budget, call sheets). To only re-read the latest script and shots, use Refresh in the Schedule tab.";
 }
 $("syncBtn").onclick = e => { if (window.CampProdPanel) window.CampProdPanel.syncNow(current.pid, e.currentTarget); };
 function setEmpty(title, text, btns, why) {
