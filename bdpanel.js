@@ -680,11 +680,13 @@ function sceneText(b, s){
   const sc = S.scripts[S.sid], lines = sceneLines(sc && sc.doc, s);
   if(!lines.length) return "";
   const needles = [];
-  Object.keys(s.els).forEach((c) => (s.els[c] || []).forEach((k) => { const e = b.elements[k]; (s.hits && s.hits[k] || []).forEach((q) => { if(q) needles.push({ q, c, name: e ? e.name : q }); }); }));
+  Object.keys(s.els).forEach((c) => (s.els[c] || []).forEach((k) => { const e = b.elements[k]; (s.hits && s.hits[k] || []).forEach((q) => { if(q) needles.push({ q, c, k, name: e ? e.name : q }); }); }));
   needles.sort((x, y) => y.q.length - x.q.length);   // longer words win where two overlap
-  const mark = (txt) => {
+  const muted = s.mute || [];
+  let li = 0;
+  const mark = (txt, li) => {
     const all = [];
-    needles.forEach((nd) => findAll(txt, nd.q).forEach(([a, z]) => { if(!all.some((p) => p.nd === nd && a < p.z && z > p.a)) all.push({ a, z, nd }); }));
+    needles.forEach((nd) => findAll(txt, nd.q).forEach(([a, z]) => { if(muted.indexOf(nd.k + "|" + li + "|" + a) >= 0) return; if(!all.some((p) => p.nd === nd && a < p.z && z > p.a)) all.push({ a, z, nd }); }));
     all.sort((x, y) => x.a - y.a || y.z - x.z);
     // tags on the same words share one mark: one underline per colour, stacked
     const spans = [];
@@ -698,7 +700,7 @@ function sceneText(b, s){
     });
     return h + esc(txt.slice(at));
   };
-  const row = (type, txt) => txt.trim() ? `<div class="sl t-${esc(type)}">${mark(txt)}</div>` : "";
+  const row = (type, txt) => { if(!txt.trim()) return ""; const n = li++; return `<div class="sl t-${esc(type)}" data-li="${n}">${mark(txt, n)}</div>`; };
   const html = lines.map((l) => {
     if(l.type === "dual" && l.dual){
       const side = (d) => d ? row("character", runsText(d.characterRuns)) + row("dialogue", runsText(d.dialogueRuns)) : "";
@@ -953,7 +955,9 @@ function wire(box, pid){
     if(!name) return;
     i.value = /[A-Z]/.test(name) && name === name.toUpperCase() ? name.charAt(0) + name.slice(1).toLowerCase() : name;   // "LANTERN" -> "Lantern"
     S.qQuote = t;
-    try{ const host = el.closest(".shText"), rg = sel.getRangeAt(0), pre = document.createRange(); pre.selectNodeContents(host); pre.setEnd(rg.startContainer, rg.startOffset); const s0 = pre.toString().length; S.pick = { s: s0, e: s0 + rg.toString().length, sel: S.sel }; }catch(_e){ S.pick = null; }
+    try{ const host = el.closest(".shText"), rg = sel.getRangeAt(0), pre = document.createRange(); pre.selectNodeContents(host); pre.setEnd(rg.startContainer, rg.startOffset); const s0 = pre.toString().length; S.pick = { s: s0, e: s0 + rg.toString().length, sel: S.sel };
+      const slEl = (rg.startContainer.nodeType === 1 ? rg.startContainer : rg.startContainer.parentElement).closest(".sl[data-li]");
+      if(slEl && slEl.contains(rg.endContainer)){ const p2 = document.createRange(); p2.selectNodeContents(slEl); p2.setEnd(rg.startContainer, rg.startOffset); S.pick.li = Number(slEl.dataset.li); S.pick.off = p2.toString().length; S.pick.len = rg.toString().length; } }catch(_e){ S.pick = null; }
     i.dispatchEvent(new Event("input", { bubbles: true }));
     i.focus(); i.select(); pickPaint();
   };
@@ -980,23 +984,28 @@ function quickAdd(box, sk, ed){
   ed((st) => E.tag(st, sk, cat, name, quote));
   setTimeout(() => { const j = box.querySelector("#bdQuick"); if(j) j.focus(); }, 60);
 }
-// Remove the tag(s) on the highlighted words from this scene (the element stays in the project; only this scene's tag goes)
+// Remove the tag on the highlighted words: only that mention. If the element has other mentions in the scene they keep their underline; if that was the last one the element comes off the scene.
 function quickRemove(box, sk, ed){
-  const m = S.model, sc = m && m.scenes.find((x) => x.key === sk), i = box.querySelector("#bdQuick"), sel = box.querySelector("#bdQCat");
-  const t = String(S.qQuote || (i && i.value) || "").replace(/\s+/g, " ").trim().toLowerCase();
-  if(!sc || t.length < 2){ H().toast("Highlight the tagged words in the scene text first.", "err", 2000); return; }
-  const hit = [];
+  const m = S.model, sc = m && m.scenes.find((x) => x.key === sk), sel = box.querySelector("#bdQCat"), pk = S.pick;
+  const nope = () => H().toast("Highlight the tagged words in the scene text first.", "err", 2000);
+  if(!sc || !pk || pk.li == null){ nope(); return; }
+  const el0 = box.querySelector('.sl[data-li="' + pk.li + '"]'); if(!el0){ nope(); return; }
+  const muted = sc.mute || [], txt0 = el0.textContent, h0 = pk.off, h1 = pk.off + pk.len;
+  const cand = [];   // every unmuted mention of an element in this scene that overlaps the highlight
   Object.keys(sc.els).forEach((c) => (sc.els[c] || []).forEach((k) => {
     const e = m.elements[k]; if(!e) return;
-    const words = [e.name].concat((sc.hits && sc.hits[k]) || []).map((w) => String(w || "").toLowerCase()).filter((w) => w.length > 1);
-    if(words.some((w) => w === t || (t.indexOf(w) >= 0) || (w.indexOf(t) >= 0))) hit.push({ k, c, name: e.name });
+    ((sc.hits && sc.hits[k]) || []).forEach((q) => { if(q) findAll(txt0, q).forEach(([a, z]) => { if(a < h1 && z > h0 && muted.indexOf(k + "|" + pk.li + "|" + a) < 0) cand.push({ k, c, name: e.name, key: k + "|" + pk.li + "|" + a }); }); });
   }));
-  if(!hit.length){ H().toast("No tag on those words in this scene.", "err", 2000); return; }
-  const mine = sel ? hit.filter((h) => h.c === sel.value) : [];
-  const go = mine.length ? mine : hit;
-  pickClear(); S.qQuote = ""; if(i) i.value = "";
-  ed((st) => go.reduce((s2, h) => E.untag(s2, sk, h.k), st));
-  H().toast("Removed " + go.map((h) => h.name).join(", ") + " from this scene.", "ok", 2200);
+  if(!cand.length){ H().toast("No tag on those words in this scene.", "err", 2000); return; }
+  const kinds = []; cand.forEach((x) => { if(!kinds.some((y) => y.k === x.k)) kinds.push(x); });
+  const pick = kinds.length === 1 ? kinds[0] : kinds.filter((x) => sel && x.c === sel.value)[0];
+  if(!pick){ H().toast("Several tags are on those words. Choose the one to remove in the category box, then press Remove.", "err", 3200); return; }
+  const all = muted.concat(cand.filter((x) => x.k === pick.k).map((x) => x.key));
+  let left = 0;   // mentions of this element still underlined after this one goes
+  box.querySelectorAll(".sl[data-li]").forEach((n) => { const t = n.textContent, li = n.dataset.li; ((sc.hits && sc.hits[pick.k]) || []).forEach((q) => { if(q) findAll(t, q).forEach(([a]) => { if(all.indexOf(pick.k + "|" + li + "|" + a) < 0) left++; }); }); });
+  pickClear(); S.qQuote = ""; const qi = box.querySelector("#bdQuick"); if(qi) qi.value = "";
+  if(left > 0){ ed((st) => E.setScene(st, sk, "mute", all)); H().toast("Removed that mention of " + pick.name + ". Its other mentions in this scene keep their tag.", "ok", 2600); }
+  else { ed((st) => E.untag(st, sk, pick.k)); H().toast("Removed " + pick.name + " from this scene.", "ok", 2200); }
 }
 function commitAdd(box, sk, cat, ed){
   pickClear();

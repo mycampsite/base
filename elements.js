@@ -771,7 +771,7 @@ function build(doc, bd, store) {
       syn: clean(meta.syn), synAuto: !clean(meta.syn),   // only what someone typed: no summary is made up from the script
       day: clean(meta.day) || d.label || "", dayAuto: !clean(meta.day), storyDay: d.day || 1, flash: !!d.flash,
       est: Number(meta.est) > 0 ? Math.round(Number(meta.est)) : estAuto, estAuto: !(Number(meta.est) > 0),
-      unit: clean(meta.unit) || "Main", note: clean(meta.note), dir: clean(meta.dir), els: per, hits: hits, src: src, qty: qty,
+      unit: clean(meta.unit) || "Main", note: clean(meta.note), dir: clean(meta.dir), mute: Array.isArray(meta.mute) ? meta.mute.map(String) : (meta.mute && typeof meta.mute === "object" ? Object.keys(meta.mute).map(function (i) { return String(meta.mute[i]); }) : []), els: per, hits: hits, src: src, qty: qty,
       count: Object.keys(per).reduce(function (a, c) { return a + per[c].length; }, 0)
     };
   });
@@ -937,8 +937,14 @@ function setHero(st, k, on) {
 }
 function setScene(st, sk, field, val) {
   st = copy(st);
-  if (["syn", "day", "est", "unit", "note", "dir"].indexOf(field) < 0) return st;
+  if (["syn", "day", "est", "unit", "note", "dir", "mute"].indexOf(field) < 0) return st;
   st.scene = st.scene || {}; const m = st.scene[sk] = st.scene[sk] || {};
+  if (field === "mute") {   // single words whose underline is switched off in this scene: ["<element>|<line>|<start>", …]
+    const l = (Array.isArray(val) ? val : []).map(String).slice(0, 200);
+    if (l.length) m.mute = l; else delete m.mute;
+    if (!Object.keys(m).length) delete st.scene[sk];
+    return st;
+  }
   const v = field === "est" ? (Number(val) > 0 ? Math.min(1440, Math.round(Number(val))) : "") : String(val == null ? "" : val).slice(0, field === "note" || field === "syn" || field === "dir" ? 2000 : 40);
   if (v === "" || v == null) delete m[field]; else m[field] = v;
   if (!Object.keys(m).length) delete st.scene[sk];
