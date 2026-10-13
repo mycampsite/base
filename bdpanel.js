@@ -613,7 +613,7 @@ function sheetsView(b, can){
   const allNames = Object.keys(b.elements).filter((k) => !(s.els[b.elements[k].cat] || []).includes(k)).map((k) => `<option value="${esc(b.elements[k].name)}" label="${esc(E.CAT[b.elements[k].cat].short)}">`).join("");
   const quick = can ? `<div class="qAdd"><select id="bdQCat" aria-label="Category" style="--cc:${E.CAT[qc].color}">${MENU_CATS.map((c) => `<option value="${c.id}"${c.id === qc ? " selected" : ""}>${esc(c.label)}</option>`).join("")}</select>
       <input type="text" id="bdQuick" list="bdQL" maxlength="60" placeholder="Add an element to this scene… (type a name, Enter)" autocomplete="off" aria-label="Add an element"><datalist id="bdQL">${allNames}</datalist>
-      <button class="btn sm primary" type="button" data-a="qadd" data-sk="${esc(s.key)}">Add</button></div>` : "";
+      <button class="btn sm primary" type="button" data-a="qadd" data-sk="${esc(s.key)}">Add</button><button class="btn sm" type="button" data-a="qrem" data-sk="${esc(s.key)}" title="Highlight words in the scene text, then Remove to take their tag off this scene">Remove</button></div>` : "";
   const cats = E.CATS.map(catBox).join("");
   const idx = shown.findIndex((x) => x.n === s.n);
   const pv = idx > 0 ? shown[idx - 1].n : 0, nx = idx >= 0 && idx < shown.length - 1 ? shown[idx + 1].n : 0;
@@ -867,6 +867,7 @@ function wire(box, pid){
     if(k === "add"){ S.adding = { sk: a.dataset.sk, cat: a.dataset.c }; rerender(); setTimeout(() => { const i = box.querySelector("#bdAdd"); if(i) i.focus(); }, 30); return; }
     if(k === "addcancel"){ S.adding = null; rerender(); return; }
     if(k === "qadd"){ quickAdd(box, a.dataset.sk, ed); return; }
+    if(k === "qrem"){ quickRemove(box, a.dataset.sk, ed); return; }
     if(k === "addok"){ commitAdd(box, a.dataset.sk, a.dataset.c, ed); return; }
     if(k === "rm"){ const sk = a.dataset.sk, key = a.dataset.k; ed((st) => E.untag(st, sk, key)); return; }
     if(k === "hero"){ const key = a.dataset.k, on = a.dataset.on === "1"; ed((st) => E.setHero(st, key, on)); return; }
@@ -978,6 +979,24 @@ function quickAdd(box, sk, ed){
   const quote = S.qQuote; S.qQuote = ""; pickClear();
   ed((st) => E.tag(st, sk, cat, name, quote));
   setTimeout(() => { const j = box.querySelector("#bdQuick"); if(j) j.focus(); }, 60);
+}
+// Remove the tag(s) on the highlighted words from this scene (the element stays in the project; only this scene's tag goes)
+function quickRemove(box, sk, ed){
+  const m = model(), sc = m && m.scenes.find((x) => x.key === sk), i = box.querySelector("#bdQuick"), sel = box.querySelector("#bdQCat");
+  const t = String(S.qQuote || (i && i.value) || "").replace(/\s+/g, " ").trim().toLowerCase();
+  if(!sc || t.length < 2){ H().toast("Highlight the tagged words in the scene text first.", "err", 2000); return; }
+  const hit = [];
+  Object.keys(sc.els).forEach((c) => (sc.els[c] || []).forEach((k) => {
+    const e = m.elements[k]; if(!e) return;
+    const words = [e.name].concat((sc.hits && sc.hits[k]) || []).map((w) => String(w || "").toLowerCase()).filter((w) => w.length > 1);
+    if(words.some((w) => w === t || (t.indexOf(w) >= 0) || (w.indexOf(t) >= 0))) hit.push({ k, c, name: e.name });
+  }));
+  if(!hit.length){ H().toast("No tag on those words in this scene.", "err", 2000); return; }
+  const mine = sel ? hit.filter((h) => h.c === sel.value) : [];
+  const go = mine.length ? mine : hit;
+  pickClear(); S.qQuote = ""; if(i) i.value = "";
+  ed((st) => go.reduce((s2, h) => E.untag(s2, sk, h.k), st));
+  H().toast("Removed " + go.map((h) => h.name).join(", ") + " from this scene.", "ok", 2200);
 }
 function commitAdd(box, sk, cat, ed){
   pickClear();
