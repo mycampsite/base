@@ -68,7 +68,10 @@ const css = `
 #bdctl .bdChips{ display:flex; gap:6px; flex-wrap:wrap; flex:1; min-width:0; }
 #bdctl .bdChip{ font-size:11.5px; color:var(--uiMuted); border:1px solid var(--uiBorder); border-radius:999px; padding:2px 9px; white-space:nowrap; }
 #bdctl .bdChip.warn{ color:#f1c76b; border-color:rgba(241,199,107,.4); }
-#bdctl .bdActs{ margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+#bdctl .bdActs{ display:contents; }
+#bdctl .bdTitle{ order:-2; }
+#bdctl .bdActs > .seg[role=tablist]{ order:-1; }
+#bdctl .bdChips{ order:0; }
 #bdctl .seg{ display:inline-flex; gap:2px; padding:3px; border-radius:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); }
 #bdctl .seg button{ border:0; background:transparent; padding:5px 12px; height:auto; border-radius:7px; font-size:12.5px; font-weight:600; cursor:pointer; color:rgba(255,255,255,.6); white-space:nowrap; }
 #bdctl .seg button.on{ background:rgba(255,255,255,.14); color:#fff; }
