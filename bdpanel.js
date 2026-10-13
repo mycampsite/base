@@ -467,11 +467,13 @@ function render(pid){
   const body = box.querySelector(".bdBody"), list = box.querySelector(".bdList"), sheet = box.querySelector(".bdSheet");
   const top = body ? body.scrollTop : 0, ltop = list ? list.scrollTop : 0, lleft = list ? list.scrollLeft : 0;
   const stop = sheet ? sheet.scrollTop : 0, ssel = S.sel, sview = S.view;
+  const stBefore = Array.from(box.querySelectorAll(".stBody")).map(e => e.scrollTop);   // the script text of the open scene: keep your place when a tag redraws the panel
   draw(pid);
   const b2 = box.querySelector(".bdBody"), l2 = box.querySelector(".bdList"), s2 = box.querySelector(".bdSheet");
   if(b2 && top) b2.scrollTop = top;
   // same scene still open: stay where you were on the sheet (a new scene starts at the top)
   if(s2 && stop && ssel === S.sel && sview === S.view) s2.scrollTop = stop;
+  if(ssel === S.sel && sview === S.view) box.querySelectorAll(".stBody").forEach((e, i) => { if(stBefore[i]) e.scrollTop = stBefore[i]; });
   if(l2){ if(ltop) l2.scrollTop = ltop; if(lleft) l2.scrollLeft = lleft; }
   // keep the open scene showing in the list
   const on = l2 && l2.querySelector(".bdSc.on");
