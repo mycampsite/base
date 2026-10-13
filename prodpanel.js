@@ -133,7 +133,12 @@ const css = `
 .brk.meal{ background:rgba(127,182,255,.07); }
 .brk.late{ color:#f1c76b; border-color:rgba(241,199,107,.45); }
 .brk.move{ background:rgba(241,199,107,.06); }
-.colCall{ flex-wrap:wrap; }
+.colCall{ flex-wrap:wrap; justify-content:space-between; }
+.colCall:empty{ display:none; }
+.colTimes{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:8px; }
+.colTimes label{ display:flex; flex-direction:column; gap:3px; font-size:10.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--uiMuted); min-width:0; }
+.colTimes select{ width:100%; min-width:0; height:26px; border-radius:6px; border:1px solid var(--uiBorder); background:#111; padding:0 3px; font-size:12px; letter-spacing:0; text-transform:none; color:var(--uiText); font-variant-numeric:tabular-nums; }
+.colTimes select:disabled{ opacity:.6; }
 .colSun{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-top:6px; font-size:11px; color:var(--uiMuted); font-variant-numeric:tabular-nums; }
 .colSun .place{ border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); border-radius:7px; padding:1px 7px; font:inherit; font-size:11px; cursor:pointer; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .colSun .place.own{ border-color:rgba(127,182,255,.5); }
@@ -147,7 +152,7 @@ const css = `
 .tmSet summary{ cursor:pointer; font-size:11px; color:var(--uiMuted); text-transform:uppercase; letter-spacing:.05em; }
 .tmRow{ display:flex; flex-wrap:wrap; gap:10px 14px; margin-top:8px; }
 .tmRow input{ width:90px; }
-.colCall .wrapT{ white-space:nowrap; margin-left:auto; color:var(--uiText); font-weight:600; font-variant-numeric:tabular-nums; }
+.colCall .wrapT{ white-space:nowrap; color:var(--uiText); font-weight:600; font-variant-numeric:tabular-nums; }
 .colCall .colMeal{ display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--uiMuted); flex-wrap:wrap; }
 .strip .nd{ display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
 .strip .nd i{ display:block; width:7px; height:7px; border-radius:50%; background:var(--c,#666); }
@@ -574,7 +579,12 @@ function draw(pid){
           ${needsRow(x.needs)}
           ${(() => { const w = P.whereOf(pl, i), sun = sunFor(w, dates[i]), wx = weatherFor(w, dates[i]);
             return `<div class="colSun"><button type="button" class="place${d.where ? " own" : ""}" data-a="dwhere" data-i="${i}"${dis} title="${w ? esc((w.label || w.name) + (d.where ? " (this day)" : " (the shoot's location)")) + ". Click to change this day's location" : "Set this day's location for sunrise, sunset and weather"}">${w ? esc(w.name) : "Set location"}</button>${sun ? `<span title="Sunrise · sunset at ${esc(w.name)}">☀ ${esc(fmtTime(sun.rise))} · ${esc(fmtTime(sun.set))}</span>` : w && w.lat != null && !dates[i] ? `<span>Set a date for sunrise</span>` : ""}${wx ? `<span class="wx" title="Forecast (Open-Meteo)">${esc(wx)}</span>` : ""}</div>`; })()}
-          <div class="colCall">Call ${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}<span class="colMeal" title="Leave on Auto to let Camp place the lunch break and work out the wrap time">Lunch ${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis)} Wrap ${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</span>${times[i].wrap && !times[i].wrapManual ? `<span class="wrapT" title="Estimated wrap: ${fmtMins(times[i].est)} of shooting plus setups${times[i].rows.some((r) => r.type === "meal") ? ", the meal" : ""}${times[i].rows.some((r) => r.type === "move") ? " and company moves" : ""}">Wrap ${esc(fmtTime(times[i].wrap))}</span>` : ""}${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
+          <div class="colTimes">
+            <label>Call${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}</label>
+            <label title="Leave on Auto to let Camp place the lunch break">Lunch${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis)}</label>
+            <label title="Leave on Auto to let Camp work out the wrap time">Wrap${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</label>
+          </div>
+          <div class="colCall">${times[i].wrap && !times[i].wrapManual ? `<span class="wrapT" title="Estimated wrap: ${fmtMins(times[i].est)} of shooting plus setups${times[i].rows.some((r) => r.type === "meal") ? ", the meal" : ""}${times[i].rows.some((r) => r.type === "move") ? " and company moves" : ""}">Est. wrap ${esc(fmtTime(times[i].wrap))}</span>` : ""}${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
         <div class="strips">${d.scenes.length ? dayRows(times[i]) : `<div class="colEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`}</div></div>`;
     })).join("");
   const dayTabs = `<div class="dayTabs" role="tablist" aria-label="Shoot days">
