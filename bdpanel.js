@@ -680,11 +680,19 @@ function sceneText(b, s){
   Object.keys(s.els).forEach((c) => (s.els[c] || []).forEach((k) => { const e = b.elements[k]; (s.hits && s.hits[k] || []).forEach((q) => { if(q) needles.push({ q, c, name: e ? e.name : q }); }); }));
   needles.sort((x, y) => y.q.length - x.q.length);   // longer words win where two overlap
   const mark = (txt) => {
+    const all = [];
+    needles.forEach((nd) => findAll(txt, nd.q).forEach(([a, z]) => { if(!all.some((p) => p.nd === nd && a < p.z && z > p.a)) all.push({ a, z, nd }); }));
+    all.sort((x, y) => x.a - y.a || y.z - x.z);
+    // tags on the same words share one mark: one underline per colour, stacked
     const spans = [];
-    needles.forEach((nd) => findAll(txt, nd.q).forEach(([a, z]) => { if(!spans.some((p) => a < p.z && z > p.a)) spans.push({ a, z, nd }); }));
-    spans.sort((x, y) => x.a - y.a);
+    all.forEach((p) => { const g = spans[spans.length - 1]; if(g && p.a < g.z){ g.z = Math.max(g.z, p.z); g.nds.push(p.nd); } else spans.push({ a: p.a, z: p.z, nds: [p.nd] }); });
     let h = "", at = 0;
-    spans.forEach((p) => { const c = E.CAT[p.nd.c]; h += esc(txt.slice(at, p.a)) + `<mark style="--cc:${c.color}" title="${esc(p.nd.name)} · ${esc(c.label)}">${esc(txt.slice(p.a, p.z))}</mark>`; at = p.z; });
+    spans.forEach((p) => {
+      const cols = [], tips = [];
+      p.nds.forEach((nd) => { const c = E.CAT[nd.c]; if(cols.indexOf(c.color) < 0) cols.push(c.color); tips.push(nd.name + " · " + c.label); });
+      const shadow = cols.map((c, i) => `inset 0 -${2 * (i + 1)}px 0 ${c}`).join(",");
+      h += esc(txt.slice(at, p.a)) + `<mark style="--cc:${cols[0]};box-shadow:${shadow}" title="${esc(tips.join("; "))}">${esc(txt.slice(p.a, p.z))}</mark>`; at = p.z;
+    });
     return h + esc(txt.slice(at));
   };
   const row = (type, txt) => txt.trim() ? `<div class="sl t-${esc(type)}">${mark(txt)}</div>` : "";
