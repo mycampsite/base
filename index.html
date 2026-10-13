@@ -103,11 +103,12 @@
   .sideEmpty{ padding:6px 4px; color:var(--uiMuted); font-size:12.5px; line-height:1.5; }
 
   /* Project header + tabs */
-  .pHead{ display:flex; align-items:center; gap:8px; padding:12px 14px 0; flex-wrap:wrap; }
-  .pHead h2{ flex:1; min-width:0; margin:0; font-size:17px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .mtabs{ display:flex; gap:2px; padding:0 10px; border-bottom:1px solid var(--uiBorder); overflow-x:auto; scrollbar-width:none; margin-top:10px; }
+  .pHead{ display:flex; align-items:center; gap:8px; padding:8px 14px 0; flex-wrap:wrap; }
+  .pHead #members{ margin-left:auto; }
+  .pHead h2{ flex:0 1 auto; min-width:0; margin:0; font-size:17px; line-height:28px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mtabs{ display:flex; gap:2px; padding:0 10px; border-bottom:1px solid var(--uiBorder); overflow-x:auto; scrollbar-width:none; margin-top:4px; }
   .mtabs::-webkit-scrollbar{ display:none; }
-  .mtab{ border:0; background:transparent; cursor:pointer; padding:9px 12px; font-size:13px; font-weight:600; color:var(--uiMuted); border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; display:inline-flex; align-items:center; gap:7px; }
+  .mtab{ border:0; background:transparent; cursor:pointer; padding:7px 12px; font-size:13px; font-weight:600; color:var(--uiMuted); border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; display:inline-flex; align-items:center; gap:7px; }
   .mtab:hover{ color:var(--uiText); }
   .mtab.on{ color:var(--uiText); border-bottom-color:var(--uiText); }
   .mtab svg{ width:15px; height:15px; }

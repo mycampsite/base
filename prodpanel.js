@@ -121,10 +121,7 @@ const css = `
 .ctlNote.rev li{ margin:3px 0; }
 .ctlNote.rev .btn{ margin-left:6px; padding:1px 8px; }
 .strip.dragging{ opacity:.35; transform:scale(.97); }
-@keyframes stripLand{ 0%{ transform:scale(1.06); box-shadow:0 0 0 2px #fff, 0 0 22px rgba(255,255,255,.5); } 100%{ transform:scale(1); box-shadow:0 0 0 0 transparent; } }
-.strip.landed{ animation:stripLand .7s cubic-bezier(.2,.9,.3,1); position:relative; z-index:1; }
-@keyframes colBump{ 0%{ background:rgba(91,140,255,.28); } 100%{ background:transparent; } }
-.col.bump .colHead{ animation:colBump .9s ease-out; }
+.strip.landed{ position:relative; z-index:1; }
 .dropLine{ height:4px; border-radius:3px; background:#fff; box-shadow:0 0 0 2px rgba(91,140,255,.6), 0 0 14px rgba(255,255,255,.6); margin:-1px 2px; flex:0 0 auto; }
 .strip .t{ display:flex; justify-content:space-between; gap:6px; font-weight:700; }
 .strip .t span{ color:var(--uiMuted); font-weight:600; white-space:nowrap; }
