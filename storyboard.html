@@ -118,6 +118,7 @@
   .card .cap .top{ display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; }
   .card .cap .top .statusDot{ width:7px; height:7px; border-radius:50%; background:#4a4a44; flex-shrink:0; }
   .card .cap .top .statusDot.shot{ background:var(--good); }
+  .card .cap .top .statusDot.prog{ background:#e0b34a; }
   .card .cap .top .statusDot.reshoot{ background:var(--accent); }
   .card .cap .top .shotLabel{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .card .cap .top .cardActions{ margin-left:auto; display:flex; align-items:center; gap:4px; }
@@ -427,6 +428,7 @@
   .ppMeta span{ border:0.25mm solid #cfcfcf; border-radius:1mm; padding:0.3mm 1.4mm; font-size:7pt; color:#333; white-space:nowrap; }
   .ppMeta span.st{ border-color:transparent; background:#eee; }
   .ppMeta span.st.shot{ background:#dff1e5; color:#1d6b3a; }
+  .ppMeta span.st.prog{ background:#fbefc9; color:#7a5a05; }
   .ppMeta span.st.reshoot{ background:#f8dddd; color:#9b1c22; }
   .ppDesc{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
   .ppSub{ color:#666; margin-top:0.8mm; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
@@ -463,7 +465,8 @@
     <input type="search" id="searchBox" placeholder="Search shots…" title="Search by shot details, description or notes">
     <select id="statusFilter" title="Filter by status">
       <option value="">All statuses</option>
-      <option value="Not shot">Not shot</option>
+      <option value="Planned">Planned</option>
+      <option value="In Progress">In Progress</option>
       <option value="Shot">Shot</option>
       <option value="Needs reshoot">Needs reshoot</option>
     </select>
@@ -1370,7 +1373,7 @@ window.SB3D={
   const SHOT_MOVE_OPTS = ["", "Static", "Pan", "Tilt", "Dolly", "Truck", "Handheld", "Steadicam/gimbal", "Crane/jib", "Drone", "Zoom"];
   const SHOT_LENS_OPTS = ["", "14mm", "18mm", "24mm", "28mm", "35mm", "50mm", "85mm", "100mm", "135mm", "Zoom"];
   const SHOT_EQUIP_OPTS = ["", "Tripod", "Handheld", "Gimbal", "Slider", "Dolly", "Jib/crane", "Drone"];
-  const SHOT_STATUS_OPTS = ["", "Not shot", "Shot", "Needs reshoot"];
+  const SHOT_STATUS_OPTS = ["", "Planned", "In Progress", "Shot", "Needs reshoot"];
 
   // Strokes are stored in a FIXED logical canvas (anchored on height, LOGICAL_H tall) rather than
   // as a fraction of whatever panel size happened to be on screen — so changing the aspect ratio
@@ -1890,7 +1893,7 @@ window.SB3D={
   // description, notes and cast, plus an optional status dropdown. Purely a display-time filter:
   // it never touches the Shot List Sheet, so it's always safe to clear.
   function matchesFilter(sh){
-    if(S.statusFilter && (sh.status || "") !== S.statusFilter) return false;
+    if(S.statusFilter && (sh.status || "Planned") !== S.statusFilter) return false;
     const q = S.searchQuery.trim().toLowerCase();
     if(!q) return true;
     const hay = [sh.shot, sh.size, sh.angle, sh.move, sh.lens, sh.equip, sh.desc, sh.notes, sh.cast]
@@ -1968,7 +1971,7 @@ window.SB3D={
     const bits = [sc.ie, (sc.dn || "").toUpperCase()].filter(Boolean);
     return "SC " + sc.n + (bits.length ? " - " + bits.join(" - ") : "");
   }
-  function sceneSub(sc){ return [sc.set, sc.cast].filter(Boolean).join(" · "); }
+  function sceneSub(sc){ return [sc.day ? "Day " + sc.day : "", sc.set, sc.cast].filter(Boolean).join(" · "); }
 
   // Jump-to navigation for the all-scenes overview — clicking a scene scrolls to it (and takes
   // you back to the overview first, if a shot's focus view is currently open).
@@ -2400,10 +2403,10 @@ window.SB3D={
     const cap = document.createElement("div");
     cap.className = "cap";
     const bits = [sh.size, sh.angle, sh.move, sh.lens].filter(Boolean).map(escapeHtml).join(" &middot; ") || (sh.desc ? escapeHtml(sh.desc) : "No details yet");
-    const statusClass = sh.status === "Shot" ? "shot" : sh.status === "Needs reshoot" ? "reshoot" : "";
+    const statusClass = sh.status === "Shot" ? "shot" : sh.status === "Needs reshoot" ? "reshoot" : sh.status === "In Progress" ? "prog" : "";
     cap.innerHTML = `
       <div class="top">
-        <span class="statusDot ${statusClass}" title="${escapeHtml(sh.status || "Not shot")}"></span>
+        <span class="statusDot ${statusClass}" title="${escapeHtml(sh.status || "Planned")}"></span>
         <span class="shotLabel">Shot ${escapeHtml(sh.shot)}</span><span class="peerDots" data-shot-key="${escapeHtml(sh.key)}">${peerDotsHtml(sh.key)}</span>
         <span class="cardActions">
           <span class="cardMenu">
@@ -2513,7 +2516,7 @@ window.SB3D={
         const cell = document.createElement("div");
         cell.className = "ppCell";
         const meta = [sh.size, sh.angle, sh.move, sh.lens, sh.equip].filter(Boolean).map((x) => `<span>${escapeHtml(x)}</span>`).join("");
-        const stCls = sh.status === "Shot" ? " shot" : sh.status === "Needs reshoot" ? " reshoot" : "";
+        const stCls = sh.status === "Shot" ? " shot" : sh.status === "Needs reshoot" ? " reshoot" : sh.status === "In Progress" ? " prog" : "";
         cell.innerHTML = `
           <div class="ppFrame" style="width:${L.fw}mm;height:${L.fh}mm;"><span class="ppNum">${escapeHtml(sh.shot || "")}</span></div>
           <div class="ppInfo" style="width:${L.cellW}mm;">
