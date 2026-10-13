@@ -149,7 +149,7 @@ const css = `
 #bdctl .stBody .t-transition{ text-align:right; text-transform:uppercase; }
 #bdctl .stBody .dualRow{ display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:none; }
 #bdctl .stBody .dualRow .t-character{ margin-left:6ch; } #bdctl .stBody .dualRow .t-dialogue{ margin-left:0; }
-::highlight(bdpick){ background:rgba(255,214,102,.45); color:inherit; }
+::highlight(bdpick){ background:rgba(127,182,255,.45); color:inherit; }
 #bdctl .stBody mark{ background:color-mix(in srgb, var(--cc) 30%, transparent); color:inherit; border-radius:3px; padding:0 1px; box-shadow:inset 0 -2px 0 var(--cc); }
 #bdctl .stBody ::selection{ background:rgba(127,182,255,.45); }
 #bdctl .shCats{ display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:12px; align-items:start; }
@@ -936,6 +936,11 @@ function wire(box, pid){
     if(window.CampProdPanel.moveSceneBefore(pid, id, toDay, before)) rerender();
   };
   // Words picked in the scene text go into the quick-add box (and are kept as the tag's quote)
+  // clicking off (anywhere but the quick-add controls) drops the highlight, like a normal selection
+  if(!document.__bdPickOff){
+    document.__bdPickOff = true;
+    document.addEventListener("mousedown", (ev) => { if(S.pick && !(ev.target.closest && ev.target.closest(".qAdd"))) pickClear(); }, true);
+  }
   box.onmouseup = () => {
     if(!can) return;
     const sel = window.getSelection(), t = sel && String(sel).replace(/\s+/g, " ").trim();
@@ -975,6 +980,7 @@ function quickAdd(box, sk, ed){
   setTimeout(() => { const j = box.querySelector("#bdQuick"); if(j) j.focus(); }, 60);
 }
 function commitAdd(box, sk, cat, ed){
+  pickClear();
   const i = box.querySelector("#bdAdd"), name = i ? i.value.trim() : "";
   if(!name){ H().toast("Type a name first.", "err", 1600); return; }
   S.adding = null; ed((st) => E.tag(st, sk, cat, name));
