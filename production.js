@@ -116,7 +116,7 @@ function normalize(plan){
   if(s.times && typeof s.times === "object"){ const t = {}; Object.keys(TIME_DEFAULTS).forEach((k) => { const v = Number(s.times[k]); if(s.times[k] !== "" && s.times[k] != null && isFinite(v) && v >= 0 && v <= 1440) t[k] = Math.round(v); }); if(Object.keys(t).length) settings.times = t; }
   const w = cleanWhere(s.where); if(w) settings.where = w;
   const arr = (v) => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).sort((a, b) => a - b).map((k) => v[k]) : []);
-  let days = arr(plan.days).map((d) => { const o = { id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }; const w = cleanWhere(d && d.where); if(w) o.where = w; return o; });
+  let days = arr(plan.days).map((d) => { const o = { id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }; const w = cleanWhere(d && d.where); if(w) o.where = w; const hm = (v) => /^\d{2}:\d{2}$/.test(String(v || "")) ? String(v) : ""; if(hm(d && d.lunch)) o.lunch = d.lunch; if(hm(d && d.wrapAt)) o.wrapAt = d.wrapAt; return o; });
   // the day count setting is the truth: pad with empty days. More stored days than the setting
   // (an older save) are kept and the count follows them, so no scheduled scene is ever lost.
   while(days.length < settings.days) days.push({ id: uid(), scenes: [], call: "", note: "", date: "" });
@@ -431,19 +431,25 @@ function dayTimes(day, byId, settings){
   const call = toMin((day && day.call) || (settings && settings.call) || DEFAULTS.call);
   const sc = ((day && day.scenes) || []).map((id) => byId[id]).filter(Boolean);
   const rows = []; let t = call, est = 0, meal = null, prevLoc = "", lateMeal = false;
+  const lunchAt = toMin(day && day.lunch);   // a lunch time set by hand: the meal goes in at the scene break nearest it
   sc.forEach((s, i) => {
     const e = estOf(s), loc = String(s.loc || "");
     if(i > 0 && T.move > 0 && loc && prevLoc && loc !== prevLoc){ rows.push({ type: "move", from: prevLoc, to: loc, start: toHM(t), end: toHM(t + T.move), min: T.move }); t += T.move; }
     const setup = i === 0 ? T.prep : T.turn;
     // the meal goes in before the scene that would run past the meal limit, once the day is close to it
-    if(!meal && i > 0 && T.meal > 0 && t + setup + e > call + T.mealBy && t >= call + T.mealBy - 150){
+    if(lunchAt != null && !meal && i > 0 && T.meal > 0 && (t >= lunchAt || (t + setup + e > lunchAt + 45 && t >= lunchAt - 60))){
+      meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal, manual: true }; rows.push(meal); t += T.meal;
+    }
+    if(lunchAt == null && !meal && i > 0 && T.meal > 0 && t + setup + e > call + T.mealBy && t >= call + T.mealBy - 150){
       meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal }; rows.push(meal); t += T.meal;
     }
     rows.push({ type: "scene", id: s.id, n: s.n, call: toHM(t), shoot: toHM(t + setup), wrap: toHM(t + setup + e), est: e });
     t += setup + e; est += e; if(loc) prevLoc = loc;
-    if(!meal && T.meal > 0 && t >= call + T.mealBy && i < sc.length - 1){ lateMeal = t > call + T.mealBy; meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal, late: lateMeal }; rows.push(meal); t += T.meal; }
+    if(lunchAt == null && !meal && T.meal > 0 && t >= call + T.mealBy && i < sc.length - 1){ lateMeal = t > call + T.mealBy; meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal, late: lateMeal }; rows.push(meal); t += T.meal; }
   });
-  return { call: toHM(call), wrap: sc.length ? toHM(t) : "", est, length: sc.length ? t - call : 0, rows, lateMeal };
+  const manualWrap = toMin(day && day.wrapAt), autoWrap = sc.length ? toHM(t) : "";
+  const end = sc.length && manualWrap != null ? manualWrap : t;
+  return { call: toHM(call), wrap: sc.length ? toHM(end) : "", autoWrap, wrapManual: sc.length && manualWrap != null, est, length: sc.length ? end - call : 0, rows, lateMeal };
 }
 // Every day's timetable, as sent with Sync (scene ids and HH:MM times only)
 function timetable(plan, byId){

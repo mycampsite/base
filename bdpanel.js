@@ -266,6 +266,9 @@ const css = `
 #bdctl .rp td{ padding:4px 12px; border-top:1px solid var(--uiBorder); vertical-align:top; }
 #bdctl .rp td:first-child{ white-space:nowrap; }
 #bdctl .rp td:last-child{ color:var(--uiMuted); text-align:right; white-space:nowrap; }
+#bdctl .rp h4{ flex-wrap:wrap; gap:2px 10px; }
+#bdctl .rpDay td:last-child{ white-space:normal; text-align:left; overflow-wrap:anywhere; color:inherit; }
+#bdctl .rpDay td:first-child{ width:1%; }
 @media (max-width:760px){
   #bdctl .bdBody{ padding:0 10px 90px; }
   #bdctl .bdSplit{ grid-template-columns:1fr; }
@@ -786,7 +789,7 @@ function reportsView(b, p){
         if(!ks.length) return "";
         return `<tr><td><span class="dot" style="background:${c.color}"></span>${esc(c.short)}</td><td>${ks.map((k) => esc((b.elements[k].no && c.id === "cast" ? b.elements[k].no + ". " : "") + b.elements[k].name)).join(", ")}</td></tr>`;
       }).join("");
-      return `<div class="rp" style="--cc:#8a8f98"><h4><span>Day ${d.n}${d.date ? " · " + esc(fmtDate(d.date)) : ""}</span><span>Sc ${d.scenes.map((s) => s.n).join(", ")}</span></h4><table>${rows}</table></div>`;
+      return `<div class="rp rpDay" style="--cc:#8a8f98"><h4><span>Day ${d.n}${d.date ? " · " + esc(fmtDate(d.date)) : ""}</span><span>Sc ${d.scenes.map((s) => s.n).join(", ")}</span></h4><table>${rows}</table></div>`;
     }).join("");
     return seg + `<div class="rpGrid">${cards || `<div class="bdEmpty">No scenes on shoot days yet.</div>`}</div>`;
   }

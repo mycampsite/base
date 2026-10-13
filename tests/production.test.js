@@ -284,5 +284,16 @@ test("plan keeps day timing, places and scene status; drops junk", () => {
   assert.strictEqual(P.dayTimes({ scenes: ["a"] }, { a: { id: "a", est: 60 } }, pl.settings).rows[0].shoot, "07:45");
 });
 
+test("lunch and wrap can be set by hand", () => {
+  const byId = {}; ["a","b","c","d"].forEach((id, i) => { byId[id] = { id, n: i + 1, est: 60, loc: "X" }; });
+  const day = { scenes: ["a","b","c","d"], call: "07:00", lunch: "12:00", wrapAt: "19:30" };
+  const T = P.dayTimes(day, byId, { call: "07:00" });
+  const meal = T.rows.find((r) => r.type === "meal");
+  assert.ok(meal && meal.manual && meal.start >= "11:00" && meal.start <= "13:00");
+  assert.strictEqual(T.wrap, "19:30"); assert.ok(T.wrapManual);
+  const pl = P.normalize({ settings: { days: 1 }, days: [{ scenes: ["a"], lunch: "12:15", wrapAt: "bad" }] });
+  assert.strictEqual(pl.days[0].lunch, "12:15"); assert.strictEqual(pl.days[0].wrapAt, undefined);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

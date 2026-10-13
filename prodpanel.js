@@ -151,6 +151,7 @@ const css = `
 .tmRow{ display:flex; flex-wrap:wrap; gap:10px 14px; margin-top:8px; }
 .tmRow input{ width:90px; }
 .colCall .wrapT{ white-space:nowrap; margin-left:auto; color:var(--uiText); font-weight:600; font-variant-numeric:tabular-nums; }
+.colCall .colMeal{ display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--uiMuted); flex-wrap:wrap; }
 .strip .nd{ display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
 .strip .nd i{ display:block; width:7px; height:7px; border-radius:50%; background:var(--c,#666); }
 .dtPick{ position:relative; display:inline-flex; align-items:center; gap:5px; margin-left:6px; font-size:11.5px; color:var(--uiText); cursor:pointer; border-radius:7px; padding:2px 7px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); }
@@ -330,6 +331,12 @@ function fmtTime(hm){
   if(is24()) return hm;
   const h = +m[1]; return (h % 12 || 12) + ":" + m[2] + (h < 12 ? " am" : " pm");
 }
+// A time that can be left on Auto (lunch and wrap are worked out unless you set them)
+function autoTimeSelect(val, attr, dis){
+  const opts = []; for(let i = 0; i < 96; i++){ const h = Math.floor(i / 4), mm = (i % 4) * 15; opts.push(String(h).padStart(2, "0") + ":" + String(mm).padStart(2, "0")); }
+  if(val && opts.indexOf(val) < 0){ opts.push(val); opts.sort(); }
+  return `<select class="tSel" ${attr}${dis}><option value=""${val ? "" : " selected"}>Auto</option>${opts.map((t) => `<option value="${t}"${t === val ? " selected" : ""}>${fmtTime(t)}</option>`).join("")}</select>`;
+}
 function timeSelect(val, attr, dis){
   const opts = []; for(let i = 0; i < 96; i++){ const h = Math.floor(i / 4), mm = (i % 4) * 15; opts.push(String(h).padStart(2, "0") + ":" + String(mm).padStart(2, "0")); }
   if(val && opts.indexOf(val) < 0){ opts.push(val); opts.sort(); }
@@ -501,7 +508,7 @@ function draw(pid){
     ${P.callsheetsStale(raw) ? `<span class="ctlChip warn" title="The plan changed since the last Sync">⟳ Sheets behind the plan${hub.isOwner(p) ? ": Sync" : " (owner Syncs)"}</span>` : ""}`;
   const hh = HIST[pid] || { undo: [], redo: [] };
   const acts = `<div class="ctlActs">
-      ${canEdit ? `<span class="ctlUR"><button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
+      ${canEdit ? `<span class="ctlUR"><button class="btn sm" type="button" data-a="reload" title="Refresh: re-read the latest script and storyboard shots (nothing is written)">⟳ Refresh</button><button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
       <span class="ctlMore"><button class="btn sm" type="button" data-a="menu" aria-haspopup="menu" aria-expanded="${S.menu}" title="More">⋯</button>${S.menu ? `<div class="ctlMenu" role="menu">
         <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room</small></button>
         <button type="button" data-a="reauto"${canEdit ? "" : " disabled"}>Re-plan all<small>Lay out every scene again from scratch</small></button>
@@ -570,7 +577,7 @@ function draw(pid){
           ${needsRow(x.needs)}
           ${(() => { const w = P.whereOf(pl, i), sun = sunFor(w, dates[i]), wx = weatherFor(w, dates[i]);
             return `<div class="colSun"><button type="button" class="place${d.where ? " own" : ""}" data-a="dwhere" data-i="${i}"${dis} title="${w ? esc((w.label || w.name) + (d.where ? " (this day)" : " (the shoot's location)")) + ". Click to change this day's location" : "Set this day's location for sunrise, sunset and weather"}">${w ? esc(w.name) : "Set location"}</button>${sun ? `<span title="Sunrise · sunset at ${esc(w.name)}">☀ ${esc(fmtTime(sun.rise))} · ${esc(fmtTime(sun.set))}</span>` : w && w.lat != null && !dates[i] ? `<span>Set a date for sunrise</span>` : ""}${wx ? `<span class="wx" title="Forecast (Open-Meteo)">${esc(wx)}</span>` : ""}</div>`; })()}
-          <div class="colCall">Call ${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}${times[i].wrap ? `<span class="wrapT" title="Estimated wrap: ${fmtMins(times[i].est)} of shooting plus setups${times[i].rows.some((r) => r.type === "meal") ? ", the meal" : ""}${times[i].rows.some((r) => r.type === "move") ? " and company moves" : ""}">Wrap ${esc(fmtTime(times[i].wrap))}</span>` : ""}${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
+          <div class="colCall">Call ${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}<span class="colMeal" title="Leave on Auto to let Camp place the lunch break and work out the wrap time">Lunch ${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis)} Wrap ${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</span>${times[i].wrap && !times[i].wrapManual ? `<span class="wrapT" title="Estimated wrap: ${fmtMins(times[i].est)} of shooting plus setups${times[i].rows.some((r) => r.type === "meal") ? ", the meal" : ""}${times[i].rows.some((r) => r.type === "move") ? " and company moves" : ""}">Wrap ${esc(fmtTime(times[i].wrap))}</span>` : ""}${x.locs.length ? `<span title="${esc(x.locs.join(", "))}">${x.locs.length} location${x.locs.length === 1 ? "" : "s"}</span>` : ""}</div></div>
         <div class="strips">${d.scenes.length ? dayRows(times[i]) : `<div class="colEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`}</div></div>`;
     })).join("");
   const dayTabs = `<div class="dayTabs" role="tablist" aria-label="Shoot days">
@@ -843,6 +850,8 @@ function wire(box, pid, ctx){
       return;
     }
     if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }
+    if(t.dataset.lunch != null){ update((plan) => { const d = plan.days[Number(t.dataset.lunch)]; if(d){ if(t.value) d.lunch = t.value; else delete d.lunch; } }); return; }
+    if(t.dataset.wrapat != null){ update((plan) => { const d = plan.days[Number(t.dataset.wrapat)]; if(d){ if(t.value) d.wrapAt = t.value; else delete d.wrapAt; } }); return; }
     if(t.dataset.call != null){ update((plan) => { const d = plan.days[Number(t.dataset.call)]; if(d) d.call = t.value === plan.settings.call ? "" : t.value; }); return; }
     if(t.dataset.status != null){ const id = t.dataset.status, v = t.value; update((plan) => { P.setStatus(plan, id, v); }); H().toast("Sc " + ((ctx.bd && P.sceneMap(ctx.bd)[id] || {}).n || "") + ": " + v, "ok", 1400); return; }
     if(t.dataset.t != null){ const k = t.dataset.t, v = Number(t.value); update((plan) => { const T = Object.assign({}, plan.settings.times || {}); const val = k === "mealBy" ? Math.round(v * 60) : Math.round(v);
@@ -916,8 +925,14 @@ function moveScene(pid, id, toDay, at){
   rerender();
 }
 function autoPlan(pid, ctx, all){
-  const r = P.autoSchedule(planOf(pid), ctx.bd, { all });
+  const before = planOf(pid), had = before.days.reduce((n, d) => n + d.scenes.length, 0);
+  const r = P.autoSchedule(before, ctx.bd, { all });
+  const now = r.plan.days.reduce((n, d) => n + d.scenes.length, 0);
   save(pid, r.plan); rerender();
+  if(!r.unplaced.length){
+    if(!all && now === had) H().toast("Nothing to place: every scene is already on a day. If the script just changed, press Refresh first.", "ok", 3600);
+    else H().toast((all ? "Re-planned " : "Placed ") + (all ? now : now - had) + " scene" + ((all ? now : now - had) === 1 ? "" : "s") + ".", "ok", 2200);
+  }
   if(r.unplaced.length) H().toast(r.unplaced.length + " scene" + (r.unplaced.length === 1 ? " doesn't" : "s don't") + " fit in " + r.plan.settings.days + " days at this page limit. Add days or raise the limit.");
 }
 function confirmShrink(pid, r){
