@@ -693,7 +693,7 @@ function sceneText(b, s){
     spans.forEach((p) => {
       const cols = [], tips = [];
       p.nds.forEach((nd) => { const c = E.CAT[nd.c]; if(cols.indexOf(c.color) < 0) cols.push(c.color); tips.push(nd.name + " · " + c.label); });
-      const shadow = cols.map((c, i) => `inset 0 -${2 * (i + 1)}px 0 ${c}`).join(",");
+      const shadow = cols.map((c, i) => i ? `0 ${2 * i}px 0 ${c}` : `inset 0 -2px 0 ${c}`).join(",");   // the first underline stays put; each extra tag adds one below it
       h += esc(txt.slice(at, p.a)) + `<mark style="--cc:${cols[0]};box-shadow:${shadow}" title="${esc(tips.join("; "))}">${esc(txt.slice(p.a, p.z))}</mark>`; at = p.z;
     });
     return h + esc(txt.slice(at));
