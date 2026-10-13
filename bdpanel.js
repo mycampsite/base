@@ -475,6 +475,9 @@ function pickPaint(){
   }catch(_e){}
 }
 function pickClear(){ S.pick = null; try{ if(window.CSS && CSS.highlights) CSS.highlights.delete("bdpick"); }catch(_e){} }
+// Dropdown order: the rarely-used categories go last (the Breakdown sheet order itself is unchanged)
+const MENU_LAST_ = ["stunts", "mfx", "animals", "wrangler", "greenery", "weapons", "music", "sound", "sfx"];
+const MENU_CATS = E.CATS.filter((c) => MENU_LAST_.indexOf(c.id) < 0).concat(MENU_LAST_.map((id) => E.CAT[id]).filter(Boolean));
 function render(pid){
   const box = document.getElementById("bdctl"); if(!box) return;
   const ae = document.activeElement;
@@ -608,7 +611,7 @@ function sheetsView(b, can){
   const dis = can ? "" : " disabled";
   const qc = E.CAT[S.qCat] ? S.qCat : "props";
   const allNames = Object.keys(b.elements).filter((k) => !(s.els[b.elements[k].cat] || []).includes(k)).map((k) => `<option value="${esc(b.elements[k].name)}" label="${esc(E.CAT[b.elements[k].cat].short)}">`).join("");
-  const quick = can ? `<div class="qAdd"><select id="bdQCat" aria-label="Category" style="--cc:${E.CAT[qc].color}">${E.CATS.map((c) => `<option value="${c.id}"${c.id === qc ? " selected" : ""}>${esc(c.label)}</option>`).join("")}</select>
+  const quick = can ? `<div class="qAdd"><select id="bdQCat" aria-label="Category" style="--cc:${E.CAT[qc].color}">${MENU_CATS.map((c) => `<option value="${c.id}"${c.id === qc ? " selected" : ""}>${esc(c.label)}</option>`).join("")}</select>
       <input type="text" id="bdQuick" list="bdQL" maxlength="60" placeholder="Add an element to this scene… (type a name, Enter)" autocomplete="off" aria-label="Add an element"><datalist id="bdQL">${allNames}</datalist>
       <button class="btn sm primary" type="button" data-a="qadd" data-sk="${esc(s.key)}">Add</button></div>` : "";
   const cats = E.CATS.map(catBox).join("");
@@ -751,10 +754,10 @@ function elementsView(b, can){
     lastCat = e.cat;
     const form = S.edit === k && can ? `<tr><td colspan="${grouped ? 4 : 5}"><div class="edForm">
         <label>Name<input type="text" id="edName" maxlength="60" value="${esc(e.name)}"></label>
-        <label>Category<select id="edCat">${E.CATS.map((x) => `<option value="${x.id}"${x.id === e.cat ? " selected" : ""}>${esc(x.label)}</option>`).join("")}</select></label>
+        <label>Category<select id="edCat">${MENU_CATS.map((x) => `<option value="${x.id}"${x.id === e.cat ? " selected" : ""}>${esc(x.label)}</option>`).join("")}</select></label>
         <label>Note (shows on every sheet)<input type="text" id="edNote" maxlength="2000" value="${esc(e.note)}" style="min-width:220px"></label>
         <button class="btn sm primary" type="button" data-a="edsave" data-k="${esc(k)}">Save</button>
-        <label>Merge into<select id="edMerge"><option value="">Choose…</option>${Object.keys(b.elements).filter((x) => x !== k).sort((x, y) => b.elements[x].name.localeCompare(b.elements[y].name)).map((x) => `<option value="${esc(x)}">${esc(b.elements[x].name)} (${esc(E.CAT[b.elements[x].cat].short)})</option>`).join("")}</select></label>
+        <label>Merge into<select id="edMerge"><option value="">Choose…</option>${Object.keys(b.elements).filter((x) => x !== k && b.elements[x].cat === e.cat).sort((x, y) => b.elements[x].name.localeCompare(b.elements[y].name)).map((x) => `<option value="${esc(x)}">${esc(b.elements[x].name)}</option>`).join("")}</select></label>
         <button class="btn sm" type="button" data-a="edmerge" data-k="${esc(k)}">Merge</button>
         <button class="btn sm" type="button" data-a="eddrop" data-k="${esc(k)}" title="Remove this element from every scene">Ignore everywhere</button>
         <button class="btn sm" type="button" data-a="edcancel">Cancel</button></div></td></tr>` : "";
@@ -879,6 +882,7 @@ function wire(box, pid){
     if(k === "edmerge"){
       const key = a.dataset.k, into = (box.querySelector("#edMerge") || {}).value;
       if(!into){ hub.toast("Choose what to merge it into.", "err", 1800); return; }
+      { const m0 = model(), el0 = m0 && m0.elements; if(el0 && el0[key] && el0[into] && el0[key].cat !== el0[into].cat){ hub.toast("Elements can only be merged within the same category.", "err", 2200); return; } }
       ed((st) => E.merge(st, [key], into)); S.edit = null;
       hub.toast("Merged.", "ok", 1500); return;
     }
