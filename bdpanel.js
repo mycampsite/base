@@ -149,6 +149,7 @@ const css = `
 #bdctl .stBody .t-transition{ text-align:right; text-transform:uppercase; }
 #bdctl .stBody .dualRow{ display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:none; }
 #bdctl .stBody .dualRow .t-character{ margin-left:6ch; } #bdctl .stBody .dualRow .t-dialogue{ margin-left:0; }
+::highlight(bdpick){ background:rgba(255,214,102,.45); color:inherit; }
 #bdctl .stBody mark{ background:color-mix(in srgb, var(--cc) 30%, transparent); color:inherit; border-radius:3px; padding:0 1px; box-shadow:inset 0 -2px 0 var(--cc); }
 #bdctl .stBody ::selection{ background:rgba(127,182,255,.45); }
 #bdctl .shCats{ display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:12px; align-items:start; }
@@ -456,6 +457,24 @@ async function payload(pid, sid){
 }
 
 /* ---------- rendering ---------- */
+// The words picked in the scene text stay highlighted while you name the tag (focus moves to the quick-add box, which would drop the browser's own selection)
+function pickPaint(){
+  try{
+    if(!window.CSS || !CSS.highlights || typeof Highlight === "undefined") return;
+    CSS.highlights.delete("bdpick");
+    if(S.pick && S.pick.sel !== S.sel) S.pick = null;
+    const host = S.pick && document.querySelector("#bdctl .shText"); if(!host) return;
+    const w = document.createTreeWalker(host, NodeFilter.SHOW_TEXT); let pos = 0, n, r = document.createRange(), a = false, z = false;
+    while((n = w.nextNode())){
+      const len = n.nodeValue.length;
+      if(!a && S.pick.s <= pos + len){ r.setStart(n, Math.max(0, S.pick.s - pos)); a = true; }
+      if(a && S.pick.e <= pos + len){ r.setEnd(n, Math.max(0, S.pick.e - pos)); z = true; break; }
+      pos += len;
+    }
+    if(a && z) CSS.highlights.set("bdpick", new Highlight(r));
+  }catch(_e){}
+}
+function pickClear(){ S.pick = null; try{ if(window.CSS && CSS.highlights) CSS.highlights.delete("bdpick"); }catch(_e){} }
 function render(pid){
   const box = document.getElementById("bdctl"); if(!box) return;
   const ae = document.activeElement;
@@ -478,6 +497,7 @@ function render(pid){
   // keep the open scene showing in the list
   const on = l2 && l2.querySelector(".bdSc.on");
   if(on){ const a = on.offsetTop - l2.offsetTop, z = a + on.offsetHeight; if(a < l2.scrollTop) l2.scrollTop = a - 6; else if(z > l2.scrollTop + l2.clientHeight) l2.scrollTop = z - l2.clientHeight + 6; }
+  pickPaint();
 }
 function head(chips, acts){ return `<div class="bdTop"><span class="bdTitle${S.lock ? "" : " hid"}">${S.lock === "strips" ? "Stripboard" : "Breakdown"}</span><div class="bdChips">${chips || ""}</div>${acts || ""}</div>`; }
 
@@ -915,12 +935,13 @@ function wire(box, pid){
     if(!name) return;
     i.value = /[A-Z]/.test(name) && name === name.toUpperCase() ? name.charAt(0) + name.slice(1).toLowerCase() : name;   // "LANTERN" -> "Lantern"
     S.qQuote = t;
+    try{ const host = el.closest(".shText"), rg = sel.getRangeAt(0), pre = document.createRange(); pre.selectNodeContents(host); pre.setEnd(rg.startContainer, rg.startOffset); const s0 = pre.toString().length; S.pick = { s: s0, e: s0 + rg.toString().length, sel: S.sel }; }catch(_e){ S.pick = null; }
     i.dispatchEvent(new Event("input", { bubbles: true }));
-    i.focus(); i.select();
+    i.focus(); i.select(); pickPaint();
   };
   box.oninput = (ev) => {
     // picking a name the project already uses sets its category
-    if(ev.target.id === "bdQuick" && !ev.target.value.trim()) S.qQuote = "";
+    if(ev.target.id === "bdQuick" && !ev.target.value.trim()){ S.qQuote = ""; pickClear(); }
     if(ev.target.id === "bdQuick"){ const m = model(), v = ev.target.value.trim().toLowerCase(), hit = m && Object.keys(m.elements).find((k) => m.elements[k].name.toLowerCase() === v), sel = box.querySelector("#bdQCat"); if(hit && sel && sel.value !== m.elements[hit].cat){ sel.value = m.elements[hit].cat; S.qCat = sel.value; sel.style.setProperty("--cc", E.CAT[sel.value].color); } return; }
     if(ev.target.id === "bdScQ"){ S.scQ = ev.target.value; const pos = ev.target.selectionStart; rerender(); setTimeout(() => { const i = box.querySelector("#bdScQ"); if(i){ i.focus(); try{ i.setSelectionRange(pos, pos); }catch(_e){} } }, 40); return; }
     if(ev.target.id === "bdQ"){ S.q = ev.target.value; const pos = ev.target.selectionStart; rerender(); setTimeout(() => { const i = box.querySelector("#bdQ"); if(i){ i.focus(); try{ i.setSelectionRange(pos, pos); }catch(_e){} } }, 40); } };
@@ -937,7 +958,7 @@ function quickAdd(box, sk, ed){
   if(!name){ H().toast("Type a name first.", "err", 1600); if(i) i.focus(); return; }
   if(!E.CAT[cat]) return;
   S.qCat = cat; lsSet("Camp_BD_QCAT_V1", cat);
-  const quote = S.qQuote; S.qQuote = "";
+  const quote = S.qQuote; S.qQuote = ""; pickClear();
   ed((st) => E.tag(st, sk, cat, name, quote));
   setTimeout(() => { const j = box.querySelector("#bdQuick"); if(j) j.focus(); }, 60);
 }
