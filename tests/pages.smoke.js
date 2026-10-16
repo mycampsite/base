@@ -80,6 +80,14 @@ let BASE = "";
     await p.keyboard.press("Escape"); await p.evaluate(() => document.getElementById("mToggleTags").click()); await p.waitForTimeout(300);
     await expect(p, () => document.querySelector(".bdtKey").hidden && (!window.CSS.highlights || !window.CSS.highlights.has("bd-cast")), "View › Show Breakdown Tags turns them off");
   });
+  await page(browser, "editor: Shot Heading (Ctrl+7) is upper case, lines up with action, and is not a scene", "/editor.html?fileId=f1", async (p) => {
+    await p.waitForSelector('#scriptEditor .line[data-type="action"]');
+    const before = await p.evaluate(() => document.querySelectorAll('#scriptEditor .line[data-type="scene"]').length);
+    await p.evaluate(() => { const l = [...document.querySelectorAll("#scriptEditor .line")].find((x) => x.dataset.type === "action"); l.textContent = "close on the knife"; l.focus(); const r = document.createRange(); r.selectNodeContents(l); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
+    await p.keyboard.press("Control+7"); await p.waitForTimeout(600);
+    const r = await p.evaluate(() => { const sh = document.querySelector('#scriptEditor .line[data-type="shot"]'), ac = document.querySelector('#scriptEditor .line[data-type="action"]'); if(!sh) return null; const a = getComputedStyle(sh), b = getComputedStyle(ac); return { text: sh.textContent, tt: a.textTransform, ml: a.marginLeft === b.marginLeft, scenes: document.querySelectorAll('#scriptEditor .line[data-type="scene"]').length }; });
+    if(!r || r.text !== "CLOSE ON THE KNIFE" || r.tt !== "uppercase" || !r.ml || r.scenes !== before) throw new Error("shot: " + JSON.stringify(r) + " scenes before " + before);
+  });
   await page(browser, "editor: Australian spellcheck flags color and teh, not realise or colour", "/editor.html?fileId=f1", async (p) => {
     await p.evaluate(() => { const l = [...document.querySelectorAll("#scriptEditor .line")].find((x) => x.dataset.type === "action"); l.textContent = "We realise the colour is wrong, the color teh."; });
     await p.waitForFunction(() => window.CampSpell && window.CampSpell.refresh, null, { timeout: 8000 });

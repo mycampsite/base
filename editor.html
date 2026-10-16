@@ -859,7 +859,7 @@
   }
 
 
-  .line[data-type="scene"], .line[data-type="action"]{
+  .line[data-type="scene"], .line[data-type="action"], .line[data-type="shot"]{
     width: calc((var(--a4w-mm) - var(--x-action-L-mm) - var(--x-action-R-mm) + var(--wrap-cal-mm)) * 1mm);
     margin-left: 0;
   }
@@ -922,7 +922,8 @@
   /* Final Draft-style: scene / character / transition are uppercase by default */
   .line[data-type="scene"],
   .line[data-type="character"],
-  .line[data-type="transition"]{ text-transform: uppercase; }
+  .line[data-type="transition"],
+  .line[data-type="shot"]{ text-transform: uppercase; }
 
   /* Auto scene separation: add one extra blank-line worth of space ABOVE every Scene Heading
      when it is not the first line on a page. This creates the common “double gap” between scenes. */
@@ -1527,7 +1528,7 @@ top:38px; left:0;
 .dialogue{ margin-bottom: var(--paraLine); padding-left: var(--indentDialogueL); padding-right: var(--indentDialogueR); }
 .paren{ padding-left: var(--indentParenL); padding-right: var(--indentDialogueR); color: var(--paperMuted); }
 .transition{ margin-top: var(--paraLine); margin-bottom: var(--paraLine); padding-left: var(--indentBodyL); padding-right: var(--indentBodyR); text-align:right; font-weight:700; letter-spacing:.2px; text-transform:uppercase; }
-.shot{ padding-left: var(--indentBodyL); padding-right: var(--indentBodyR); font-weight:700; letter-spacing:.15px; text-transform:uppercase; }
+.shot{ padding-left: var(--indentBodyL); padding-right: var(--indentBodyR); font-weight:400; text-transform:uppercase; }
 .note{ padding-left: var(--indentBodyL); padding-right: var(--indentBodyR); font-style: italic; color: var(--paperMuted); }
 .scene,.action,.shot,.note{ padding-left: var(--indentBodyL); padding-right: var(--indentBodyR); }
 
@@ -2426,6 +2427,7 @@ body.ctxOpen #smartMenu, body.ctxOpen #charMenu, body.ctxOpen #sceneLocMenu, bod
           <button class="pill" type="button" data-type="dual">Dual Dialogue</button>
           <button class="pill" type="button" data-type="parenthetical">Parenthetical</button>
           <button class="pill" type="button" data-type="transition">Transition</button>
+          <button class="pill" type="button" data-type="shot">Shot Heading</button>
         </div>
         <!-- keep Project A authoritative select (hidden), wired by its own logic -->
         <select id="typeSel" class="hidden" aria-hidden="true">
@@ -2436,6 +2438,7 @@ body.ctxOpen #smartMenu, body.ctxOpen #charMenu, body.ctxOpen #sceneLocMenu, bod
           <option value="dialogue">Dialogue</option>
           <option value="dual">Dual Dialogue</option>
           <option value="transition">Transition</option>
+          <option value="shot">Shot Heading</option>
         </select>
       </div>
 
@@ -3235,7 +3238,7 @@ function _applyTypeToLines(type){
     if(type==="dual"){ convertLineToDual(ln); continue; }
     ln.dataset.type = type;
 
-    if(type==="scene" || type==="character" || type==="transition"){
+    if(type==="scene" || type==="character" || type==="transition" || type==="shot"){
       _uppercaseLineInPlace(ln);
     }
 
@@ -6092,7 +6095,7 @@ function snapshot(reason="edit"){
 
       // Keep scene headings and character names with what follows them
       // (don't leave them stranded at the bottom of a page).
-      const keepWithNext = (ltype === "scene" || ltype === "character") && queue.length > 0 && used > 0.5;
+      const keepWithNext = (ltype === "scene" || ltype === "character" || ltype === "shot") && queue.length > 0 && used > 0.5;
       // A scene heading needs the blank line after it plus the first two lines of what follows
       // (Final Draft won't leave a single orphaned line under a heading at the bottom of a page).
       let needAfter = keepWithNext ? lineStepPx : moreReserve;
@@ -6109,7 +6112,7 @@ function snapshot(reason="edit"){
       }
 
       // Short elements are never split across pages: move the whole line to the next page.
-      if(used > 0.5 && (keepWithNext || ltype === "scene" || ltype === "character" || ltype === "transition" || ltype === "parenthetical" || ltype === "dual")){
+      if(used > 0.5 && (keepWithNext || ltype === "scene" || ltype === "character" || ltype === "transition" || ltype === "shot" || ltype === "parenthetical" || ltype === "dual")){
         moveToNextPage(line);
         continue;
       }
@@ -6677,7 +6680,7 @@ if((line.dataset.type||"action")==="action"){
 // Final Draft-ish enter rules
 
 // Final Draft-ish enter rules
-if(newType==="scene"){
+if(newType==="scene" || newType==="shot"){
   newType = "action";
 } else if(newType==="character"){
   // Blank character line -> back to action, otherwise -> dialogue
@@ -6704,7 +6707,7 @@ line.parentElement.insertBefore(newLine, line.nextSibling);
 // - Scene headings should always have an "air" line after them before action continues.
 //   If the split produced text on the next line, we insert a blank action line between.
 const originalType = line.dataset.type || "action";
-if(originalType === "scene" && !forcedType){
+if((originalType === "scene" || originalType === "shot") && !forcedType){
   ensureBlankLineAfter(line);
   const firstAfter = nextLine(line);
   if(firstAfter){
@@ -6941,7 +6944,7 @@ function _uppercaseTextNodes(rootEl){
 function applyTypeCapitalization(lineEl, type){
   if(!lineEl) return;
   // FD behaviour: Scene / Character / Transition are uppercase.
-  if(type === "scene" || type === "character" || type === "transition"){
+  if(type === "scene" || type === "character" || type === "transition" || type === "shot"){
     _uppercaseTextNodes(lineEl);
   }
 }
@@ -7053,7 +7056,7 @@ function applyTypeCapitalization(lineEl, type){
     }
 
     if(!opts.noSpacing){
-      if(type==="scene"){
+      if(type==="scene" || type==="shot"){
         ensureBlankLineBefore(lineEl);
         ensureBlankLineAfter(lineEl);
       }
@@ -7080,8 +7083,8 @@ function applyTypeCapitalization(lineEl, type){
 
   // Final Draft-style Tab: Action -> Character -> Transition -> Scene -> Action,
   // and Dialogue <-> Parenthetical. Shift+Tab goes the other way.
-  const TAB_NEXT = { action:"character", character:"transition", transition:"scene", scene:"action", dialogue:"parenthetical", parenthetical:"dialogue" };
-  const TAB_PREV = { action:"scene", scene:"transition", transition:"character", character:"action", dialogue:"parenthetical", parenthetical:"dialogue" };
+  const TAB_NEXT = { action:"character", character:"transition", transition:"scene", scene:"action", dialogue:"parenthetical", parenthetical:"dialogue", shot:"action" };
+  const TAB_PREV = { action:"scene", scene:"transition", transition:"character", character:"action", dialogue:"parenthetical", parenthetical:"dialogue", shot:"scene" };
   function cycleType(dir){
     const line = getActiveLine();
     if(!line) return;
@@ -8081,11 +8084,11 @@ function _forceSelectAllInScript(){
     // Typing in Notes: its own undo/formatting, not the script's
     if(e.target && e.target.closest && e.target.closest("#notesArea")) return;
 
-// Cmd/Ctrl + 1–6: set current line type (Final Draft-style)
-// 1 Scene, 2 Action, 3 Character, 4 Dialogue, 5 Parenthetical, 6 Transition
-if(meta && !e.altKey && !e.shiftKey && e.key && /^[1-6]$/.test(e.key)){
+// Cmd/Ctrl + 1–7: set current line type (Final Draft-style)
+// 1 Scene, 2 Action, 3 Character, 4 Dialogue, 5 Parenthetical, 6 Transition, 7 Shot Heading
+if(meta && !e.altKey && !e.shiftKey && e.key && /^[1-7]$/.test(e.key)){
   e.preventDefault();
-  const map = { "1":"scene", "2":"action", "3":"character", "4":"dialogue", "5":"parenthetical", "6":"transition" };
+  const map = { "1":"scene", "2":"action", "3":"character", "4":"dialogue", "5":"parenthetical", "6":"transition", "7":"shot" };
   const type = map[e.key];
   const line = getActiveLine();
   if(line && type){
@@ -12336,7 +12339,7 @@ async function __exportPdfExactInner(opts){
     setTimeout(() => { inp.focus(); inp.select(); }, 30);
   };
   // ---------- Final Draft (.fdx) and Fountain: export + import ----------
-  const __IX_TYPES_FDX = { scene:"Scene Heading", action:"Action", character:"Character", dialogue:"Dialogue", parenthetical:"Parenthetical", transition:"Transition" };
+  const __IX_TYPES_FDX = { scene:"Scene Heading", action:"Action", character:"Character", dialogue:"Dialogue", parenthetical:"Parenthetical", transition:"Transition", shot:"Shot" };
   const __ixPlain = (runs) => (runs || []).map(r => r.c ? String(r.t || "").toUpperCase() : String(r.t || "")).join("");
   const __ixRun = (t, f) => ({ t, b: !!(f && f.b), i: !!(f && f.i), u: !!(f && f.u), s: !!(f && f.s), c: false });
   const __ixFileBase = (doc) => (String((doc.title && doc.title.title) || "").replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim() || "Script");
@@ -12378,7 +12381,7 @@ async function __exportPdfExactInner(opts){
         continue;
       }
       const type = __IX_TYPES_FDX[l.type] || "Action";
-      const upper = l.type === "scene" || l.type === "character" || l.type === "transition";
+      const upper = l.type === "scene" || l.type === "character" || l.type === "transition" || l.type === "shot";
       P.push(`<Paragraph Type="${type}">${__fdxTextRuns(l.runs, upper)}</Paragraph>`);
     }
     const t = doc.title || {};
@@ -12610,7 +12613,7 @@ ${TP.join("\n")}
       }
       return runs.length ? runs : [__ixRun("")];
     };
-    const MAP = { "Scene Heading":"scene", "Action":"action", "Character":"character", "Dialogue":"dialogue", "Parenthetical":"parenthetical", "Transition":"transition", "Shot":"scene", "General":"action", "Cast List":"action", "New Act":"action", "End of Act":"action" };
+    const MAP = { "Scene Heading":"scene", "Action":"action", "Character":"character", "Dialogue":"dialogue", "Parenthetical":"parenthetical", "Transition":"transition", "Shot":"shot", "General":"action", "Cast List":"action", "New Act":"action", "End of Act":"action" };
     const out = [];
     const add = (type, runs) => out.push({ id: uid(), type, runs });
     const addBlank = () => { if(out.length && out[out.length - 1].type !== "dual" && !__ixPlain(out[out.length - 1].runs).length) return; if(out.length) add("action", [__ixRun("")]); };
@@ -12634,7 +12637,7 @@ ${TP.join("\n")}
       if(!__ixPlain(runs).trim()) continue; // Final Draft spacing is automatic
       const inSpeech = (type === "dialogue" || type === "parenthetical") && (prev === "character" || prev === "dialogue" || prev === "parenthetical");
       if(!inSpeech) addBlank();
-      if(type === "scene" || type === "character" || type === "transition"){ runs.forEach(r => r.t = r.t.toUpperCase()); }
+      if(type === "scene" || type === "character" || type === "transition" || type === "shot"){ runs.forEach(r => r.t = r.t.toUpperCase()); }
       add(type, runs);
       prev = type;
     }
@@ -13128,6 +13131,7 @@ ${TP.join("\n")}
         #verModal .pl.pl-dialogue{ padding-left:10ch; padding-right:10ch; }
         #verModal .pl.pl-parenthetical{ padding-left:15ch; }
         #verModal .pl.pl-transition{ text-align:right; text-transform:uppercase; }
+        #verModal .pl.pl-shot{ text-transform:uppercase; }
         @media (max-width: 720px){ #verModal .vmBody{ grid-template-columns: 1fr; } #verModal .vmList{ max-height:34vh; border-right:0; border-bottom:1px solid rgba(255,255,255,.08); } }
       `;
       document.head.appendChild(st);
@@ -14870,7 +14874,7 @@ ${TP.join("\n")}
   (function __touchBar(){
     const bar = document.createElement("div");
     bar.className = "touchBar"; bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Script tools");
-    const T = [["scene","Scene"],["action","Action"],["character","Character"],["dialogue","Dialogue"],["parenthetical","( )"],["transition","Trans."]];
+    const T = [["scene","Scene"],["action","Action"],["character","Character"],["dialogue","Dialogue"],["parenthetical","( )"],["transition","Trans."],["shot","Shot"]];
     bar.innerHTML = `
       <button type="button" data-a="scenes" class="tbIcon" title="Scenes &amp; comments" aria-label="Scenes and comments"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
       <span class="tbSep"></span>
@@ -18103,7 +18107,7 @@ function clearHighlights(){
     el.setAttribute("aria-keyshortcuts", HINTS[id].replace(/Mod/g, isMac ? "Meta" : "Control"));
   }
   // Line-type buttons: show their shortcut on hover
-  const TYPE_KEYS = { scene: "1", action: "2", character: "3", dialogue: "4", parenthetical: "5", transition: "6" };
+  const TYPE_KEYS = { scene: "1", action: "2", character: "3", dialogue: "4", parenthetical: "5", transition: "6", shot: "7" };
   document.querySelectorAll('#typeButtons .pill[data-type]').forEach(b => {
     const n = TYPE_KEYS[b.dataset.type];
     b.title = b.textContent.trim() + (n ? " (" + K("Mod+" + n) + ")" : b.dataset.type === "dual" ? "" : "");
@@ -18451,6 +18455,7 @@ function clearHighlights(){
       <button type="button" class="qItem" data-t="dialogue">Dialogue</button>
       <button type="button" class="qItem" data-t="parenthetical">Parenthetical</button>
       <button type="button" class="qItem" data-t="transition">Transition</button>
+      <button type="button" class="qItem" data-t="shot">Shot heading</button>
       <button type="button" class="qItem" data-t="dual">Dual dialogue</button>
     </div>
   </div>

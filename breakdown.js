@@ -44,7 +44,7 @@ function estimatePages_(doc) {
     } else {
       rows = wrapRows_(runsText_(l.runs), W[t] || BG_COLS_.action);
     }
-    const gap = (y > 0 && t === "scene") ? 1 : 0;
+    const gap = (y > 0 && (t === "scene" || t === "shot")) ? 1 : 0;
     if (y > 0 && y + gap + rows > perPage) { pages++; y = rows; }
     else y += gap + rows;
   }
