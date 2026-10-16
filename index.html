@@ -497,7 +497,7 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="breakdown.js" defer></script>
 <script src="production.js?v=2" defer></script>
 <script src="elements.js?v=3" defer></script>
-<script src="prodpanel.js?v=3" defer></script>
+<script src="prodpanel.js?v=4" defer></script>
 <script src="bdpanel.js?v=11" defer></script>
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=2" defer></script>
@@ -661,7 +661,7 @@ window.addEventListener("camp:bd-nav", () => saveLast(true));
 // Each open tab writes projects/<pid>/presence/<uid>/<tab> = { a: area, at, pg } and removes it when the tab closes or the
 // connection drops (onDisconnect). Other pages (script, treatment, storyboard) write the same place through camp-core.js.
 // ⚠ needs the presence rule (projects/$pid/presence/$uid). Without it the writes are refused and nobody shows; nothing else breaks.
-const PRES = { tab: Math.random().toString(36).slice(2, 10), pid: null, ref: null, unsub: null, data: {}, timer: 0, connected: false, off: false };
+const PRES = { tab: Math.random().toString(36).slice(2, 10), last: "", pid: null, ref: null, unsub: null, data: {}, timer: 0, connected: false, off: false };
 const TAB_NAMES = { scripts: "Scripts", treatment: "Treatment", storyboard: "Storyboard", breakdown: "Breakdown", schedule: "Schedule", docs: "Docs", board: "Board" };
 function presArea() {
   const t = TAB_NAMES[current.tab] || "Hub";
@@ -671,9 +671,12 @@ function presArea() {
   return t;
 }
 function presSignedIn() { return !!(auth && auth.currentUser && me && auth.currentUser.uid === me.uid); }
-function presPut() {
+function presPut(force) {
   if (!PRES.ref || !presSignedIn() || PRES.off) return;
-  set(PRES.ref, { a: ("Hub · " + presArea()).slice(0, 79), at: Date.now(), pg: "hub" }).catch(err => { if (/permission/i.test(String(err && err.message))) PRES.off = true; });
+  const a = ("Hub · " + presArea()).slice(0, 79);
+  if (!force && a === PRES.last) return;          // nothing new: don't write (each write reaches every open hub)
+  PRES.last = a;
+  set(PRES.ref, { a, at: Date.now(), pg: "hub" }).catch(err => { PRES.last = ""; if (/permission/i.test(String(err && err.message))) PRES.off = true; });
 }
 function presLeave() {
   const r = PRES.ref; PRES.ref = null;
@@ -689,7 +692,8 @@ function presSync() {
     presLeave(); PRES.pid = pid; PRES.off = false;
     if (pid) {
       PRES.ref = ref(db, "projects/" + pid + "/presence/" + me.uid + "/" + PRES.tab);
-      if (PRES.connected) { onDisconnect(PRES.ref).remove().catch(() => {}); presPut(); }
+      PRES.last = "";
+      if (PRES.connected) { onDisconnect(PRES.ref).remove().catch(() => {}); presPut(true); }
       PRES.unsub = onValue(ref(db, "projects/" + pid + "/presence"), s => { PRES.data = s.val() || {}; drawOnline(); }, () => { PRES.data = {}; drawOnline(); });
     }
     return;
@@ -699,7 +703,7 @@ function presSync() {
 // Re-register after a dropped connection (the server already ran onDisconnect and removed us)
 onValue(ref(db, ".info/connected"), s => {
   PRES.connected = s.val() === true;
-  if (PRES.connected && PRES.ref) { onDisconnect(PRES.ref).remove().catch(() => {}); presPut(); }
+  if (PRES.connected && PRES.ref) { onDisconnect(PRES.ref).remove().catch(() => {}); presPut(true); }
 });
 window.addEventListener("pagehide", () => { if (PRES.ref) { try { remove(PRES.ref); } catch (_e) {} } });
 const presColor = uid => { const C = (window.CampTent && window.CampTent.colors) || ["#7d8f4e"]; let h = 0; for (const ch of String(uid)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return C[h % C.length]; };
@@ -974,7 +978,11 @@ function watchProjects() {
     ids.forEach(pid => {
       if (projectUnsubs[pid]) return;
       projectUnsubs[pid] = onValue(ref(db, "projects/" + pid), s => {
-        if (s.exists()) projects[pid] = s.val(); else delete projects[pid];
+        // who's-here changes only move the tents: never redraw the page for them (it closed open menus mid-click)
+        const v = s.exists() ? s.val() : null, strip = x => { if (!x) return ""; const c = Object.assign({}, x); delete c.presence; return JSON.stringify(c); };
+        const onlyPresence = v && projects[pid] && strip(v) === strip(projects[pid]);
+        if (v) projects[pid] = v; else delete projects[pid];
+        if (onlyPresence) return;
         saveProjectsCache();
         render();
       }, () => dropProject(pid));

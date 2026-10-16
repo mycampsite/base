@@ -97,17 +97,17 @@ let BASE = "";
     await expect(p, () => document.getElementById("preview").classList.contains("exporting"), "the export preview");
   });
   await page(browser, "plan panel: cast types and places with areas", "/tests/fixtures/plan.html?popout=1", async (p) => {
-    await p.evaluate(() => { localStorage.setItem("Camp_PROD_VIEW_V1", "classic"); localStorage.setItem("Camp_PROD_LOCS_OPEN_V1", "1"); localStorage.setItem("Camp_PROD_CAST_OPEN_V1", "1"); location.reload(); });
-    await p.waitForTimeout(1500); await p.evaluate(() => CampProdPanel.render("p1")); await p.waitForTimeout(600);
-    await p.waitForTimeout(600); await p.evaluate(() => CampProdPanel.render("p1")); await p.waitForTimeout(300);
-    await expect(p, () => !!document.querySelector("details[data-sec=cast] select[data-ctype]"), "the cast type dropdowns");
+    await p.evaluate(() => CampProdPanel.render("p1")); await p.waitForTimeout(600); await p.evaluate(() => CampProdPanel.render("p1")); await p.waitForTimeout(300);
+    await p.click('[data-sb=sec][data-v=cast]'); await p.waitForTimeout(300);
+    await expect(p, () => !!document.querySelector("details[data-sec=cast] select[data-ctype]"), "the cast type dropdowns on the Cast tab");
+    await p.click('[data-sb=sec][data-v=locs]'); await p.waitForTimeout(300);
     await p.click("[data-a=lcnew]"); await p.fill("#lcName", "house");
     for(const v of ["KITCHEN", "BEDROOM"]) await p.check(`.lcPick input[value="${v}"]`);
     await p.click("[data-a=lcok]"); await p.waitForTimeout(500);
     await expect(p, () => (window.__CampHub.project().production.locMerge || []).length === 2, "two locations grouped into HOUSE");
   });
   await page(browser, "plan follows the breakdown: a hand-tagged animal reaches the day card", "/tests/fixtures/plan.html?popout=1", async (p) => {
-    await p.evaluate(() => { localStorage.clear(); localStorage.setItem("Camp_PROD_VIEW_V1", "classic"); location.reload(); });
+    await p.evaluate(() => { localStorage.clear(); CampProdPanel.render("p1"); });
     await p.waitForTimeout(1500); await p.evaluate(() => CampProdPanel.render("p1"));
     await p.waitForTimeout(700);
     await p.evaluate(() => {
@@ -118,12 +118,12 @@ let BASE = "";
       CampProdPanel.render("p1");
     });
     await p.waitForTimeout(500);
-    await expect(p, () => /Stunts 1/.test(document.querySelector(".board").innerText), "the stunt shows as a need on the day");
+    await expect(p, () => /Stunts 1/.test(document.querySelector(".sbBoard").innerText), "the stunt shows as a need on the day");
   });
   await page(browser, "stripboard: strips, day headers, move several, filters, tabs", "/tests/fixtures/plan.html?popout=1", async (p) => {
     await p.evaluate(() => { localStorage.clear(); CampProdPanel.render("p1"); });
     await p.waitForTimeout(800); await p.evaluate(() => CampProdPanel.render("p1")); await p.waitForTimeout(300);
-    await expect(p, () => document.querySelectorAll(".sbRow").length >= 3 && document.querySelectorAll(".sbDayWrap").length === 2 && !!document.querySelector(".sbBone"), "strips, two days and the Unscheduled pool");
+    await expect(p, () => document.querySelectorAll(".sbRow").length >= 3 && document.querySelectorAll(".sbDayWrap:not(.sbBone)").length === 2 && !!document.querySelector(".sbBone"), "strips, two days and the Unscheduled pool");
     await expect(p, () => document.querySelectorAll(".sbEnd").length === 2 && /End of Day 1/i.test(document.querySelector(".sbEnd").innerText), "End of Day banners");
     // pick two strips from the pool (click, then Ctrl+click) and move them to Day 2 together
     await p.click(".sbBone .sbRow >> nth=0"); await p.waitForTimeout(150); await p.click(".sbBone .sbRow >> nth=1", { modifiers: ["Control"] }); await p.waitForTimeout(200);
@@ -134,7 +134,12 @@ let BASE = "";
     const got = await p.evaluate(() => (__CampHub.project().production.days[1] || {}).scenes || []);
     if(JSON.stringify(got) !== JSON.stringify(want)) throw new Error("Day 2 has " + JSON.stringify(got) + ", wanted " + JSON.stringify(want));
     // drag one strip onto Day 1's header
-    await p.dragAndDrop('.sbDayWrap[data-day="1"] .sbRow >> nth=0', '.sbDayWrap[data-day="0"] .sbDay'); await p.waitForTimeout(800);
+    // drag a strip up onto Day 1: it moves only up and down, and a gap shows where it lands
+    { const a = await p.$('.sbDayWrap[data-day="1"] .sbRow'), ab = await a.boundingBox(), t = await (await p.$('.sbDayWrap[data-day="0"] .sbDay')).boundingBox();
+      await p.mouse.move(ab.x + ab.width / 2, ab.y + ab.height / 2); await p.mouse.down();
+      for(let k = 1; k <= 8; k++){ await p.mouse.move(ab.x + ab.width / 2, ab.y + ab.height / 2 + (t.y + t.height / 2 - ab.y - ab.height / 2) * k / 8); await p.waitForTimeout(30); }
+      await expect(p, () => !!document.querySelector(".sbFloat") && !!document.querySelector('.sbDayWrap[data-day="0"] .sbGap'), "the floating strip and the gap in Day 1");
+      await p.mouse.up(); await p.waitForTimeout(800); }
     await expect(p, () => ((__CampHub.project().production.days[0] || {}).scenes || []).length === 1, "a strip dragged onto Day 1");
     // filters hide strips; the note says how many
     await p.selectOption("[data-sbf=dn]", "N"); await p.waitForTimeout(300);
@@ -145,12 +150,9 @@ let BASE = "";
     await p.click('[data-sb=sec][data-v=dood]'); await p.waitForTimeout(300);
     await expect(p, () => !!document.querySelector(".sbSec details[open] table"), "the Day Out of Days tab");
     await p.click('[data-sb=sec][data-v=strips]'); await p.waitForTimeout(200);
-    await p.click('[data-sb=dense][data-v=full]'); await p.waitForTimeout(200);
-    await expect(p, () => !!document.querySelector(".sbBoard.full .sbMore"), "Detailed strips");
-    await p.click('[data-a=pview][data-v=classic]'); await p.waitForTimeout(300);
-    await expect(p, () => !!document.querySelector(".board .col") && !document.querySelector(".sbBoard"), "the Classic toggle shows the day columns");
-    await p.click('[data-a=pview][data-v=strips]'); await p.waitForTimeout(300);
-    await expect(p, () => !!document.querySelector(".sbBoard"), "and back to Strips");
+    await expect(p, () => !!document.querySelector(".sbBoard") && !document.querySelector("[data-a=pview], [data-sb=dense], .sbLegend"), "no view, density or legend toggles");
+    await p.hover(".sbTot .cap"); await p.waitForTimeout(150);
+    await expect(p, () => { const t = document.getElementById("sbTip"); return t && t.classList.contains("show") && t.textContent.length > 5; }, "a tooltip on hover");
   });
   await page(browser, "breakdown panel: sheets, add and remove an element, elements manager", "/tests/fixtures/bd.html", async (p) => {
     await p.evaluate(() => { localStorage.clear(); CampBdPanel.setMode(true); CampBdPanel.render("p1"); });
