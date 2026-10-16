@@ -113,6 +113,9 @@ const css = `
 #bdctl .shHead{ display:flex; align-items:baseline; gap:12px; padding:12px 14px 4px; }
 #bdctl .shHead h3{ margin:0; font-size:15px; letter-spacing:.04em; font-family:ui-monospace,"Courier Prime","Courier New",monospace; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
 #bdctl .shHead .pr{ font-size:11.5px; color:var(--uiMuted); white-space:nowrap; }
+#bdctl .shEnv{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 14px; margin:6px 14px 0; padding:6px 10px; border:1px solid var(--uiBorder); border-radius:10px; background:#181818; font-size:12px; }
+#bdctl .shEnv .lb{ font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--uiMuted); margin-right:4px; }
+#bdctl .shShots{ font-size:11px; color:var(--uiMuted); line-height:1.3; } #bdctl .shShots b{ color:#a9cbff; font-weight:600; }
 #bdctl .shFields{ display:grid; grid-template-columns:86px 92px minmax(150px,2fr) 100px 92px minmax(90px,1fr) minmax(90px,1fr) 80px; margin:8px 14px 0; border:1px solid var(--uiBorder); border-left:5px solid var(--sc,#ddd); border-radius:10px; overflow:hidden; background:#181818; }
 #bdctl .shFields .f{ padding:8px 10px; border-left:1px solid var(--uiBorder); display:flex; flex-direction:column; gap:6px; min-width:0; justify-content:space-between; }
 #bdctl .shFields .f:first-child{ border-left:0; background:color-mix(in srgb, var(--sc,#ddd) 14%, #181818); }
@@ -378,6 +381,17 @@ function stripColor(s){
   return ext ? "#f2c94c" : both ? "#f5dc8a" : "#e8e8e8";
 }
 const DN = { D: "Day", N: "Night", M: "Dawn/Dusk" };
+// The shot list's time for a scene: the same numbers the stripboard uses (see shottime.js). null when it has no shots.
+function shotInfo(s){
+  try{
+    const PP = window.CampProdPanel, sc = S.scripts[S.sid], p = H().project(S.pid);
+    if(!PP || !PP.withShotTimes || !s || !s.id || !sc || !sc.doc || !p) return null;
+    const bd = PP.withShotTimes(enriched(S.pid, S.sid, p, sc.doc, sc.bd, sc.modified, planOpts(p)), PP.shotsFor(S.sid), PP.planOf ? PP.planOf(S.pid) : P.normalize(p.production));
+    const x = bd && bd.scenes && bd.scenes.find((y) => y.id === s.id);
+    return x && x.shotN ? { n: x.shotN, total: x.shotRes ? x.shotRes.total : 0, prep: x.shotRes ? x.shotRes.prep : 0, used: x.estSrc === "shots" } : null;
+  }catch(_e){ return null; }
+}
+const ENV_LIST = [["water", "Water"], ["height", "Height"], ["tight", "Tight location"], ["drive", "Moving vehicle"], ["lightfx", "Lighting FX"], ["practicals", "Practical lights"], ["equip", "Special camera gear"]];
 const fmtMin = (m) => m >= 60 ? Math.floor(m / 60) + "h" + (m % 60 ? " " + String(m % 60).padStart(2, "0") : "") : m + "m";
 const SKEY = (pid, sid) => pid + "|" + sid;
 let rafId = 0;
@@ -683,6 +697,8 @@ function sheetsView(b, can){
       <label class="tgl"><input type="checkbox" id="bdShowEmpty"${S.showEmpty ? " checked" : ""}> Show empty categories</label>
       <button class="btn sm" type="button" data-a="print" title="Print this breakdown sheet">Print</button></div>`;
   const tot = E.CATS.reduce((a, c) => a + (s.els[c.id] || []).length, 0);
+  const si = shotInfo(s), envOn = s.env || [];
+  const envRow = `<div class="shEnv"><span class="lb" title="Things the breakdown can't tell from the script. The shot time estimates use them.">Shoot conditions</span>${ENV_LIST.map(([k, l]) => `<label class="tgl"><input type="checkbox" data-env="${k}"${envOn.indexOf(k) >= 0 ? " checked" : ""}${dis}> ${l}</label>`).join("")}</div>`;
   const fld = (label, val, cls) => `<div class="f${cls ? " " + cls : ""}"><span class="lb">${label}</span>${val}</div>`;
   const fields = `<div class="shFields" style="--sc:${stripColor(s)}">
       ${fld("Scene", `<span class="big">${s.n}</span>`, "fn")}
@@ -691,14 +707,14 @@ function sheetsView(b, can){
       ${fld("Day / Night", `<b>${esc(DN[s.dn] || "—")}</b>`)}
       ${fld("Pages (1/8)", `<b title="A page is 8 eighths">${E.fmtEighths(s.eighths)}</b>`)}
       ${fld("Story day", `<input type="text" id="shDay" maxlength="40" value="${esc(s.dayAuto ? "" : s.day)}" placeholder="${esc(s.day)}"${dis}>`)}
-      ${fld("Est. minutes", `<input type="number" id="shEst" min="5" max="1440" step="5" value="${s.estAuto ? "" : s.est}" placeholder="${s.est}"${dis}>`)}
+      ${fld("Est. minutes", `<input type="number" id="shEst" min="5" max="1440" step="5" value="${s.estAuto ? "" : s.est}" placeholder="${s.est}"${dis}>${si ? `<span class="shShots" title="${esc((s.estAuto ? "The schedule uses the shot list's time" : "Your Est. is used; the shot list says") + ": " + si.n + " shot" + (si.n === 1 ? "" : "s") + (si.prep ? " plus " + si.prep + " min prep" : "") + " = " + fmtMin(si.total) + ".")}">${s.estAuto ? "~" + fmtMin(s.est) + " auto · " : ""}<b>Shots ${fmtMin(si.total)}</b> (${si.n})${s.estAuto ? "" : " · yours used"}</span>` : ""}`)}
       ${fld("Elements", `<b>${tot}</b>`)}
     </div>`;
   return `<div class="bdSplit">${listBox}
     <div class="bdSheet">
       ${bar}
       <div class="shHead" style="--sc:${stripColor(s)}"><h3>${esc(s.heading || "(no scene heading)")}</h3><span class="pr">${esc(hubTitle())}</span></div>
-      ${fields}
+      ${fields}${envRow}
       <div class="shGrid">
         <div class="shMain">${S.showText ? sceneText(b, s) : ""}${quick}
           <div class="shCats">${cats || `<div class="bdEmpty" style="grid-column:1/-1;padding:6px 0">Nothing found in this scene yet.${can ? " Add what it needs above." : ""}</div>`}</div></div>
@@ -1161,6 +1177,7 @@ function wire(box, pid){
     else if(t.id === "shDir") edit(pid, sid, (st) => E.setScene(st, sk, "dir", t.value), true);
     else if(t.id === "shDay"){ edit(pid, sid, (st) => E.setScene(st, sk, "day", t.value.trim())); }
     else if(t.id === "shEst"){ edit(pid, sid, (st) => E.setScene(st, sk, "est", t.value)); }
+    else if(t.dataset && t.dataset.env){ const l = Array.from(box.querySelectorAll("input[data-env]:checked")).map((x) => x.dataset.env); edit(pid, sid, (st) => E.setScene(st, sk, "env", l)); }
     else if(t.id === "shUnit"){ edit(pid, sid, (st) => E.setScene(st, sk, "unit", t.value === "Main" ? "" : t.value)); }
   };
   // Stripboard drag: hand the move to the Plan panel (same save, undo and feedback as dragging on the Plan)
@@ -1309,5 +1326,5 @@ function getView(){ return S.view === "strips" ? "sheets" : S.view; }
 function setView(v){ if(!["sheets", "elements", "reports"].includes(v) || v === getView()) return; S.view = v; lsSet(VIEW_KEY, v); S.edit = null; S.adding = null; rerender(); }
 // The Stripboard's "Breakdown sheet" button: open one scene's sheet on the Breakdown tab
 function openScene(n, fromId){ if(!Number(n)) return; S.fromStrip = fromId || null; S.sel = Number(n); S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; S.edit = null; try{ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); }catch(_e){} }
-window.CampBdPanel = { enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, getView, setView, openScene, reloadScript: (id) => loadScript(id, true) };
+window.CampBdPanel = { refresh: () => rerender(), enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, getView, setView, openScene, reloadScript: (id) => loadScript(id, true) };
 })();

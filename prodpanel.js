@@ -375,13 +375,17 @@ async function loadShots(id, force){
     S.shots[id] = { state: "error", map: cur && cur.map, err: (err && err.message) || String(err) };
   }
   rerender();
+  try{ if(window.CampBdPanel && window.CampBdPanel.refresh) window.CampBdPanel.refresh(); }catch(_e){}
 }
 
 // Shot times: a scene with shots in the shot list takes its time from them (shottime.js); an Est. typed on the breakdown
 // sheet still wins, and a scene with no shots keeps the breakdown's own Est. ⚠ This feeds every day's times, Sync and the
 // call sheets. Worked out each time from the breakdown and the shot list, never stored.
+const WST = { bd: null, map: null, ck: "", out: null };
 function withShotTimes(bd, shotMap, plan){
   const T = window.CampShotTime; if(!T || !bd || !Array.isArray(bd.scenes)) return bd;
+  const ck = JSON.stringify((plan && plan.settings && plan.settings.shotTimes) || null);
+  if(WST.bd === bd && WST.map === shotMap && WST.ck === ck) return WST.out;   // same breakdown and shots: same answer
   const kids = {}; (bd.cast || []).forEach((c) => { if(c && c.minor) kids[c.name] = 1; });
   const cfg = T.config(plan && plan.settings && plan.settings.shotTimes);
   const scenes = bd.scenes.map((s) => {
@@ -391,8 +395,12 @@ function withShotTimes(bd, shotMap, plan){
     const r = T.sceneMinutes(sc, shots, cfg), res = r.shots || (shots.length ? T.sceneShots(sc, shots, cfg) : null);
     return Object.assign({}, s, { estBd: s.est, est: r.min || s.est, estSrc: r.src, shotN: shots.length, shotRes: res });
   });
-  return Object.assign({}, bd, { scenes });
+  const out = Object.assign({}, bd, { scenes });
+  Object.assign(WST, { bd, map: shotMap, ck, out });
+  return out;
 }
+// The shot list for a script (read once, then from memory); the Breakdown tab shows the same shot times
+function shotsFor(scriptId){ if(!scriptId) return {}; if(!S.shots[scriptId]) loadShots(scriptId); return (S.shots[scriptId] && S.shots[scriptId].map) || {}; }
 
 /* ---------- saving (whole plan; the team sees it live) ---------- */
 let saveT = 0, pending = null;
@@ -1712,5 +1720,5 @@ function focusScene(pid, id){
   clearTimeout(focusScene.t); focusScene.t = setTimeout(() => { SB.landed = []; rerender(); }, 1400);
   rerender();
 }
-window.CampProdPanel = { focusScene, syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, timetable, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
+window.CampProdPanel = { withShotTimes, shotsFor, focusScene, syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, timetable, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
 })();

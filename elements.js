@@ -771,7 +771,8 @@ function build(doc, bd, store) {
       syn: clean(meta.syn), synAuto: !clean(meta.syn),   // only what someone typed: no summary is made up from the script
       day: clean(meta.day) || d.label || "", dayAuto: !clean(meta.day), storyDay: d.day || 1, flash: !!d.flash,
       est: Number(meta.est) > 0 ? Math.round(Number(meta.est)) : estAuto, estAuto: !(Number(meta.est) > 0),
-      unit: clean(meta.unit) || "Main", note: clean(meta.note), dir: clean(meta.dir), mute: Array.isArray(meta.mute) ? meta.mute.map(String) : (meta.mute && typeof meta.mute === "object" ? Object.keys(meta.mute).map(function (i) { return String(meta.mute[i]); }) : []), els: per, hits: hits, src: src, qty: qty,
+      unit: clean(meta.unit) || "Main", note: clean(meta.note), dir: clean(meta.dir), mute: Array.isArray(meta.mute) ? meta.mute.map(String) : (meta.mute && typeof meta.mute === "object" ? Object.keys(meta.mute).map(function (i) { return String(meta.mute[i]); }) : []),
+      env: (Array.isArray(meta.env) ? meta.env : (meta.env && typeof meta.env === "object" ? Object.keys(meta.env).map(function (i) { return meta.env[i]; }) : [])).map(String).filter(function (k) { return ENV_KEYS_.indexOf(k) >= 0; }), els: per, hits: hits, src: src, qty: qty,
       count: Object.keys(per).reduce(function (a, c) { return a + per[c].length; }, 0)
     };
   });
@@ -935,10 +936,17 @@ function setHero(st, k, on) {
   if (!Object.keys(st.heroes).length) delete st.heroes;
   return st;
 }
+const ENV_KEYS_ = ["water", "height", "tight", "drive", "lightfx", "practicals", "equip"];
 function setScene(st, sk, field, val) {
   st = copy(st);
-  if (["syn", "day", "est", "unit", "note", "dir", "mute"].indexOf(field) < 0) return st;
+  if (["syn", "day", "est", "unit", "note", "dir", "mute", "env"].indexOf(field) < 0) return st;
   st.scene = st.scene || {}; const m = st.scene[sk] = st.scene[sk] || {};
+  if (field === "env") {   // shoot conditions ticked on the sheet (the shot time estimates use them)
+    const l = (Array.isArray(val) ? val : []).map(String).filter(function (k, i, a) { return ENV_KEYS_.indexOf(k) >= 0 && a.indexOf(k) === i; });
+    if (l.length) m.env = l; else delete m.env;
+    if (!Object.keys(m).length) delete st.scene[sk];
+    return st;
+  }
   if (field === "mute") {   // single words whose underline is switched off in this scene: ["<element>|<line>|<start>", …]
     const l = (Array.isArray(val) ? val : []).map(String).slice(0, 200);
     if (l.length) m.mute = l; else delete m.mute;

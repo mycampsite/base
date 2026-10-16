@@ -392,5 +392,13 @@ test("the reset time goes to and from the database", () => {
   assert.ok(Object.keys(d).some((k) => /^tags\/a\//.test(k) && d[k] === null));
 });
 
+test("shoot conditions: only known ones, no repeats, and they survive the team sync", () => {
+  let st = E.setScene({}, "s1", "env", ["water", "nope", "water", "height"]);
+  assert.deepStrictEqual(st.scene.s1.env, ["water", "height"]);
+  const back = E.fromRemote(JSON.parse(JSON.stringify(E.toRemote(st))));
+  assert.deepStrictEqual(back.scene.s1.env, ["water", "height"]);
+  st = E.setScene(st, "s1", "env", []); assert.ok(!st.scene || !st.scene.s1);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
