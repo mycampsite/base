@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><style>:root{--uiBorder:#333;--uiText:#eee;--uiMuted:#999}body{background:#111;color:#eee;margin:0;font:13px sans-serif}#calPane{display:flex;height:700px}</style></head><body><div id="calPane"></div>
+<!-- Test page for tests/pages.smoke.js: the Calendar tab with a fake hub that keeps the database in memory -->
+<script>
+const proj={id:"p1",name:"P",calendar:{}};
+function put(root,path,v){const ps=path.split("/");let o=root;for(let i=0;i<ps.length-1;i++){if(!o[ps[i]]||typeof o[ps[i]]!=="object")o[ps[i]]={};o=o[ps[i]];}const k=ps[ps.length-1];if(v==null)delete o[k];else o[k]=JSON.parse(JSON.stringify(v));}
+window.__CampHub={project:()=>proj,canEdit:()=>true,isOwner:()=>true,me:()=>"t@x",
+ writeCalendar:async(pid,paths)=>{const next=JSON.parse(JSON.stringify(proj.calendar||{}));Object.keys(paths).forEach(k=>put(next,k,paths[k]));proj.calendar=next;setTimeout(()=>CampCalendar.render("p1"),0);},
+ toast(){},prompt:async(t,l,v)=>v||"",confirm:async()=>true};
+</script>
+<script src="../../calendar.js"></script>
+<script>CampCalendar.render("p1");</script>
+</body></html>

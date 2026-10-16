@@ -218,6 +218,18 @@ let BASE = "";
     await expect(p, () => { const L = Object.values(__CampHub.project().layouts)[0]; return Object.values(L.items).some((i) => i.t === "note" && /Key light/.test(i.text)); }, "a sticky note with text");
     void items;
   });
+  await page(browser, "calendar: add an event, meeting minutes, action item, search", "/tests/fixtures/calendar.html", async (p) => {
+    await p.fill('.caAdd input[name=t]', 'Location recce'); await p.selectOption('.caAdd select', 'meeting'); await p.press('.caAdd input[name=t]', 'Enter'); await p.waitForTimeout(300);
+    await expect(p, () => Object.values(__CampHub.project().calendar).some((e) => e.title === "Location recce" && e.k === "meeting"), "an event on the selected day");
+    await expect(p, () => !!document.querySelector(".caEd"), "the meeting opens ready for minutes");
+    await p.fill('.caEd textarea[data-f=mn]', 'Agreed to shoot the diner at dawn'); await p.press('.caEd textarea[data-f=mn]', 'Tab'); await p.waitForTimeout(300);
+    await p.fill('.caAct input', 'Book the diner'); await p.press('.caAct input', 'Enter'); await p.waitForTimeout(300);
+    await expect(p, () => Object.values(__CampHub.project().calendar).some((e) => /dawn/.test(e.mn || "") && e.acts === "[ ] Book the diner"), "minutes and an action item saved");
+    await p.click('.caActs input[type=checkbox]'); await p.waitForTimeout(300);
+    await expect(p, () => Object.values(__CampHub.project().calendar).some((e) => e.acts === "[x] Book the diner"), "the action item ticked");
+    await p.click('.caTabs [data-s=min]'); await p.fill('.caSearch', 'diner'); await p.waitForTimeout(200);
+    await expect(p, () => document.querySelectorAll(".caBody .caEv").length === 1, "the minutes found by search");
+  });
   await page(browser, "breakdown: category picker with colours, highlighted jump to the scene text, icons", "/tests/fixtures/bd.html", async (p) => {
     await p.evaluate(() => { localStorage.clear(); CampBdPanel.setMode(true); CampBdPanel.render("p1"); });
     await p.waitForTimeout(700); await p.evaluate(() => CampBdPanel.render("p1")); await p.waitForTimeout(300);
