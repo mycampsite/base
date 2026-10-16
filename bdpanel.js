@@ -268,6 +268,8 @@ const css = `
 #bdctl table.bdT tr.grp + tr td{ border-top-color:color-mix(in srgb, var(--cc) 45%, transparent); }
 #bdctl .cpill{ display:inline-block; font-size:11px; padding:1px 8px; border-radius:999px; border:1px solid color-mix(in srgb, var(--cc) 50%, #222); background:color-mix(in srgb, var(--cc) 12%, #161616); white-space:nowrap; }
 #bdctl .cno{ display:inline-block; min-width:18px; margin-right:6px; padding:0 4px; border-radius:4px; background:var(--cc, #e03131); color:#fff; font-size:11px; font-weight:700; text-align:center; }
+#bdctl button.cno{ border:0; font:inherit; font-size:11px; font-weight:700; line-height:inherit; cursor:pointer; }
+#bdctl button.cno:hover{ filter:brightness(1.2); box-shadow:0 0 0 1px rgba(255,255,255,.5); }
 #bdctl td.act{ text-align:right; }
 #bdctl .edBtn{ border:1px solid var(--uiBorder); background:transparent; color:var(--uiMuted); border-radius:6px; padding:2px 9px; font:inherit; font-size:11.5px; cursor:pointer; opacity:.55; }
 #bdctl tr.er:hover .edBtn, #bdctl .edBtn:focus-visible{ opacity:1; color:var(--uiText); border-color:rgba(255,255,255,.35); }
@@ -504,6 +506,13 @@ function enriched(pid, sid, p, doc, bd, modified, opts){
 }
 
 // The finished breakdown for a script, for Sync / Export (the Schedule sheet and call sheets read it)
+// The script's character name -> its ID number (set by hand or the script order), sent with Sync for the Sheets
+async function castNumbers(pid, sid){
+  const hub = H(), p = hub.project(pid); if(!p || !sid) return null;
+  let doc = S.scripts[sid] && S.scripts[sid].doc;
+  if(!doc){ const res = await hub.ripGet({ action: "load", fileId: sid }); if(!res || res.ok === false || !res.doc) return null; doc = res.doc; }
+  return E.build(doc, B.analyze(doc, planOpts(p)), storeOf(pid, sid)).castNos || null;
+}
 async function payload(pid, sid){
   const hub = H(), p = hub.project(pid); if(!p || !sid) return null;
   let sc = S.scripts[sid];
@@ -922,6 +931,7 @@ function elementsView(b, can){
     const grp = grouped && e.cat !== lastCat ? `<tr class="grp" style="--cc:${c.color}"><td colspan="${grouped ? 4 : 5}">${catIcon(e.cat)}${esc(c.label)}<span>${counts[e.cat]}</span></td></tr>` : "";
     lastCat = e.cat;
     const form = S.edit === k && can ? `<tr><td colspan="${grouped ? 4 : 5}"><div class="edForm">
+        ${e.cat === "cast" ? `<label>ID no.<input type="number" id="edNo" min="1" max="999" step="1" value="${e.no || ""}" style="width:64px" title="Taken? The two swap numbers. Leave empty for the script order"></label>` : ""}
         <label>Name<input type="text" id="edName" maxlength="60" value="${esc(e.name)}"></label>
         <label>Category<select id="edCat">${MENU_CATS.map((x) => `<option value="${x.id}"${x.id === e.cat ? " selected" : ""}>${esc(x.label)}</option>`).join("")}</select></label>
         <label>Note (shows on every sheet)<input type="text" id="edNote" maxlength="2000" value="${esc(e.note)}" style="min-width:220px"></label>
@@ -929,8 +939,9 @@ function elementsView(b, can){
         <label>Merge into<select id="edMerge"><option value="">Choose…</option>${Object.keys(b.elements).filter((x) => x !== k && b.elements[x].cat === e.cat).sort((x, y) => b.elements[x].name.localeCompare(b.elements[y].name)).map((x) => `<option value="${esc(x)}">${esc(b.elements[x].name)}</option>`).join("")}</select></label>
         <button class="btn sm" type="button" data-a="edmerge" data-k="${esc(k)}">Merge</button>
         <button class="btn sm" type="button" data-a="eddrop" data-k="${esc(k)}" title="Remove this element from every scene">Ignore everywhere</button>
+        ${e.cat === "cast" && Object.keys(b.elements).some((x) => b.elements[x].noSet) ? `<button class="btn sm" type="button" data-a="ednoreset" title="Put every cast ID number back to the script order">Cast IDs: script order</button>` : ""}
         <button class="btn sm" type="button" data-a="edcancel">Cancel</button></div></td></tr>` : "";
-    return `${grp}<tr class="er${S.edit === k ? " on" : ""}" style="--cc:${c.color}"><td>${e.no && e.cat === "cast" ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}<b>${esc(e.name)}</b>${can ? `<button type="button" class="star${e.hero ? " on" : ""}" data-a="hero" data-k="${esc(k)}" data-on="${e.hero ? 0 : 1}" aria-pressed="${e.hero}" aria-label="${e.hero ? "Remove hero from " : "Make "}${esc(e.name)}${e.hero ? "" : " a hero"}" title="${e.hero ? "Hero: plan doubles and continuity. Click to turn off" : "Make this a hero"}" style="margin-left:6px">${e.hero ? "★" : "☆"}</button>` : e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.hero && !e.heroSet ? `<span class="tag" title="Found automatically: written in CAPS or handled in several scenes">auto</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
+    return `${grp}<tr class="er${S.edit === k ? " on" : ""}" style="--cc:${c.color}"><td>${e.no && e.cat === "cast" ? (can ? `<button type="button" class="cno" data-a="edit" data-k="${esc(k)}" data-focus="edNo" aria-label="Change ${esc(e.name)}'s ID number">${e.no}</button>` : `<span class="cno">${e.no}</span>`) : `<span class="dot" style="background:${c.color}"></span>`}<b>${esc(e.name)}</b>${can ? `<button type="button" class="star${e.hero ? " on" : ""}" data-a="hero" data-k="${esc(k)}" data-on="${e.hero ? 0 : 1}" aria-pressed="${e.hero}" aria-label="${e.hero ? "Remove hero from " : "Make "}${esc(e.name)}${e.hero ? "" : " a hero"}" title="${e.hero ? "Hero: plan doubles and continuity. Click to turn off" : "Make this a hero"}" style="margin-left:6px">${e.hero ? "★" : "☆"}</button>` : e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.hero && !e.heroSet ? `<span class="tag" title="Found automatically: written in CAPS or handled in several scenes">auto</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
       ${grouped ? "" : `<td><span class="cpill">${esc(c.short)}</span></td>`}
       <td><div class="scBtns">${e.scenes.map((n) => `<span class="scGo"><button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${n}'s sheet">${n}</button><button type="button" class="goText" data-a="opentext" data-n="${n}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in scene ${n}'s text" title="Show in scene ${n}'s text">↗</button></span>`).join("")}</div></td>
       <td class="num">${E.fmtEighths(e.eighths)}</td>
@@ -1139,13 +1150,19 @@ function wire(box, pid){
     if(k === "addok"){ commitAdd(box, a.dataset.sk, a.dataset.c, ed); return; }
     if(k === "rm"){ const sk = a.dataset.sk, key = a.dataset.k; ed((st) => E.untag(st, sk, key)); return; }
     if(k === "hero"){ const key = a.dataset.k, on = a.dataset.on === "1"; ed((st) => E.setHero(st, key, on)); return; }
-    if(k === "edit"){ S.edit = a.dataset.k; S.view = "elements"; lsSet(VIEW_KEY, S.view); S.cat = "all"; rerender(); setTimeout(() => { const i = box.querySelector("#edName"); if(i){ i.focus(); i.select(); i.scrollIntoView({ block: "nearest" }); } }, 30); return; }
+    if(k === "edit"){ S.edit = a.dataset.k; S.view = "elements"; lsSet(VIEW_KEY, S.view); S.cat = "all"; rerender(); const fid = a.dataset.focus === "edNo" ? "#edNo" : "#edName"; setTimeout(() => { const i = box.querySelector(fid) || box.querySelector("#edName"); if(i){ i.focus(); i.select(); i.scrollIntoView({ block: "nearest" }); } }, 30); return; }
     if(k === "edcancel"){ S.edit = null; rerender(); return; }
+    if(k === "ednoreset"){ ed((st) => E.clearCastNos(st)); hub.toast("Cast ID numbers follow the script order again.", "ok", 1800); return; }
     if(k === "edsave"){
       const key = a.dataset.k, name = (box.querySelector("#edName") || {}).value, cat = (box.querySelector("#edCat") || {}).value, note = (box.querySelector("#edNote") || {}).value;
       if(!String(name || "").trim()){ hub.toast("Give it a name.", "err", 1800); return; }
       let nk = key;
-      ed((st) => { let s2 = E.rename(st, key, cat, name); nk = E.key(cat, name); s2 = E.setNote(s2, nk, note); return s2; });
+      const noIn = box.querySelector("#edNo"), m0 = model(), cur = {};
+      if(m0) (m0.byCat.cast || []).forEach((x) => { cur[x] = m0.elements[x].no; });
+      const noNew = noIn && cat === "cast" ? parseInt(noIn.value, 10) || 0 : null, noOld = m0 && m0.elements[key] ? m0.elements[key].no || 0 : 0, noWasSet = !!(m0 && m0.elements[key] && m0.elements[key].noSet);
+      ed((st) => { let s2 = E.rename(st, key, cat, name); nk = E.key(cat, name); s2 = E.setNote(s2, nk, note);
+        if(noNew !== null && (noNew !== noOld || (!noNew && noWasSet))){ if(nk !== key){ cur[nk] = cur[key]; delete cur[key]; } s2 = E.setCastNo(s2, nk, noNew, cur); }
+        return s2; });
       S.edit = null; return;
     }
     if(k === "edmerge"){
@@ -1324,5 +1341,5 @@ function getView(){ return S.view === "strips" ? "sheets" : S.view; }
 function setView(v){ if(!["sheets", "elements", "reports"].includes(v) || v === getView()) return; S.view = v; lsSet(VIEW_KEY, v); S.edit = null; S.adding = null; rerender(); }
 // The Stripboard's "Breakdown sheet" button: open one scene's sheet on the Breakdown tab
 function openScene(n, fromId){ if(!Number(n)) return; S.fromStrip = fromId || null; S.sel = Number(n); S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; S.edit = null; try{ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); }catch(_e){} }
-window.CampBdPanel = { refresh: () => rerender(), enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, getView, setView, openScene, reloadScript: (id) => loadScript(id, true) };
+window.CampBdPanel = { refresh: () => rerender(), enriched, payload, castNumbers, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, getView, setView, openScene, reloadScript: (id) => loadScript(id, true) };
 })();

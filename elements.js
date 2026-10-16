@@ -16,6 +16,7 @@
      names: { elementKey: "Display name" }             the name to show for an element
      notes: { elementKey: "text" }                     notes on an element (shown on every sheet)
      heroes: { elementKey: "1" | "0" }                 hero switched on / off by hand (no entry = the automatic call stands)
+     nums:  { castKey: "3" }                           a cast member's ID number set by hand (the rest follow the script order, skipping these)
      scene: { sceneKey: { syn, day, est, unit, note } } per-scene sheet fields typed by the user
    sceneKey = the scene heading's line id (or "n" + scene number before ids exist).
    elementKey = catId + "|" + normalised name, e.g. "props|shotgun". */
@@ -712,7 +713,7 @@ function resolve(alias, k) { const seen = {}; while (alias[k] && alias[k] !== k 
 function build(doc, bd, store) {
   bd = bd || { scenes: [], cast: [] };
   store = store && typeof store === "object" ? store : {};
-  const tags = store.tags || {}, off = store.off || {}, alias = store.alias || {}, names = store.names || {}, notes = store.notes || {}, heroes = store.heroes || {}, smeta = store.scene || {};
+  const tags = store.tags || {}, off = store.off || {}, alias = store.alias || {}, names = store.names || {}, notes = store.notes || {}, heroes = store.heroes || {}, nums = store.nums || {}, smeta = store.scene || {};
   const drop = {}; (store.drop || []).forEach(function (k) { drop[k] = 1; });
   const bds = bd.scenes || [];
   const texts = sceneTexts(doc);
@@ -723,7 +724,11 @@ function build(doc, bd, store) {
   (bd.cast || []).forEach(function (c) { ctx.cast[c.name] = c; c.name.split(/\s+/).forEach(function (w) { if (w.length > 1) ctx.castWord[w] = 1; }); });
   (bd.locs || []).forEach(function (l) { ctx.locs[l.name] = 1; });
   bds.forEach(function (s) { ctx.locs[s.loc] = 1; ctx.locs[s.set] = 1; String(s.set || "").split(/\s+-\s+/).forEach(function (p) { ctx.locs[p] = 1; }); });
-  const castNo = {}; (bd.cast || []).forEach(function (c, i) { castNo[key("cast", c.name)] = i + 1; });
+  // Cast ID numbers: any set by hand keep theirs; everyone else follows the script order, skipping the numbers taken
+  const numOf = function (k) { const n = parseInt(nums[k], 10); return n > 0 ? n : 0; };
+  const castNo = {}, taken = {}; let nx = 1;
+  Object.keys(nums).forEach(function (k) { if (numOf(k)) taken[numOf(k)] = 1; });
+  (bd.cast || []).forEach(function (c) { const k = key("cast", c.name), own = numOf(resolve(alias, k)) || numOf(k); if (own) { castNo[k] = own; return; } while (taken[nx]) nx++; castNo[k] = nx; taken[nx] = 1; nx++; });
   const days = storyDays(bds, bds.map(txOf));
 
   const els = {};
@@ -733,7 +738,7 @@ function build(doc, bd, store) {
     const cat2 = k.split("|")[0];
     if (!CAT[cat2]) return null;
     let e = els[k];
-    if (!e) e = els[k] = { key: k, cat: cat2, name: names[k] || (k === k0 ? name : display(k.split("|").slice(1).join("|"), cat2)), scenes: [], eighths: 0, auto: false, manual: false, why: [], note: notes[k] || "", no: castNo[k] || 0 };
+    if (!e) e = els[k] = { key: k, cat: cat2, name: names[k] || (k === k0 ? name : display(k.split("|").slice(1).join("|"), cat2)), scenes: [], eighths: 0, auto: false, manual: false, why: [], note: notes[k] || "", no: (cat2 === "cast" ? numOf(k) || castNo[k] || castNo[k0] : 0) || 0, noSet: cat2 === "cast" && !!numOf(k) };
     if (e.scenes.indexOf(n) < 0) { e.scenes.push(n); e.eighths += eighths || 0; }
     if (auto) e.auto = true; else e.manual = true;
     if (why && e.why.length < 6 && e.why.indexOf(why) < 0) e.why.push(why);
@@ -798,7 +803,10 @@ function build(doc, bd, store) {
       return (B.scenes.length - A.scenes.length) || (A.scenes[0] - B.scenes[0]) || A.name.localeCompare(B.name);
     });
   });
-  return { cats: CATS, scenes: scenes, elements: els, byCat: byCat,
+  // the script's character name -> its ID number, for the Sheets (Budget, Day Out of Days, call sheets)
+  const castNos = {};
+  (bd.cast || []).forEach(function (c) { const k0 = key("cast", c.name), e = els[resolve(alias, k0)]; const n = (e && e.cat === "cast" && e.no) || castNo[k0]; if (n) castNos[c.name] = n; });
+  return { cats: CATS, scenes: scenes, elements: els, byCat: byCat, castNos: castNos,
     totals: { scenes: scenes.length, elements: Object.keys(els).length, eighths: scenes.reduce(function (a, s) { return a + (s.eighths || 0); }, 0), est: scenes.reduce(function (a, s) { return a + s.est; }, 0) } };
 }
 
@@ -910,6 +918,7 @@ function rename(st, k, cat, name) {
     if (st.alias[to] === k) delete st.alias[to];                                                // no loops
     if (st.notes && st.notes[k] && !st.notes[to]) { st.notes[to] = st.notes[k]; delete st.notes[k]; }
     if (st.heroes && st.heroes[k] && !st.heroes[to]) { st.heroes[to] = st.heroes[k]; delete st.heroes[k]; }
+    if (st.nums && st.nums[k] && !st.nums[to]) { st.nums[to] = st.nums[k]; delete st.nums[k]; }
   }
   st.names[to] = name;
   return st;
@@ -923,6 +932,7 @@ function merge(st, keys, intoKey, name) {
     if (st.alias[intoKey] === k) delete st.alias[intoKey];
     if (st.notes && st.notes[k]) { if (!st.notes[intoKey]) st.notes[intoKey] = st.notes[k]; delete st.notes[k]; }
     if (st.heroes && st.heroes[k]) { if (!st.heroes[intoKey]) st.heroes[intoKey] = st.heroes[k]; delete st.heroes[k]; }
+    if (st.nums && st.nums[k]) { if (!st.nums[intoKey]) st.nums[intoKey] = st.nums[k]; delete st.nums[k]; }
   });
   if (name) st = rename(st, intoKey, intoKey.split("|")[0], name);
   return st;
@@ -936,6 +946,22 @@ function setHero(st, k, on) {
   if (!Object.keys(st.heroes).length) delete st.heroes;
   return st;
 }
+// A cast member's ID number. cur = { castKey: number now }; whoever has that number now takes this one's old number.
+// n empty / 0 = back to the script order.
+function setCastNo(st, k, n, cur) {
+  st = copy(st); st.nums = st.nums || {}; cur = cur || {};
+  n = parseInt(n, 10);
+  if (!(n > 0)) delete st.nums[k];
+  else {
+    n = Math.min(n, 999);
+    const old = Number(cur[k]) || 0;
+    Object.keys(cur).forEach(function (o) { if (o !== k && Number(cur[o]) === n) { if (old > 0) st.nums[o] = String(old); else delete st.nums[o]; } });
+    st.nums[k] = String(n);
+  }
+  if (!Object.keys(st.nums).length) delete st.nums;
+  return st;
+}
+function clearCastNos(st) { st = copy(st); delete st.nums; return st; }
 const ENV_KEYS_ = ["water", "height", "tight", "drive", "lightfx", "practicals", "equip"];
 function setScene(st, sk, field, val) {
   st = copy(st);
@@ -967,7 +993,7 @@ function setScene(st, sk, field, val) {
 // Firebase keys can't hold . # $ [ ] / or control characters, so keys are %-encoded.
 function encKey(k) { return String(k).replace(/[%.#$\[\]\/\x00-\x1f\x7f]/g, function (c) { return "%" + ("0" + c.charCodeAt(0).toString(16).toUpperCase()).slice(-2); }); }
 function decKey(k) { return String(k).replace(/%([0-9A-F]{2})/gi, function (_m, h) { return String.fromCharCode(parseInt(h, 16)); }); }
-const MAPS_ = ["alias", "names", "notes", "heroes"];
+const MAPS_ = ["alias", "names", "notes", "heroes", "nums"];
 function toRemote(st) {
   st = st && typeof st === "object" ? st : {};
   const out = {};
@@ -1008,7 +1034,7 @@ function fromRemote(r) {
   return st;
 }
 // The entries that differ between two stores, as { "tags/<scene>/<element>": value | null, … } for one update()
-const DEPTH_ = { tags: 3, off: 3, drop: 2, alias: 2, names: 2, notes: 2, heroes: 2, scene: 2, reset: 1 };
+const DEPTH_ = { tags: 3, off: 3, drop: 2, alias: 2, names: 2, notes: 2, heroes: 2, nums: 2, scene: 2, reset: 1 };
 function flat(r) {
   const out = {};
   Object.keys(DEPTH_).forEach(function (top) {
@@ -1085,14 +1111,14 @@ function resetStore(st, o) {
   });
   if (!one) {
     delete st.drop;
-    if (!keep.names) { delete st.alias; delete st.names; }
+    if (!keep.names) { delete st.alias; delete st.names; delete st.nums; }
     if (!keep.notes) delete st.notes;
     if (!keep.heroes) delete st.heroes;
     st.reset = at;
   } else {
     st.scene = st.scene || {}; (st.scene[one] = st.scene[one] || {}).rs = at;
   }
-  ["tags", "off", "scene", "alias", "names", "notes", "heroes"].forEach(function (m) { if (st[m] && !Object.keys(st[m]).length) delete st[m]; });
+  ["tags", "off", "scene", "alias", "names", "notes", "heroes", "nums"].forEach(function (m) { if (st[m] && !Object.keys(st[m]).length) delete st[m]; });
   return st;
 }
 // What a reset would clear, for the confirm box
@@ -1104,7 +1130,7 @@ function resetCounts(st, o) {
   const mine = function (sk) { return !gone(sk) && (!one || sk === one); };
   const n = function (m, f) { return Object.keys(st[m] || {}).filter(f).reduce(function (a, sk) { return a + (st[m][sk] || []).length; }, 0); };
   const c = { tags: n("tags", mine), off: n("off", mine), mute: 0, orphans: 0, drop: one ? 0 : (st.drop || []).length,
-    names: one || keep.names ? 0 : Object.keys(st.alias || {}).length + Object.keys(st.names || {}).length,
+    names: one || keep.names ? 0 : Object.keys(st.alias || {}).length + Object.keys(st.names || {}).length + Object.keys(st.nums || {}).length,
     notes: one || keep.notes ? 0 : Object.keys(st.notes || {}).length, heroes: one || keep.heroes ? 0 : Object.keys(st.heroes || {}).length, scene: 0 };
   Object.keys(st.scene || {}).forEach(function (sk) {
     const v = st.scene[sk] || {};
@@ -1134,7 +1160,7 @@ function csv(b) {
 
 const api = { CATS: CATS, CAT: CAT, build: build, enrich: enrich, sheetPayload: sheetPayload, suggestScene: suggestScene, sceneTexts: sceneTexts, storyDays: storyDays, estimate: estimate,
   key: key, norm: norm, display: display, sceneKey: sceneKey, resolve: resolve,
-  tag: tag, untag: untag, drop: dropEl, undrop: undrop, rename: rename, merge: merge, unmerge: unmerge, setNote: setNote, setHero: setHero, setScene: setScene,
+  tag: tag, untag: untag, drop: dropEl, undrop: undrop, rename: rename, merge: merge, unmerge: unmerge, setNote: setNote, setHero: setHero, setCastNo: setCastNo, clearCastNos: clearCastNos, setScene: setScene,
   report: report, csv: csv, fmtEighths: fmtEighths,
   encKey: encKey, decKey: decKey, toRemote: toRemote, fromRemote: fromRemote, diff: diff, mergeStores: mergeStores, applyOps: applyOps, resetStore: resetStore, resetCounts: resetCounts };
 if (typeof module !== "undefined" && module.exports) module.exports = api;

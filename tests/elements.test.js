@@ -400,5 +400,25 @@ test("shoot conditions: only known ones, no repeats, and they survive the team s
   st = E.setScene(st, "s1", "env", []); assert.ok(!st.scene || !st.scene.s1);
 });
 
+test("cast ID numbers set by hand: swap on clash, the rest follow on, shared and reset", () => {
+  const lines = [["scene", "INT. HOUSE - DAY"], ["character", "MUM"], ["dialogue", "Hi."], ["character", "JIMMY"], ["dialogue", "Yo."], ["character", "DAD"], ["dialogue", "Hey."]];
+  const b0 = run(lines), cur = (b) => { const o = {}; (b.byCat.cast || []).forEach((k) => { o[k] = b.elements[k].no; }); return o; };
+  const auto = cur(b0); assert.deepStrictEqual(Object.values(auto).sort(), [1, 2, 3]);
+  const first = Object.keys(auto).find((k) => auto[k] === 1), third = Object.keys(auto).find((k) => auto[k] === 3);
+  // give the third one number 1: they swap
+  let st = E.setCastNo({}, third, 1, auto); const b1 = run(lines, st), c1 = cur(b1);
+  assert.strictEqual(c1[third], 1); assert.strictEqual(c1[first], 3); assert.deepStrictEqual(Object.values(c1).sort(), [1, 2, 3]);
+  assert.strictEqual(b1.castNos[b1.elements[third].name], 1);
+  // a number nobody has: the others keep theirs
+  st = E.setCastNo(st, third, 10, c1); const c2 = cur(run(lines, st)); assert.strictEqual(c2[third], 10); assert.strictEqual(c2[first], 3);
+  // survives the trip through the database, and a rename
+  assert.deepStrictEqual(E.fromRemote(E.toRemote(st)).nums, st.nums);
+  assert.ok(Object.keys(E.diff({}, st)).some((p) => /^nums\//.test(p)));
+  const st2 = E.rename(st, third, "cast", "GRANDAD"); assert.strictEqual(st2.nums["cast|grandad"], "10");
+  // back to the script order
+  assert.ok(!E.clearCastNos(st).nums); assert.deepStrictEqual(cur(run(lines, E.clearCastNos(st))), auto);
+  assert.ok(!E.resetStore(st, {}).nums);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

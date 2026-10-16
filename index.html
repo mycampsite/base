@@ -1652,6 +1652,9 @@ async function exportDoc(kind, fileId, retried) {
   // the shot list's EST. MIN column: each shot's estimate, worked out in the hub (a number typed in the Sheet is kept there)
   let shotMins = null;
   if (kind === "shotlist" && window.CampProdPanel && window.CampProdPanel.shotMinutes) { try { shotMins = await window.CampProdPanel.shotMinutes(current.pid); } catch (_e) { shotMins = null; } }
+  // cast ID numbers set on the Breakdown (or the script order): the Budget, Day Out of Days and call sheets use them
+  let castNos = null;
+  if (window.CampBdPanel && window.CampBdPanel.castNumbers) { try { castNos = await window.CampBdPanel.castNumbers(current.pid, fileId); } catch (_e) { castNos = null; } }
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 240000);
   let res;
   try {
@@ -1659,7 +1662,7 @@ async function exportDoc(kind, fileId, retried) {
       // The Production plan travels with every export, so the schedule and budget follow the panel
       body: JSON.stringify({ key: lsGet(KEY_KEY) || "", action: kind, fileId, folderId: p.folderId, tz, plan: (p && p.production && p.production.scriptId === fileId) ? p.production : null, breakdown,
         // call / shoot / wrap per scene, the meal and company moves, worked out in the hub (the Schedule sheet lays them out)
-        times, shotMins }) });
+        times, shotMins, castNos }) });
     res = await r.json();
   } catch (err) {
     throw new Error(err && err.name === "AbortError" ? "Google took too long. Try again: it may be half made, and trying again finishes it." : "Couldn't reach the script cloud.");
