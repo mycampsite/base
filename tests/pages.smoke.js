@@ -135,7 +135,7 @@ let BASE = "";
       CampProdPanel.render("p1");
     });
     await p.waitForTimeout(500);
-    await expect(p, () => /Stunts 1/.test(document.querySelector(".sbBoard").innerText), "the stunt shows as a need on the day");
+    await expect(p, () => /Stunts 1/.test(document.querySelector(".sbBoard .sbNeeds").textContent), "the stunt shows as a need on the day (in the Elements chip)");
   });
   await page(browser, "stripboard: strips, day headers, move several, filters, tabs", "/tests/fixtures/plan.html?popout=1", async (p) => {
     await p.evaluate(() => { localStorage.clear(); CampProdPanel.render("p1"); });
