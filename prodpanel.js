@@ -686,7 +686,8 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbT select.sbSort{ width:auto; max-width:130px; }
 .sbT select{ height:26px; border-radius:6px; border:1px solid var(--uiBorder); background:#171717; color:var(--uiText); font:inherit; font-size:12px; }
 .sbDayB .colNeeds{ margin:0; }
-.sbFold{ border:0; background:none; color:var(--uiMuted); cursor:pointer; width:18px; font-size:12px; padding:0; }
+.sbFold{ border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); cursor:pointer; width:30px; height:30px; border-radius:7px; font-size:16px; line-height:1; padding:0; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+.sbFold:hover{ background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.3); }
 .sbRows{ padding:7px 7px 2px; display:flex; flex-direction:column; gap:6px; min-height:12px; }
 .sbDayWrap.folded .sbRows{ padding:0; min-height:0; }
 .sbRow{ position:relative; height:46px; box-sizing:border-box; padding:0 12px 0 6px; border:1px solid rgba(255,255,255,.08); border-left:5px solid var(--sc, #ddd); border-radius:8px; background:color-mix(in srgb, var(--sc, #ddd) 9%, #202020); color:#e6e6e6; font-size:12px; line-height:1.35; cursor:grab; user-select:none; -webkit-user-select:none; touch-action:pan-y; }
@@ -711,7 +712,7 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbTag.rev{ background:rgba(241,199,107,.2); color:#f1c76b; } .sbTag.new{ background:rgba(143,227,166,.18); color:#8fe3a6; } .sbTag.warn{ background:rgba(255,139,131,.18); color:#ff8b83; }
 .sbStat.s-shot{ background:#2f9e44; } .sbStat.s-partshot{ background:#f59f00; color:#111; } .sbStat.s-pickup{ background:#1c7ed6; } .sbStat.s-moved{ background:#868e96; } .sbStat.s-omitted{ background:#e03131; }
 .sbRow.st-shot, .sbRow.st-omitted{ opacity:.55; } .sbRow.st-omitted .sbPlace{ text-decoration:line-through; }
-.sbRow.sel{ outline:2px solid var(--focus, #7fb6ff); outline-offset:1px; background:color-mix(in srgb, #7fb6ff 14%, #202020); }
+.sbRow.sel{ background:color-mix(in srgb, var(--sc, #ddd) 24%, #262626); border-color:rgba(255,255,255,.4); border-left-color:var(--sc, #ddd); box-shadow:inset 0 0 0 1px rgba(255,255,255,.4); }
 .sbRow.landed{ animation:sbLand 1s ease-out; }
 @keyframes sbLand{ 0%{ box-shadow:0 0 0 2px #fff, 0 0 18px rgba(255,255,255,.4); } 100%{ box-shadow:none; } }
 .sbBoard.hiOn .sbRow.dim{ opacity:.3; }

@@ -318,8 +318,8 @@ const css = `
 #bdctl .rp h4{ margin:0; padding:7px 12px; font-size:12.5px; background:color-mix(in srgb, var(--cc) 22%, #181818); display:flex; justify-content:space-between; }
 #bdctl .rp table{ width:100%; border-collapse:collapse; font-size:12px; }
 #bdctl .rp td{ padding:4px 12px; border-top:1px solid var(--uiBorder); vertical-align:top; }
-#bdctl .rp td:first-child{ white-space:nowrap; }
-#bdctl .rp td:last-child{ color:var(--uiMuted); text-align:right; white-space:nowrap; }
+#bdctl .rp td:first-child{ overflow-wrap:anywhere; }
+#bdctl .rp td:last-child{ color:var(--uiMuted); text-align:right; width:42%; overflow-wrap:anywhere; }
 #bdctl .rp h4{ flex-wrap:wrap; gap:2px 10px; }
 #bdctl .rpDay td:last-child{ white-space:normal; text-align:left; overflow-wrap:anywhere; color:inherit; }
 #bdctl .rpDay td:first-child{ width:1%; }
@@ -986,7 +986,7 @@ function reportsView(b, p){
   }
   const cards = E.CATS.map((c) => {
     const r = E.report(b, c.id); if(!r.length) return "";
-    return `<div class="rp" style="--cc:${c.color}"><h4><span>${catIcon(c.id)}${esc(c.label)}</span><span>${r.length}</span></h4><table>${r.map((x) => `<tr><td><b>${x.no ? x.no + ". " : ""}${esc(x.name)}</b>${b.elements[x.key] && b.elements[x.key].hero ? ` <span style="color:#f1c76b" title="Hero prop">★</span>` : ""}${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</td><td>Sc ${x.scenes.length > 8 ? x.scenes.slice(0, 8).join(", ") + " +" + (x.scenes.length - 8) : x.scenes.join(", ")}</td></tr>`).join("")}</table></div>`;
+    return `<div class="rp" style="--cc:${c.color}"><h4><span>${catIcon(c.id)}${esc(c.label)}</span><span>${r.length}</span></h4><table>${r.map((x) => `<tr><td><b>${x.no ? x.no + ". " : ""}${esc(x.name)}</b>${b.elements[x.key] && b.elements[x.key].hero ? ` <span style="color:#f1c76b" title="Hero prop">★</span>` : ""}${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</td><td>Sc ${x.scenes.join(", ")}</td></tr>`).join("")}</table></div>`;
   }).join("");
   return seg + `<div class="rpGrid">${cards || `<div class="bdEmpty">No elements yet.</div>`}</div>`;
 }
