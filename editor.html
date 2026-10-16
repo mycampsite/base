@@ -1825,6 +1825,8 @@ html,body{ background: var(--uiBg) !important; }
   .proofMenu .pmMeta button:hover{ background: rgba(255,255,255,0.12); }
 
 
+  /* While a right-click menu is open, the typing suggestions (character names, places, times) stay out of its way */
+body.ctxOpen #smartMenu, body.ctxOpen #charMenu, body.ctxOpen #sceneLocMenu, body.ctxOpen .bdtPop{ display:none !important; }
   /* Character name autocomplete menu */
 .charMenu{
   position: fixed;
@@ -16371,6 +16373,7 @@ function __bindProofMenu(){
 
   function hide(){
     menu.hidden = true;
+    document.body.classList.remove("ctxOpen");
     currentSpan = null;
     currentKind = "miss";
     currentWord = "";
@@ -16459,6 +16462,8 @@ function __bindProofMenu(){
 
     const line = span.closest(".line");
     e.preventDefault();
+    try{ ["smartMenu", "charMenu", "sceneLocMenu"].forEach((id) => { const x = document.getElementById(id); if(x) x.hidden = true; }); }catch(_e){}
+    document.body.classList.add("ctxOpen");
 
     currentSpan = span;
     currentKind = miss ? "miss" : "gram";
@@ -18455,7 +18460,7 @@ function clearHighlights(){
 (function(){
   const ed = document.getElementById("scriptEditor"), m = document.getElementById("qMenu");
   if(!ed || !m) return;
-  const hide = () => { m.hidden = true; };
+  const hide = () => { m.hidden = true; document.body.classList.remove("ctxOpen"); };
   m.addEventListener("mousedown", (e) => e.preventDefault());   // keep the selection in the script
   m.addEventListener("click", (e) => {
     const b = e.target.closest("button"); if(!b) return;
@@ -18480,6 +18485,9 @@ function clearHighlights(){
       mk("Ignore", "", () => window.CampSpell.ignore(hit.w));
       const sep = document.createElement("div"); sep.className = "qSep"; sp.appendChild(sep);
     }
+    // one menu at a time: close the typing suggestions before this one opens
+    try{ ["smartMenu", "charMenu", "sceneLocMenu"].forEach((id) => { const x = document.getElementById(id); if(x) x.hidden = true; }); }catch(_e){}
+    document.body.classList.add("ctxOpen");
     const cur = (document.getElementById("typeSel") || {}).value;
     m.querySelectorAll(".qFly button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
     m.querySelector(".qSub").classList.remove("open");

@@ -87,6 +87,15 @@ let BASE = "";
     const words = await p.evaluate(() => { const h = CSS.highlights.get("camp-spell"); return h ? [...h].map((r) => r.toString()) : []; });
     if(!(words.includes("color") && words.includes("teh") && !words.includes("realise") && !words.includes("colour"))) throw new Error("flagged: " + JSON.stringify(words));
   });
+  await page(browser, "editor: the right-click menu keeps the typing suggestions out of its way", "/editor.html?fileId=f1", async (p) => {
+    await p.waitForSelector('#scriptEditor .line[data-type="character"]');
+    await p.evaluate(() => { const m = document.getElementById("charMenu") || Object.assign(document.body.appendChild(document.createElement("div")), { id: "charMenu", className: "charMenu" }); m.hidden = false; m.textContent = "ANA"; });
+    await p.evaluate(() => document.querySelector('#scriptEditor .line[data-type="character"]').scrollIntoView({ block: "center" })); await p.waitForTimeout(400);
+    await p.click('#scriptEditor .line[data-type="character"]', { button: "right" }); await p.waitForTimeout(200);
+    await expect(p, () => !document.getElementById("qMenu").hidden && document.body.classList.contains("ctxOpen") && getComputedStyle(document.getElementById("charMenu")).display === "none", "only the right-click menu showing");
+    await p.keyboard.press("Escape"); await p.waitForTimeout(100);
+    await expect(p, () => document.getElementById("qMenu").hidden && !document.body.classList.contains("ctxOpen"), "closed again");
+  });
   await page(browser, "storyboard opens", "/storyboard.html?fileId=f1");
   await page(browser, "treatment builds its pages, and Export shows the preview first", "/treatment.html?fileId=f1", async (p) => {
     await expect(p, () => document.querySelectorAll(".navItem").length > 2 && !!document.querySelector("#stage .tpage"), "pages on the stage");
@@ -164,6 +173,22 @@ let BASE = "";
     await expect(p, () => new Set(Array.from(document.querySelectorAll(".sbRow")).map((r) => Math.round(r.getBoundingClientRect().height))).size === 1, "strips all one height");
     await p.hover(".sbTot .cap"); await p.waitForTimeout(150);
     await expect(p, () => { const t = document.getElementById("sbTip"); return t && t.classList.contains("show") && t.textContent.length > 5; }, "a tooltip on hover");
+  });
+  await page(browser, "breakdown: category picker with colours, highlighted jump to the scene text, icons", "/tests/fixtures/bd.html", async (p) => {
+    await p.evaluate(() => { localStorage.clear(); CampBdPanel.setMode(true); CampBdPanel.render("p1"); });
+    await p.waitForTimeout(700); await p.evaluate(() => CampBdPanel.render("p1")); await p.waitForTimeout(300);
+    await p.click(".qAdd .catPick"); await p.waitForTimeout(150);
+    await expect(p, () => document.querySelectorAll(".catMenu .cpO .cpI svg").length > 10, "the category list with an icon for each");
+    await p.click('.catMenu .cpO:has-text("Wardrobe")'); await p.waitForTimeout(150);
+    await expect(p, () => document.getElementById("bdQCat").value === "wardrobe" && /Wardrobe/.test(document.querySelector(".qAdd .catPick").innerText), "Wardrobe picked");
+    await p.click('table.ct .goText >> nth=0'); await p.waitForTimeout(600);
+    await expect(p, () => !!document.querySelector(".stBody mark.hiEl") && !!document.querySelector(".hiChip"), "the element's words highlighted, with a chip to clear it");
+    await p.click(".hiChip"); await p.waitForTimeout(300);
+    await expect(p, () => !document.querySelector(".stBody mark.hiEl"), "highlight cleared");
+    await p.click('[data-a=view][data-v=elements]'); await p.waitForTimeout(300);
+    await expect(p, () => !!document.querySelector(".catChip .ci") && !!document.querySelector("tr.grp .ci"), "category icons in the Elements view");
+    await p.click('[data-a=view][data-v=reports]'); await p.waitForTimeout(300);
+    await expect(p, () => !!document.querySelector(".rp h4 .ci"), "category icons on the reports");
   });
   await page(browser, "breakdown panel: sheets, add and remove an element, elements manager", "/tests/fixtures/bd.html", async (p) => {
     await p.evaluate(() => { localStorage.clear(); CampBdPanel.setMode(true); CampBdPanel.render("p1"); });

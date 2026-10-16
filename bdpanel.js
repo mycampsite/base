@@ -159,6 +159,25 @@ const css = `
 #bdctl .qRemPick{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:6px 0 2px; font-size:12px; color:var(--uiMuted,#9a9aa0); }
 #bdctl .qRemPick .btn i{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--cc); margin-right:5px; }
 #bdctl .qRemPick .btn small{ color:var(--uiMuted,#9a9aa0); margin-left:4px; }
+#bdctl .catChip .ci{ width:13px; height:13px; color:var(--cc); margin:0 5px -2px 0; filter:brightness(1.3); }
+#bdctl table.bdT tr.grp .ci{ width:15px; height:15px; color:var(--cc); margin:0 7px -3px 0; filter:brightness(1.3); }
+#bdctl .rp h4 .ci{ width:15px; height:15px; color:#fff; margin:0 7px -3px 0; opacity:.9; }
+.cpNative{ position:absolute !important; opacity:0 !important; pointer-events:none !important; width:1px !important; height:1px !important; }
+.catPick{ display:inline-flex; align-items:center; gap:7px; height:34px; min-width:150px; padding:0 9px; border-radius:8px; border:1px solid color-mix(in srgb, var(--cc, #888) 55%, #333); background:color-mix(in srgb, var(--cc, #888) 10%, #1a1a1a); color:var(--uiText, #f2f2f2); font:inherit; font-size:12.5px; cursor:pointer; text-align:left; }
+.catPick:hover{ border-color:var(--cc, #888); }
+.catPick .cpT{ flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.catPick .cpV{ font-style:normal; font-size:10px; opacity:.6; }
+.cpI{ display:inline-flex; width:20px; height:20px; border-radius:6px; align-items:center; justify-content:center; background:color-mix(in srgb, var(--cc) 22%, transparent); color:var(--cc); flex:none; }
+.cpI .ci{ width:13px; height:13px; filter:brightness(1.35); }
+.catMenu{ position:fixed; z-index:10001; overflow-y:auto; padding:4px; border-radius:10px; background:#1d1e22; border:1px solid rgba(255,255,255,.18); box-shadow:0 14px 34px rgba(0,0,0,.55); font:12.5px/1.2 Inter, system-ui, sans-serif; color:#f2f2f2; }
+.cpO{ display:flex; align-items:center; gap:9px; padding:5px 10px 5px 6px; border-radius:7px; cursor:pointer; white-space:nowrap; border-left:3px solid transparent; }
+.cpO:hover, .cpO.hl{ background:rgba(255,255,255,.08); }
+.cpO.on{ background:color-mix(in srgb, var(--cc) 16%, transparent); border-left-color:var(--cc); font-weight:600; }
+#bdctl .stBody mark.hiEl{ background:color-mix(in srgb, var(--cc) 72%, transparent); color:#fff; box-shadow:0 0 0 2px var(--cc) !important; border-radius:3px; }
+#bdctl .shText.hasHi .stBody mark:not(.hiEl){ opacity:.55; }
+#bdctl .shText.pulse{ animation:bdTxtPulse 1.2s ease-out; }
+@keyframes bdTxtPulse{ 0%{ box-shadow:0 0 0 3px rgba(127,182,255,.8); } 100%{ box-shadow:0 0 0 0 rgba(127,182,255,0); } }
+#bdctl .hiChip{ border:1px solid rgba(127,182,255,.5); background:rgba(127,182,255,.14); color:#cfe0ff; border-radius:999px; padding:2px 10px; font:inherit; font-size:11.5px; cursor:pointer; }
 #bdReset .bdResetBox{ width:min(480px,100%); }
 #bdReset .fl{ font-size:12.5px; color:rgba(255,255,255,.62); margin-bottom:4px; }
 #bdReset .bdRScope{ border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:4px; }
@@ -531,6 +550,7 @@ function render(pid){
   const on = l2 && l2.querySelector(".bdSc.on");
   if(on){ const a = on.offsetTop - l2.offsetTop, z = a + on.offsetHeight; if(a < l2.scrollTop) l2.scrollTop = a - 6; else if(z > l2.scrollTop + l2.clientHeight) l2.scrollTop = z - l2.clientHeight + 6; }
   pickPaint();
+  cpClose(); cpEnhance(box);
   focusMention(box);
   // opened from the editor's Edit › Reset Breakdown Tags: show the reset box once the breakdown is ready
   if(window.__campBdReset && S.model && S.sid === window.__campBdReset){ const x = window.__campBdReset; window.__campBdReset = null; setTimeout(() => openReset(pid, x), 60); }
@@ -751,7 +771,8 @@ function sceneText(b, s){
       nds.forEach((nd) => { const c = E.CAT[nd.c]; if(cols.indexOf(c.color) < 0) cols.push(c.color); });
       const shadow = cols.map((c, i) => i ? `0 ${3 * i}px 0 ${c}` : `inset 0 -2px 0 ${c}`).join(",");   // the first underline stays put; each extra colour adds one below it
       const tags = JSON.stringify(nds.map((nd) => [E.CAT[nd.c].color, nd.name, E.CAT[nd.c].label]));
-      h += esc(txt.slice(at, p.a)) + `<mark class="${nds.length > 1 ? "multi" : ""}" style="--cc:${cols[0]};box-shadow:${shadow}" data-tags="${esc(tags)}" data-keys="${esc(JSON.stringify(nds.map((nd) => nd.k)))}"${nds.length > 1 ? ` data-n="${nds.length}"` : ""} aria-label="${esc(nds.map((nd) => nd.name + ", " + E.CAT[nd.c].label).join("; "))}">${esc(txt.slice(p.a, p.z))}</mark>`; at = p.z;
+      const hiEl = S.hiEl && S.hiEl.n === s.n && nds.some((nd) => nd.k === S.hiEl.k);
+      h += esc(txt.slice(at, p.a)) + `<mark class="${nds.length > 1 ? "multi" : ""}${hiEl ? " hiEl" : ""}" style="--cc:${cols[0]};box-shadow:${shadow}" data-tags="${esc(tags)}" data-keys="${esc(JSON.stringify(nds.map((nd) => nd.k)))}"${nds.length > 1 ? ` data-n="${nds.length}"` : ""} aria-label="${esc(nds.map((nd) => nd.name + ", " + E.CAT[nd.c].label).join("; "))}">${esc(txt.slice(p.a, p.z))}</mark>`; at = p.z;
     });
     return h + esc(txt.slice(at));
   };
@@ -764,7 +785,8 @@ function sceneText(b, s){
     return row(l.type || "action", runsText(l.runs));
   }).join("");
   const can = H().canEdit(H().project(S.pid));
-  return `<div class="shText" aria-label="Scene text"><div class="stHd"><span>Scene text</span>${can ? `<small>Select words to add them below</small>` : ""}</div><div class="stBody">${html}</div></div>`;
+  const hiName = S.hiEl && S.hiEl.n === s.n ? S.hiEl.name : "";
+  return `<div class="shText${hiName ? " hasHi" : ""}" aria-label="Scene text"><div class="stHd"><span>Scene text</span>${hiName ? `<button type="button" class="hiChip" data-a="clearhi" title="Stop highlighting">Highlighting <b>${esc(hiName)}</b> ✕</button>` : can ? `<small>Select words to add them below</small>` : ""}</div><div class="stBody">${html}</div></div>`;
 }
 // Show an element in the breakdown's own Scene text: open that scene's sheet (with Scene text on), scroll to the
 // element's first underlined mention and flash it. Hand-tagged elements with no words in the text just bring up the scene.
@@ -774,6 +796,7 @@ function showInText(sk, n, k){
   S.sel = sc.n; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; S.edit = null; S.qQuote = "";
   if(!S.showText){ S.showText = true; lsSet("Camp_BD_TEXT_V1", "1"); }
   S.focusEl = { n: sc.n, k, name: (m.elements[k] && m.elements[k].name) || "" };
+  S.hiEl = { n: sc.n, k, name: S.focusEl.name };   // stays highlighted until cleared or another scene is opened
   rerender();
   if(was !== S.view) navStep();
 }
@@ -783,6 +806,7 @@ function focusMention(box){
   const marks = Array.from(box.querySelectorAll(".stBody mark[data-keys]"));
   const hit = marks.find((mk) => { try{ return JSON.parse(mk.dataset.keys || "[]").indexOf(f.k) >= 0; }catch(_e){ return false; } });
   const txt = box.querySelector(".shText");
+  if(txt){ txt.classList.remove("pulse"); void txt.offsetWidth; txt.classList.add("pulse"); }
   if(!hit){ if(txt) txt.scrollIntoView({ block: "nearest" }); H().toast((f.name || "That element") + " has no underlined words in this scene's text (it was tagged by hand).", "ok", 2600); return; }
   const body = hit.closest(".stBody");
   if(txt) txt.scrollIntoView({ block: "nearest" });
@@ -818,6 +842,52 @@ const CAT_ICON = {
   labor: '<path d="M4 15a8 8 0 0 1 16 0v2H4z"/><path d="M10 7V5h4v2M3 17h18"/>',
   misc: '<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>'
 };
+/* A category dropdown that shows each category's colour and icon (#bdQCat, #edCat). The real <select> stays
+   (its value and change events drive everything) and a button with a list that opens below sits on top of it. */
+const CPM = { el: null, sel: null, btn: null };
+function cpClose(){ if(CPM.el) CPM.el.remove(); if(CPM.btn) CPM.btn.setAttribute("aria-expanded", "false"); CPM.el = CPM.sel = CPM.btn = null; }
+function cpLabel(sel){ const c = E.CAT[sel.value]; return c ? `<span class="cpI" style="--cc:${c.color}">${catIcon(c.id)}</span><span class="cpT">${esc(c.label)}</span>` : `<span class="cpT">${esc(sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : "")}</span>`; }
+function cpSync(sel){ const b = sel && sel.nextElementSibling; if(b && b.classList.contains("catPick")){ b.innerHTML = cpLabel(sel) + `<i class="cpV" aria-hidden="true">▾</i>`; b.style.setProperty("--cc", (E.CAT[sel.value] || {}).color || "#888"); } }
+function cpOpen(btn, sel){
+  cpClose();
+  const scroller = btn.closest(".bdBody, .bdSheet");
+  let r = btn.getBoundingClientRect(); const want = Math.min(340, sel.options.length * 32 + 10);
+  if(scroller && innerHeight - r.bottom < want + 12){ scroller.scrollTop += want + 12 - (innerHeight - r.bottom); r = btn.getBoundingClientRect(); }
+  const m = document.createElement("div"); m.className = "catMenu"; m.setAttribute("role", "listbox");
+  m.innerHTML = Array.from(sel.options).map((o, k) => { const c = E.CAT[o.value]; return `<div class="cpO${o.selected ? " on" : ""}" role="option" data-k="${k}" aria-selected="${o.selected}" style="--cc:${c ? c.color : "#888"}">${c ? `<span class="cpI">${catIcon(c.id)}</span>` : ""}<span>${esc(o.text)}</span></div>`; }).join("");
+  document.body.appendChild(m);
+  m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + "px"; m.style.top = (r.bottom + 4) + "px"; m.style.minWidth = r.width + "px";
+  m.style.maxHeight = Math.max(160, Math.min(340, innerHeight - r.bottom - 12)) + "px";
+  const on = m.querySelector(".cpO.on"); if(on) m.scrollTop = on.offsetTop - m.clientHeight / 2;
+  Object.assign(CPM, { el: m, sel, btn }); btn.setAttribute("aria-expanded", "true");
+  m.addEventListener("pointerdown", (e) => e.preventDefault());
+  m.addEventListener("click", (e) => { const o = e.target.closest(".cpO"); if(o) cpPick(Number(o.dataset.k)); });
+}
+function cpPick(k){ const sel = CPM.sel, btn = CPM.btn; if(!sel) return; cpClose(); if(sel.selectedIndex !== k){ sel.selectedIndex = k; cpSync(sel); sel.dispatchEvent(new Event("change", { bubbles: true })); } if(btn && document.body.contains(btn)) btn.focus(); }
+document.addEventListener("keydown", (e) => {
+  if(!CPM.el) return;
+  const opts = Array.from(CPM.el.querySelectorAll(".cpO")), cur = opts.findIndex((o) => o.classList.contains("hl")), base = cur >= 0 ? cur : opts.findIndex((o) => o.classList.contains("on"));
+  const go = (i) => { i = Math.max(0, Math.min(opts.length - 1, i)); opts.forEach((o) => o.classList.remove("hl")); opts[i].classList.add("hl"); opts[i].scrollIntoView({ block: "nearest" }); };
+  let done = true;
+  if(e.key === "ArrowDown") go(base + 1); else if(e.key === "ArrowUp") go(base - 1);
+  else if(e.key === "Enter" || e.key === " ") cpPick(base < 0 ? 0 : base);
+  else if(e.key === "Escape"){ const b = CPM.btn; cpClose(); if(b) b.focus(); }
+  else if(e.key.length === 1){ const L = e.key.toLowerCase(), k = opts.findIndex((o, i) => i > base && o.textContent.trim().toLowerCase().startsWith(L)), k2 = k >= 0 ? k : opts.findIndex((o) => o.textContent.trim().toLowerCase().startsWith(L)); if(k2 >= 0) go(k2); }
+  else done = false;
+  if(done){ e.preventDefault(); e.stopPropagation(); }
+}, true);
+document.addEventListener("pointerdown", (e) => { if(CPM.el && !CPM.el.contains(e.target) && !(CPM.btn && CPM.btn.contains(e.target))) cpClose(); }, true);
+document.addEventListener("scroll", (e) => { if(CPM.el && !CPM.el.contains(e.target)) cpClose(); }, true);
+window.addEventListener("resize", cpClose);
+function cpEnhance(box){
+  box.querySelectorAll("select#bdQCat, select#edCat").forEach((sel) => {
+    if(sel.dataset.cp) return; sel.dataset.cp = "1";
+    const b = document.createElement("button"); b.type = "button"; b.className = "catPick"; b.setAttribute("aria-haspopup", "listbox"); b.setAttribute("aria-expanded", "false"); b.setAttribute("aria-label", "Category");
+    sel.classList.add("cpNative"); sel.tabIndex = -1; sel.after(b); cpSync(sel);
+    b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); if(CPM.btn === b) cpClose(); else cpOpen(b, sel); });
+    b.addEventListener("keydown", (e) => { if(!CPM.el && (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ")){ e.preventDefault(); e.stopPropagation(); cpOpen(b, sel); } });
+  });
+}
 const catIcon = (id) => `<svg class="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CAT_ICON[id] || CAT_ICON.misc}</svg>`;
 
 /* ---------- elements manager ---------- */
@@ -826,13 +896,13 @@ function elementsView(b, can){
   const keys = Object.keys(b.elements).filter((k) => { const e = b.elements[k]; return (S.cat === "all" || e.cat === S.cat) && (!q || e.name.toLowerCase().indexOf(q) >= 0 || e.note.toLowerCase().indexOf(q) >= 0); });
   const counts = {}; Object.keys(b.elements).forEach((k) => { const c = b.elements[k].cat; counts[c] = (counts[c] || 0) + 1; });
   const chips = [`<button type="button" class="catChip${S.cat === "all" ? " on" : ""}" data-a="cat" data-c="all">All<small>${b.totals.elements}</small></button>`]
-    .concat(E.CATS.filter((c) => counts[c.id]).map((c) => `<button type="button" class="catChip${S.cat === c.id ? " on" : ""}" style="--cc:${c.color}" data-a="cat" data-c="${c.id}">${esc(c.short)}<small>${counts[c.id]}</small></button>`)).join("");
+    .concat(E.CATS.filter((c) => counts[c.id]).map((c) => `<button type="button" class="catChip${S.cat === c.id ? " on" : ""}" style="--cc:${c.color}" data-a="cat" data-c="${c.id}">${catIcon(c.id)}${esc(c.short)}<small>${counts[c.id]}</small></button>`)).join("");
   keys.sort((a, c) => { const A = b.elements[a], C = b.elements[c], ia = E.CATS.findIndex((x) => x.id === A.cat), ic = E.CATS.findIndex((x) => x.id === C.cat); return (ia - ic) || b.byCat[A.cat].indexOf(a) - b.byCat[A.cat].indexOf(c); });
   const grouped = S.cat === "all" && !q;
   let lastCat = "";
   const rows = keys.map((k) => {
     const e = b.elements[k], c = E.CAT[e.cat];
-    const grp = grouped && e.cat !== lastCat ? `<tr class="grp" style="--cc:${c.color}"><td colspan="${grouped ? 4 : 5}"><i></i>${esc(c.label)}<span>${counts[e.cat]}</span></td></tr>` : "";
+    const grp = grouped && e.cat !== lastCat ? `<tr class="grp" style="--cc:${c.color}"><td colspan="${grouped ? 4 : 5}">${catIcon(e.cat)}${esc(c.label)}<span>${counts[e.cat]}</span></td></tr>` : "";
     lastCat = e.cat;
     const form = S.edit === k && can ? `<tr><td colspan="${grouped ? 4 : 5}"><div class="edForm">
         <label>Name<input type="text" id="edName" maxlength="60" value="${esc(e.name)}"></label>
@@ -914,7 +984,7 @@ function reportsView(b, p){
   }
   const cards = E.CATS.map((c) => {
     const r = E.report(b, c.id); if(!r.length) return "";
-    return `<div class="rp" style="--cc:${c.color}"><h4><span>${esc(c.label)}</span><span>${r.length}</span></h4><table>${r.map((x) => `<tr><td><b>${x.no ? x.no + ". " : ""}${esc(x.name)}</b>${b.elements[x.key] && b.elements[x.key].hero ? ` <span style="color:#f1c76b" title="Hero prop">★</span>` : ""}${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</td><td>Sc ${x.scenes.length > 8 ? x.scenes.slice(0, 8).join(", ") + " +" + (x.scenes.length - 8) : x.scenes.join(", ")}</td></tr>`).join("")}</table></div>`;
+    return `<div class="rp" style="--cc:${c.color}"><h4><span>${catIcon(c.id)}${esc(c.label)}</span><span>${r.length}</span></h4><table>${r.map((x) => `<tr><td><b>${x.no ? x.no + ". " : ""}${esc(x.name)}</b>${b.elements[x.key] && b.elements[x.key].hero ? ` <span style="color:#f1c76b" title="Hero prop">★</span>` : ""}${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</td><td>Sc ${x.scenes.length > 8 ? x.scenes.slice(0, 8).join(", ") + " +" + (x.scenes.length - 8) : x.scenes.join(", ")}</td></tr>`).join("")}</table></div>`;
   }).join("");
   return seg + `<div class="rpGrid">${cards || `<div class="bdEmpty">No elements yet.</div>`}</div>`;
 }
@@ -1031,7 +1101,8 @@ function wire(box, pid){
     if(k === "scf"){ S.scF = a.dataset.v; rerender(); return; }
     if(k === "opentext"){ showInText(a.dataset.sk, Number(a.dataset.n) || 0, a.dataset.k); return; }
     if((k === "pick" || k === "goto") && !Number(a.dataset.n)) return;
-    if(k === "pick" || k === "goto"){ const was = S.view; S.qQuote = ""; S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; if(S.lock){ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); return; } rerender(); if(was !== S.view) navStep(); return; }
+    if(k === "clearhi"){ S.hiEl = null; rerender(); return; }
+    if(k === "pick" || k === "goto"){ S.hiEl = null; const was = S.view; S.qQuote = ""; S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; if(S.lock){ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); return; } rerender(); if(was !== S.view) navStep(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
     if(k === "csv"){ const m = model(); if(m) download(((hub.scriptTitle(sid) || "breakdown") + " - breakdown.csv").replace(/[\\/:*?"<>|]/g, "-"), E.csv(m)); return; }
     if(k === "rpby"){ S.rpBy = a.dataset.v; rerender(); return; }
@@ -1141,7 +1212,7 @@ function wire(box, pid){
   box.oninput = (ev) => {
     // picking a name the project already uses sets its category
     if(ev.target.id === "bdQuick" && !ev.target.value.trim()){ S.qQuote = ""; pickClear(); }
-    if(ev.target.id === "bdQuick"){ const m = model(), v = ev.target.value.trim().toLowerCase(), hit = m && Object.keys(m.elements).find((k) => m.elements[k].name.toLowerCase() === v), sel = box.querySelector("#bdQCat"); if(hit && sel && sel.value !== m.elements[hit].cat){ sel.value = m.elements[hit].cat; S.qCat = sel.value; sel.style.setProperty("--cc", E.CAT[sel.value].color); } return; }
+    if(ev.target.id === "bdQuick"){ const m = model(), v = ev.target.value.trim().toLowerCase(), hit = m && Object.keys(m.elements).find((k) => m.elements[k].name.toLowerCase() === v), sel = box.querySelector("#bdQCat"); if(hit && sel && sel.value !== m.elements[hit].cat){ sel.value = m.elements[hit].cat; S.qCat = sel.value; sel.style.setProperty("--cc", E.CAT[sel.value].color); cpSync(sel); } return; }
     if(ev.target.id === "bdScQ"){ S.scQ = ev.target.value; const pos = ev.target.selectionStart; rerender(); setTimeout(() => { const i = box.querySelector("#bdScQ"); if(i){ i.focus(); try{ i.setSelectionRange(pos, pos); }catch(_e){} } }, 40); return; }
     if(ev.target.id === "bdQ"){ S.q = ev.target.value; const pos = ev.target.selectionStart; rerender(); setTimeout(() => { const i = box.querySelector("#bdQ"); if(i){ i.focus(); try{ i.setSelectionRange(pos, pos); }catch(_e){} } }, 40); } };
   box.onkeydown = (ev) => {
