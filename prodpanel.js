@@ -363,14 +363,19 @@ async function loadScript(id, force){
 }
 
 // The storyboard's shot list for the same script (optional: the plan works without it)
+const SHOTS_AT = {};
 async function loadShots(id, force){
   const cur = S.shots[id];
   if(cur && !force && cur.state !== "error") return;
+  if(cur && cur.state === "loading") return;
+  SHOTS_AT[id] = Date.now();
   S.shots[id] = { state: "loading", map: cur && cur.map };
   try{
     const res = await H().ripGet({ action: "shotlistdata", fileId: id });
     if(!res || res.ok === false || !Array.isArray(res.shots)) throw new Error((res && res.error) || "Couldn't read the shot list.");
-    S.shots[id] = { state: "ok", map: P.shotsBySceneId(res) };
+    const map = P.shotsBySceneId(res);
+    S.shots[id] = { state: "ok", map };
+    if(cur && cur.map && JSON.stringify(cur.map) !== JSON.stringify(map)) H().toast("Shot list updated. Scene times follow.", "ok", 2000);
   }catch(err){
     S.shots[id] = { state: "error", map: cur && cur.map, err: (err && err.message) || String(err) };
   }
@@ -393,7 +398,7 @@ function withShotTimes(bd, shotMap, plan){
     const sc = { id: s.id, ie: s.ie, dn: s.dn, eighths: s.eighths, cast: s.cast || [], est: s.est, estAuto: s.estAuto !== false,
       tags: T.sceneTags({ els: s.catEls || {}, bg: s.bg, minors: (s.cast || []).some((nm) => kids[nm]), env: s.env }) };
     const r = T.sceneMinutes(sc, shots, cfg), res = r.shots || (shots.length ? T.sceneShots(sc, shots, cfg) : null);
-    return Object.assign({}, s, { estBd: s.est, est: r.min || s.est, estSrc: r.src, shotN: shots.length, shotRes: res });
+    return Object.assign({}, s, { estBd: s.est, est: r.min || s.est, estSrc: r.src, shotN: shots.length, shotTimed: shots.filter((x) => Number(x.min) > 0).length, shotRes: res });
   });
   const out = Object.assign({}, bd, { scenes });
   Object.assign(WST, { bd, map: shotMap, ck, out });
@@ -412,6 +417,12 @@ async function shotMinutes(pid){
 }
 // The shot list for a script (read once, then from memory); the Breakdown tab shows the same shot times
 function shotsFor(scriptId){ if(!scriptId) return {}; if(!S.shots[scriptId]) loadShots(scriptId); return (S.shots[scriptId] && S.shots[scriptId].map) || {}; }
+
+// The shot list is edited in its Google Sheet, outside the hub: read it again when you come back to this tab
+// (at most every 15 s) and after every Sync, so the stripboard's times follow what you typed there.
+function refreshShots(){ const id = S.lastScriptId; if(id && Date.now() - (SHOTS_AT[id] || 0) > 15000) loadShots(id, true); }
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") refreshShots(); });
+window.addEventListener("focus", refreshShots);
 
 /* ---------- saving (whole plan; the team sees it live) ---------- */
 let saveT = 0, pending = null;
@@ -648,16 +659,15 @@ function draw(pid){
 
   // Shot list by shoot day: the storyboard's shots, in the order the scenes are shot
   const shSt = S.shots[scriptId] || {};
-  const shotMinOf = (id, k) => { const r = byId[id] && byId[id].shotRes, t = r && r.shots[k]; return t ? `<span title="${esc(t.typed ? "Typed in the shot list (the estimate is " + t.auto + ")" : t.complexity + " · setup " + t.setup + " + shooting " + t.shoot + " min (" + t.takes + " takes)")}">${t.min}${t.typed ? "*" : ""}</span>` : ""; };
   const shotRows = pl.days.map((d, i) => {
     const ds = P.dayShots(d, shotMap); if(!ds.scenes.length) return "";
-    return `<tr><td class="shotDay" colspan="8">Day ${i + 1}<span>${esc(fmtDate(dates[i]) || "no date")} · ${ds.total} shot${ds.total === 1 ? "" : "s"}</span></td></tr>` +
-      ds.scenes.map((x) => x.shots.length ? x.shots.map((sh, k) => `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td>${esc(sh.shot)}</td><td>${esc(sh.size)}</td><td>${esc(sh.angle)}</td><td>${esc(sh.move)}</td><td class="desc">${esc(sh.desc)}</td><td>${shotMinOf(x.id, k)}</td><td class="st${sh.status === "Shot" ? " shot" : sh.status === "Needs reshoot" ? " reshoot" : ""}">${esc(sh.status || "Not shot")}</td></tr>`).join("")
-        : `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td colspan="7" class="desc" style="color:var(--uiMuted)">No shots on the storyboard yet</td></tr>`).join("");
+    return `<tr><td class="shotDay" colspan="7">Day ${i + 1}<span>${esc(fmtDate(dates[i]) || "no date")} · ${ds.total} shot${ds.total === 1 ? "" : "s"}</span></td></tr>` +
+      ds.scenes.map((x) => x.shots.length ? x.shots.map((sh) => `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td>${esc(sh.shot)}</td><td>${esc(sh.size)}</td><td>${esc(sh.angle)}</td><td>${esc(sh.move)}</td><td class="desc">${esc(sh.desc)}</td><td class="st${sh.status === "Shot" ? " shot" : sh.status === "Needs reshoot" ? " reshoot" : ""}">${esc(sh.status || "Not shot")}</td></tr>`).join("")
+        : `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td colspan="6" class="desc" style="color:var(--uiMuted)">No shots on the storyboard yet</td></tr>`).join("");
   }).join("");
   const nShots = Object.keys(shotMap).reduce((a, k) => a + shotMap[k].length, 0);
   const shots = `<details class="dood fx" data-sec="shots"${lsGet(SHOTS_KEY) === "1" ? " open" : ""}><summary>Shot list by day · ${shSt.state === "loading" && !shotsOn ? "loading…" : nShots + " shot" + (nShots === 1 ? "" : "s")}${shSt.state === "error" ? " · couldn't refresh" : ""}</summary>
-    ${shotsOn ? `<div class="doodWrap"><table><tr><th>Sc</th><th>Shot</th><th>Size</th><th>Angle</th><th>Move</th><th>Description</th><th title="Estimated minutes: setup and shooting, rounded up to 10">Est.</th><th>Status</th></tr>${shotRows}</table></div>`
+    ${shotsOn ? `<div class="doodWrap"><table><tr><th>Sc</th><th>Shot</th><th>Size</th><th>Angle</th><th>Move</th><th>Description</th><th>Status</th></tr>${shotRows}</table></div>`
       : `<div class="shotNone">${shSt.state === "error" ? esc(shSt.err) : shSt.state === "loading" ? "Reading the storyboard…" : "No shots yet. Add them on the Storyboard tab and they appear here under their shoot day."}</div>`}
   </details>`;
 
@@ -894,7 +904,7 @@ function sbView(c){
     const tags = (stat !== "Scheduled" ? `<em class="sbStat s-${stat.replace(/[^a-z]/gi, "").toLowerCase()}">${esc(stat)}</em>` : "")
       + (rv ? `<em class="sbTag rev"${tipAttr("Changed in the script since it was scheduled: " + revText(rv))}>Revised</em>` : "")
       + (isNew ? `<em class="sbTag new"${tipAttr("New in the script")}>New</em>` : "")
-      + (s.estSrc === "shots" ? `<em class="sbTag sh"${tipAttr("Time from the shot list: " + s.shotN + " shot" + (s.shotN === 1 ? "" : "s") + (s.shotRes && s.shotRes.prep ? " plus " + s.shotRes.prep + " min prep" : "") + " = " + fmtMins(s.est) + (s.estBd ? ". The breakdown's estimate was " + fmtMins(s.estBd) : ""))}>${s.shotN} shot${s.shotN === 1 ? "" : "s"}</em>` : "")
+      + (s.estSrc === "shots" ? `<em class="sbTag sh"${tipAttr("Time from the shot list: " + s.shotN + " shot" + (s.shotN === 1 ? "" : "s") + " (" + s.shotTimed + " with EST. MIN typed, the rest suggested)" + (s.shotRes && s.shotRes.prep ? " plus " + s.shotRes.prep + " min prep" : "") + " = " + fmtMins(s.est) + (s.estBd ? ". The breakdown's estimate was " + fmtMins(s.estBd) : ""))}>${s.shotN} shot${s.shotN === 1 ? "" : "s"}</em>` : "")
       + (kidNight ? `<em class="sbTag warn"${tipAttr("Night scene with a cast member under 18: check work-hour limits, permit and chaperone")}>⚠ Minor</em>` : "");
     return `<div class="${cls}" role="row" tabindex="0" data-sid="${esc(id)}" data-day="${day}" style="--sc:${stripColor(s)}" aria-selected="${sel.has(id)}" aria-label="${esc("Scene " + s.n + ", " + s.heading + ". Double-click for its breakdown sheet")}">
       ${canEdit ? `<span class="sbGrip"${tipAttr("Drag to move")} aria-hidden="true">⋮⋮</span>` : `<span class="sbGrip off"></span>`}
@@ -1679,7 +1689,7 @@ function syncNow(pid, btn){
   const ids = hub.scriptIds(p), plan = planOf(pid), scriptId = (plan.scriptId && ids.indexOf(plan.scriptId) >= 0) ? plan.scriptId : ids[0];
   if(!scriptId){ hub.toast("Add a script to this project first.", "err"); return; }
   flush(); S.busy[pid] = "sync"; rerender();
-  Promise.resolve(hub.syncSheets(pid, scriptId, btn)).finally(() => { delete S.busy[pid]; rerender(); });
+  Promise.resolve(hub.syncSheets(pid, scriptId, btn)).finally(() => { delete S.busy[pid]; loadShots(scriptId, true); rerender(); });
 }
 const isStale = (pid) => { const p = H().project(pid); return !!(p && P.callsheetsStale(p.production)); };
 // Each day's call / shoot / wrap times for Sync (null until the plan has been drawn for this project in this tab)

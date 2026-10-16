@@ -388,10 +388,9 @@ function shotInfo(s){
     if(!PP || !PP.withShotTimes || !s || !s.id || !sc || !sc.doc || !p) return null;
     const bd = PP.withShotTimes(enriched(S.pid, S.sid, p, sc.doc, sc.bd, sc.modified, planOpts(p)), PP.shotsFor(S.sid), PP.planOf ? PP.planOf(S.pid) : P.normalize(p.production));
     const x = bd && bd.scenes && bd.scenes.find((y) => y.id === s.id);
-    return x && x.shotN ? { n: x.shotN, total: x.shotRes ? x.shotRes.total : 0, prep: x.shotRes ? x.shotRes.prep : 0, used: x.estSrc === "shots" } : null;
+    return x && x.shotN ? { n: x.shotN, timed: x.shotTimed || 0, total: x.shotRes ? x.shotRes.total : 0, used: x.estSrc === "shots" } : null;
   }catch(_e){ return null; }
 }
-const ENV_LIST = [["water", "Water"], ["height", "Height"], ["tight", "Tight location"], ["drive", "Moving vehicle"], ["lightfx", "Lighting FX"], ["practicals", "Practical lights"], ["equip", "Special camera gear"]];
 const fmtMin = (m) => m >= 60 ? Math.floor(m / 60) + "h" + (m % 60 ? " " + String(m % 60).padStart(2, "0") : "") : m + "m";
 const SKEY = (pid, sid) => pid + "|" + sid;
 let rafId = 0;
@@ -697,8 +696,7 @@ function sheetsView(b, can){
       <label class="tgl"><input type="checkbox" id="bdShowEmpty"${S.showEmpty ? " checked" : ""}> Show empty categories</label>
       <button class="btn sm" type="button" data-a="print" title="Print this breakdown sheet">Print</button></div>`;
   const tot = E.CATS.reduce((a, c) => a + (s.els[c.id] || []).length, 0);
-  const si = shotInfo(s), envOn = s.env || [];
-  const envRow = `<div class="shEnv"><span class="lb" title="Things the breakdown can't tell from the script. The shot time estimates use them.">Shoot conditions</span>${ENV_LIST.map(([k, l]) => `<label class="tgl"><input type="checkbox" data-env="${k}"${envOn.indexOf(k) >= 0 ? " checked" : ""}${dis}> ${l}</label>`).join("")}</div>`;
+  const si = shotInfo(s);
   const fld = (label, val, cls) => `<div class="f${cls ? " " + cls : ""}"><span class="lb">${label}</span>${val}</div>`;
   const fields = `<div class="shFields" style="--sc:${stripColor(s)}">
       ${fld("Scene", `<span class="big">${s.n}</span>`, "fn")}
@@ -707,14 +705,16 @@ function sheetsView(b, can){
       ${fld("Day / Night", `<b>${esc(DN[s.dn] || "—")}</b>`)}
       ${fld("Pages (1/8)", `<b title="A page is 8 eighths">${E.fmtEighths(s.eighths)}</b>`)}
       ${fld("Story day", `<input type="text" id="shDay" maxlength="40" value="${esc(s.dayAuto ? "" : s.day)}" placeholder="${esc(s.day)}"${dis}>`)}
-      ${fld("Est. minutes", `<input type="number" id="shEst" min="5" max="1440" step="5" value="${s.estAuto ? "" : s.est}" placeholder="${s.est}"${dis}>${si ? `<span class="shShots" title="${esc((s.estAuto ? "The schedule uses the shot list's time" : "Your Est. is used; the shot list says") + ": " + si.n + " shot" + (si.n === 1 ? "" : "s") + (si.prep ? " plus " + si.prep + " min prep" : "") + " = " + fmtMin(si.total) + ".")}">${s.estAuto ? "~" + fmtMin(s.est) + " auto · " : ""}<b>Shots ${fmtMin(si.total)}</b> (${si.n})${s.estAuto ? "" : " · yours used"}</span>` : ""}`)}
+      ${fld("Est. minutes", `<input type="number" id="shEst" min="5" max="1440" step="5" value="${s.estAuto ? "" : s.est}" placeholder="${s.est}"${dis}>${si ? (si.timed && s.estAuto ? `<span class="shShots" title="${esc("The stripboard uses the shot list: " + si.n + " shot" + (si.n === 1 ? "" : "s") + ", " + si.timed + " with EST. MIN typed (the rest count as their suggestion). This page estimate is ~" + fmtMin(s.est) + ".")}"><b>Using shot list: ${fmtMin(si.total)}</b></span>`
+        : si.timed ? `<span class="shShots" title="Your Est. here wins over the shot list">Shot list says ${fmtMin(si.total)}</span>`
+        : `<span class="shShots" title="Type minutes in the shot list's EST. MIN column and the stripboard switches to the shot list">${si.n} shot${si.n === 1 ? "" : "s"}, none timed yet</span>`) : ""}`)}
       ${fld("Elements", `<b>${tot}</b>`)}
     </div>`;
   return `<div class="bdSplit">${listBox}
     <div class="bdSheet">
       ${bar}
       <div class="shHead" style="--sc:${stripColor(s)}"><h3>${esc(s.heading || "(no scene heading)")}</h3><span class="pr">${esc(hubTitle())}</span></div>
-      ${fields}${envRow}
+      ${fields}
       <div class="shGrid">
         <div class="shMain">${S.showText ? sceneText(b, s) : ""}${quick}
           <div class="shCats">${cats || `<div class="bdEmpty" style="grid-column:1/-1;padding:6px 0">Nothing found in this scene yet.${can ? " Add what it needs above." : ""}</div>`}</div></div>
@@ -1177,7 +1177,6 @@ function wire(box, pid){
     else if(t.id === "shDir") edit(pid, sid, (st) => E.setScene(st, sk, "dir", t.value), true);
     else if(t.id === "shDay"){ edit(pid, sid, (st) => E.setScene(st, sk, "day", t.value.trim())); }
     else if(t.id === "shEst"){ edit(pid, sid, (st) => E.setScene(st, sk, "est", t.value)); }
-    else if(t.dataset && t.dataset.env){ const l = Array.from(box.querySelectorAll("input[data-env]:checked")).map((x) => x.dataset.env); edit(pid, sid, (st) => E.setScene(st, sk, "env", l)); }
     else if(t.id === "shUnit"){ edit(pid, sid, (st) => E.setScene(st, sk, "unit", t.value === "Main" ? "" : t.value)); }
   };
   // Stripboard drag: hand the move to the Plan panel (same save, undo and feedback as dragging on the Plan)

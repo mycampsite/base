@@ -62,11 +62,12 @@ test("setup type: the same size, move and cast again is a re-slate; a closer sho
   const r = T.sceneShots(sc, [{ size: "CU" }, { size: "CU" }, { size: "CU", desc: "tighter on her eyes" }, { size: "WS" }]);
   assert.deepStrictEqual(r.shots.map((s) => s.st), ["new", "same", "lens", "move"]);
 });
-test("which time a scene gets: typed Est., else its shots, else the breakdown's auto Est.", () => {
+test("which time a scene gets: typed Est., else its shots once one is timed, else the breakdown's auto Est.", () => {
   const sc = Object.assign({}, kitchen, { est: 75, estAuto: true });
   assert.deepStrictEqual(T.sceneMinutes(sc, []), { min: 75, src: "auto" });
-  const s = T.sceneMinutes(sc, [cu()]); assert.strictEqual(s.src, "shots"); assert.strictEqual(s.min, 50);
-  assert.deepStrictEqual(T.sceneMinutes(Object.assign({}, sc, { estAuto: false }), [cu()]), { min: 75, src: "manual" });
+  assert.deepStrictEqual(T.sceneMinutes(sc, [cu()]), { min: 75, src: "auto" });   // shots with no typed minutes: still the breakdown's
+  const s = T.sceneMinutes(sc, [Object.assign(cu(), { min: 30 }), cu("move")]); assert.strictEqual(s.src, "shots"); assert.strictEqual(s.min, 30 + 30);
+  assert.deepStrictEqual(T.sceneMinutes(Object.assign({}, sc, { estAuto: false }), [Object.assign(cu(), { min: 30 })]), { min: 75, src: "manual" });
 });
 test("tags from the breakdown categories, crowd, minors and the ticked environment", () => {
   assert.deepStrictEqual(T.sceneTags({ els: { stunts: ["k"], mfx: ["x"], sfx: ["y"], vehicles: ["v"], cast: ["c"], props: [] }, bg: "Crowd", minors: true, env: ["water", "nope"] }),

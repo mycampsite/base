@@ -5,7 +5,7 @@
 
    Which time a scene gets (sceneMinutes):
      1. Est. typed on the breakdown sheet   (always wins)
-     2. its shots in the shot list           (prep + the sum of the shots)
+     2. its shots, once any has EST. MIN typed (prep + the sum of the shots; blank ones count as their suggestion)
      3. the breakdown's own auto Est.        (about an hour a page plus allowances; unchanged when there are no shots)
    Shot and prep times round UP to the next 10 minutes (CONFIG.round), so a scene is exactly prep + its shots.
 
@@ -188,7 +188,8 @@ function sceneMinutes(scene, shots, cfgIn){
   scene = scene || {};
   const est = Math.round(num(scene.est));
   if(est > 0 && scene.estAuto === false) return { min: est, src: "manual" };
-  if(shots && shots.length){ const r = sceneShots(scene, shots, cfgIn); return { min: r.total, src: "shots", shots: r }; }
+  // the shot list takes over once any shot has EST. MIN typed; shots still blank count as their suggestion
+  if(shots && shots.some((sh) => num(sh && sh.min) > 0)){ const r = sceneShots(scene, shots, cfgIn); return { min: r.total, src: "shots", shots: r }; }
   if(est > 0) return { min: est, src: "auto" };
   return { min: 0, src: "auto" };
 }
