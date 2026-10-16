@@ -410,6 +410,53 @@ function moveSceneIn(plan, id, toDay, at){
   if(toDay >= 0 && plan.days[toDay]){ const list = plan.days[toDay].scenes; if(at < 0 || at > list.length) list.push(id); else list.splice(at, 0, id); }
   return { plan, from };
 }
+// ---------- stripboard (pure, so it's tested) ----------
+// Move several scenes at once, keeping their order: onto a day (-1 = Unscheduled), in front of beforeId or at the end.
+function moveManyIn(plan, ids, toDay, beforeId){
+  ids = (ids || []).filter((x, i, a) => x && a.indexOf(x) === i);
+  const from = {};
+  plan.days.forEach((d, i) => { d.scenes.forEach((x) => { if(ids.indexOf(x) >= 0) from[x] = i; }); d.scenes = d.scenes.filter((x) => ids.indexOf(x) < 0); });
+  if(toDay >= 0 && plan.days[toDay]){
+    const list = plan.days[toDay].scenes;
+    let at = beforeId && ids.indexOf(beforeId) < 0 ? list.indexOf(beforeId) : -1;
+    if(at < 0) at = list.length;
+    list.splice(at, 0, ...ids);
+  }
+  return { plan, from };
+}
+// Re-order one day's scenes: "loc" keeps each location together (in the order they first appear) and runs day to night
+// inside it; "dn" day, then dawn/dusk, then night; "n" script order. Ties keep the current order.
+function sortDay(plan, i, by, byId){
+  const d = plan.days[i]; if(!d) return plan;
+  const pos = {}; d.scenes.forEach((x, k) => { pos[x] = k; });
+  const sc = (x) => byId[x] || {}, L = { D: 0, M: 1, N: 2 }, light = (x) => L[lightOf(sc(x))] || 0;
+  const firstLoc = {}; d.scenes.forEach((x) => { const l = sc(x).loc || "?"; if(!(l in firstLoc)) firstLoc[l] = pos[x]; });
+  const cmp = by === "loc" ? (a, b) => firstLoc[sc(a).loc || "?"] - firstLoc[sc(b).loc || "?"] || light(a) - light(b) || pos[a] - pos[b]
+    : by === "dn" ? (a, b) => light(a) - light(b) || pos[a] - pos[b]
+    : (a, b) => (sc(a).n || 0) - (sc(b).n || 0) || pos[a] - pos[b];
+  d.scenes = d.scenes.slice().sort(cmp);
+  return plan;
+}
+// Does a scene pass the stripboard's search and filters? f = { q, ie: "INT"|"EXT", dn: "D"|"N"|"M", cast: name }
+function stripMatch(s, f){
+  if(!s) return false; f = f || {};
+  if(f.ie && !(new RegExp("\\b" + f.ie + "\\b").test(String(s.ie || "")))) return false;
+  if(f.dn && lightOf(s) !== f.dn) return false;
+  if(f.cast && (s.cast || []).indexOf(f.cast) < 0) return false;
+  const q = String(f.q || "").trim().toLowerCase();
+  if(q){
+    const hay = [s.n, s.heading, s.set, s.loc, s.syn, (s.cast || []).join(" "), s.storyDay, s.note].join(" ").toLowerCase();
+    if(q.split(/\s+/).some((w) => hay.indexOf(w) < 0)) return false;
+  }
+  return true;
+}
+// Cast ID numbers on a strip: the breakdown's numbers when it has them, else the cast list order
+function castIds(s, cast){
+  if(s && Array.isArray(s.castNo) && s.castNo.length) return s.castNo.slice();
+  const order = (cast || []).map((c) => c.name);
+  return ((s && s.cast) || []).map((n) => order.indexOf(n) + 1).filter((n) => n > 0).sort((a, b) => a - b);
+}
+
 // ---------- the day's timetable: call, shoot and wrap for each scene, plus the meal and company moves ----------
 // Worked out, never stored: change the call time, the order or a scene's Est. minutes and it follows.
 //   prep    minutes from crew call to the first shot (lighting, rehearsal)
@@ -569,6 +616,6 @@ function dayShots(day, shotMap){
 }
 
 const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
-  moveSceneIn, placeScenes, STATUSES, statusOf, setStatus, cleanWhere, whereOf, sunTimes, hmIn, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
+  moveSceneIn, moveManyIn, sortDay, stripMatch, castIds, placeScenes, STATUSES, statusOf, setStatus, cleanWhere, whereOf, sunTimes, hmIn, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);

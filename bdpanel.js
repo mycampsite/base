@@ -1233,5 +1233,7 @@ function setMode(on, lock){ on = !!on; lock = on && lock ? lock : null; if(on ==
 function navStep(){ try { window.dispatchEvent(new CustomEvent("camp:bd-nav")); } catch(_e){} }
 function getView(){ return S.view === "strips" ? "sheets" : S.view; }
 function setView(v){ if(!["sheets", "elements", "reports"].includes(v) || v === getView()) return; S.view = v; lsSet(VIEW_KEY, v); S.edit = null; S.adding = null; rerender(); }
-window.CampBdPanel = { enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, getView, setView, reloadScript: (id) => loadScript(id, true) };
+// The Stripboard's "Breakdown sheet" button: open one scene's sheet on the Breakdown tab
+function openScene(n){ if(!Number(n)) return; S.sel = Number(n); S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; S.edit = null; try{ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); }catch(_e){} }
+window.CampBdPanel = { enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, getView, setView, openScene, reloadScript: (id) => loadScript(id, true) };
 })();

@@ -295,5 +295,39 @@ test("lunch and wrap can be set by hand", () => {
   assert.strictEqual(pl.days[0].lunch, "12:15"); assert.strictEqual(pl.days[0].wrapAt, undefined);
 });
 
+
+/* ---------- stripboard ---------- */
+test("several scenes move together, keeping their order", () => {
+  const pl = { days: [{ scenes: ["a", "b", "c"] }, { scenes: ["d", "e"] }] };
+  let r = P.moveManyIn(JSON.parse(JSON.stringify(pl)), ["c", "a"], 1, "e");
+  assert.deepStrictEqual(r.plan.days.map((d) => d.scenes), [["b"], ["d", "c", "a", "e"]]);
+  assert.deepStrictEqual(r.from, { a: 0, c: 0 });
+  r = P.moveManyIn(JSON.parse(JSON.stringify(pl)), ["a", "d"], 0, null);
+  assert.deepStrictEqual(r.plan.days.map((d) => d.scenes), [["b", "c", "a", "d"], ["e"]]);
+  r = P.moveManyIn(JSON.parse(JSON.stringify(pl)), ["b", "e"], -1);
+  assert.deepStrictEqual(r.plan.days.map((d) => d.scenes), [["a", "c"], ["d"]]);
+  r = P.moveManyIn(JSON.parse(JSON.stringify(pl)), ["a", "b"], 0, "b");   // dropped on one of its own: goes to the end
+  assert.deepStrictEqual(r.plan.days[0].scenes, ["c", "a", "b"]);
+});
+test("a day sorts by location, by light or by scene number", () => {
+  const byId = { a: { n: 3, loc: "PARK", dn: "N" }, b: { n: 1, loc: "HOUSE", dn: "D" }, c: { n: 2, loc: "PARK", dn: "D" }, d: { n: 4, loc: "HOUSE", dn: "M" } };
+  const pl = () => ({ days: [{ scenes: ["a", "b", "c", "d"] }] });
+  assert.deepStrictEqual(P.sortDay(pl(), 0, "loc", byId).days[0].scenes, ["c", "a", "b", "d"]);
+  assert.deepStrictEqual(P.sortDay(pl(), 0, "dn", byId).days[0].scenes, ["b", "c", "d", "a"]);
+  assert.deepStrictEqual(P.sortDay(pl(), 0, "n", byId).days[0].scenes, ["b", "c", "a", "d"]);
+  assert.deepStrictEqual(P.sortDay(pl(), 5, "n", byId).days[0].scenes, ["a", "b", "c", "d"]);   // no such day: untouched
+});
+test("strips match search and filters", () => {
+  const s = { n: 12, ie: "INT./EXT.", dn: "N", heading: "INT./EXT. CAR - NIGHT", set: "CAR", loc: "CAR", syn: "Ana drives away", cast: ["ANA", "BEN"] };
+  assert.ok(P.stripMatch(s, {})); assert.ok(P.stripMatch(s, { ie: "EXT" })); assert.ok(P.stripMatch(s, { ie: "INT" }));
+  assert.ok(!P.stripMatch(s, { dn: "D" })); assert.ok(P.stripMatch(s, { dn: "N", cast: "BEN" })); assert.ok(!P.stripMatch(s, { cast: "CAL" }));
+  assert.ok(P.stripMatch(s, { q: "ana drives" })); assert.ok(P.stripMatch(s, { q: "12" })); assert.ok(!P.stripMatch(s, { q: "house" }));
+  assert.ok(!P.stripMatch(null, {}));
+});
+test("cast ID numbers come from the breakdown, else the cast order", () => {
+  assert.deepStrictEqual(P.castIds({ castNo: [5, 2], cast: ["X"] }, []), [5, 2]);
+  assert.deepStrictEqual(P.castIds({ cast: ["BEN", "ANA", "ZED"] }, [{ name: "ANA" }, { name: "BEN" }]), [1, 2]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

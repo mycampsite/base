@@ -28,7 +28,8 @@ const S = {
   pick: null,            // scene id chosen for "move to…" (click / touch)
   landed: null,          // { id, day } just moved: flashes once
   drag: null,            // scene id being dragged
-  pid: null
+  pid: null,
+  view: lsGet("Camp_PROD_VIEW_V1") === "classic" ? "classic" : "strips"   // the Stripboard, or the Classic columns
 };
 
 /* ---------- styles ---------- */
@@ -511,6 +512,7 @@ function draw(pid){
   const hh = HIST[pid] || { undo: [], redo: [] };
   const acts = `<div class="ctlActs">
       <span class="ctlUR"><button class="btn sm" type="button" data-a="reload" title="Refresh: re-read the latest script and storyboard shots into this view. Nothing is written to your Sheets (Sync does that).">⟳ Refresh</button>${canEdit ? `<button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button>` : ""}</span>
+      <span class="seg sbView" title="Stripboard: one strip per scene. Classic: the day columns"><button type="button" class="${S.view === "strips" ? "on" : ""}" data-a="pview" data-v="strips">Strips</button><button type="button" class="${S.view === "classic" ? "on" : ""}" data-a="pview" data-v="classic">Classic</button></span>
       <span class="ctlMore"><button class="btn sm" type="button" data-a="menu" aria-haspopup="menu" aria-expanded="${S.menu}" title="More">⋯</button>${S.menu ? `<div class="ctlMenu" role="menu">
         <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room</small></button>
         <button type="button" data-a="reauto"${canEdit ? "" : " disabled"}>Re-plan all<small>Lay out every scene again from scratch</small></button>
@@ -524,7 +526,7 @@ function draw(pid){
   const pageOpts = []; for(let e = 16; e <= 80; e += 4) pageOpts.push(e);
   if(pageOpts.indexOf(st.maxEighths) < 0) pageOpts.push(st.maxEighths), pageOpts.sort((a, b) => a - b);
   const phone = matchMedia("(max-width:760px)").matches;
-  const settings = `<details class="setWrap"${!phone || S.setOpen ? " open" : ""}><summary>Settings<span>${st.days} day${st.days === 1 ? "" : "s"} · ${st.perWeek}/wk · ${P.fmtEighths(st.maxEighths)} pg/day</span></summary><div class="ctlSet">
+  const settings = `<details class="setWrap"${(S.view === "strips" ? S.setOpen : (!phone || S.setOpen)) ? " open" : ""}><summary>Settings<span>${st.days} day${st.days === 1 ? "" : "s"} · ${st.perWeek}/wk · ${P.fmtEighths(st.maxEighths)} pg/day</span></summary><div class="ctlSet">
       ${scriptSel}
       <label>Shoot days<span class="ctlStep"><button type="button" data-a="days-" aria-label="One fewer day"${dis}>−</button><input type="number" min="1" max="${P.MAX_DAYS}" value="${st.days}" data-s="days"${dis}><button type="button" data-a="days+" aria-label="One more day"${dis}>+</button></span></label>
       <label>First shoot day<input type="date" value="${esc(st.start)}" data-s="start"${dis}></label>
@@ -626,8 +628,327 @@ function draw(pid){
   const offs = (st.off || []);
   const cal = offs.length ? `<div class="offRow"><b>Days off</b>${offs.map((iso) => `<button type="button" class="offChip" data-a="cal" data-iso="${esc(iso)}" title="Shoot on this date again"${canEdit ? "" : " disabled"}>${esc(fmtDate(iso))} ✕</button>`).join("")}</div>` : "";
   const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit), castSec = castView(pl, bd, canEdit);
-  box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${castSec}${locSec}</div>`;
+  if(S.view === "strips"){
+    if(SB.pid !== pid){ SB.pid = pid; SB.sel = []; SB.anchor = null; }
+    const sbHtml = sbView({ pid, pl, bd, byId, st, dates, stats, times, warns, shotMap, canEdit, rec, revOf, n, dood, shots, flagSec, castSec, locSec });
+    box.innerHTML = head(chips, acts) + `<div class="ctlBody sbMode">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${sbHtml}</div>`;
+  }
+  else box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${castSec}${locSec}</div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
+}
+
+/* ---------- the stripboard: one strip per scene, one place to plan the shoot ----------
+   The same plan as the Classic board (projects/<pid>/production), so live sync, Sheets Sync and call sheets are unchanged.
+   Strips run in shoot order under each day's header (date, place, call / lunch / wrap, totals) and end with an
+   End of Day banner; scenes with no day wait in the Unscheduled pool at the bottom. Select several (click, Shift,
+   Ctrl/Cmd) and drag them together or move them to a day. ⚠ Every move writes the shared plan (ripple/sync). */
+const SBP_KEY = "Camp_SB_PREFS_V1";
+{ const st2 = document.createElement("style"); st2.textContent = `.sbSecs{ display:flex; gap:2px; margin:12px 0 8px; border-bottom:1px solid var(--uiBorder); overflow-x:auto; scrollbar-width:none; }
+.sbSecs button{ border:0; background:none; color:var(--uiMuted); font:inherit; font-size:13px; font-weight:600; padding:8px 12px; border-bottom:2px solid transparent; margin-bottom:-1px; cursor:pointer; white-space:nowrap; }
+.sbSecs button.on{ color:var(--uiText); border-bottom-color:var(--uiText); }
+.sbSec > details{ margin-top:0; } .sbSec > details > summary{ display:none; }
+.sbTools{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0; }
+.sbTools select, .sbTools .sbQ{ height:32px; border-radius:8px; border:1px solid var(--uiBorder); background:#1d1d1d; color:var(--uiText); font:inherit; font-size:12.5px; padding:0 8px; }
+.sbTools .sbQ{ flex:1 1 220px; min-width:160px; max-width:340px; }
+.sbSp{ flex:1; }
+.sbDense button{ font-size:12px; }
+.sbLegend{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; font-size:11.5px; color:var(--uiMuted); margin:2px 0 8px; }
+.sbLegend i{ width:12px; height:12px; border-radius:3px; background:var(--sc); display:inline-block; margin-right:-6px; vertical-align:-2px; }
+.sbSelBar{ position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:8px 12px; margin:0 0 8px; border-radius:10px; background:#24324a; border:1px solid #4a6aa3; font-size:12.5px; }
+.sbSelBar > span{ color:#c9d6ee; }
+.sbSelBar label{ display:inline-flex; align-items:center; gap:6px; }
+.sbSelBar select{ height:30px; border-radius:7px; border:1px solid rgba(255,255,255,.25); background:#1b2333; color:#fff; font:inherit; font-size:12.5px; }
+.sbBoard{ border:1px solid var(--uiBorder); border-radius:10px; background:#151515; }
+.sbHead, .sbRow{ display:grid; grid-template-columns:22px 38px 34px minmax(110px,1.3fr) 44px 46px minmax(120px,2.2fr) minmax(52px,.6fr) 44px 64px; gap:0 8px; align-items:center; padding:0 10px 0 6px; }
+.sbHead{ position:sticky; top:0; z-index:3; background:#1b1b1b; border-bottom:1px solid var(--uiBorder); font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--uiMuted); height:28px; }
+.sbRow{ min-height:30px; font-size:12.5px; color:#111; background:var(--sc); border-bottom:1px solid rgba(0,0,0,.35); cursor:pointer; position:relative; user-select:none; }
+.sbRow:hover{ filter:brightness(1.07); }
+.sbRow > span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sbRow .sbNo{ font-weight:800; font-variant-numeric:tabular-nums; }
+.sbRow .sbIE, .sbRow .sbDN{ font-weight:700; font-size:11px; }
+.sbRow .sbSet b{ font-weight:700; text-transform:uppercase; }
+.sbRow .sbSet small{ margin-left:6px; opacity:.6; font-size:10.5px; text-transform:uppercase; }
+.sbRow .sbPg, .sbRow .sbTm, .sbRow .sbSD{ font-variant-numeric:tabular-nums; font-size:12px; }
+.sbRow .sbCast{ font-weight:700; font-variant-numeric:tabular-nums; }
+.sbRow .sbSyn{ opacity:.85; }
+.sbBadges{ margin-left:6px; } .sbBadges em{ font-style:normal; font-size:10px; font-weight:700; padding:0 5px; border-radius:4px; margin-right:3px; background:rgba(0,0,0,.18); }
+.sbBadges .sbWarn, .sbBadges .sbRev{ background:#b3261e; color:#fff; } .sbBadges .sbNew{ background:#1a73e8; color:#fff; }
+.sbRow.st-shot, .sbRow.st-omitted{ opacity:.55; } .sbRow.st-omitted .sbSet b{ text-decoration:line-through; }
+.sbRow input[type=checkbox]{ width:15px; height:15px; margin:0; accent-color:#1a73e8; cursor:pointer; }
+.sbRow.sel{ outline:2px solid #4c8dff; outline-offset:-2px; z-index:1; box-shadow:inset 0 0 0 999px rgba(76,141,255,.18); }
+.sbRow.dragging{ opacity:.35; }
+.sbRow.landed{ animation:sbLand 1s ease-out; }
+@keyframes sbLand{ 0%{ box-shadow:inset 0 0 0 999px rgba(255,255,255,.55); } 100%{ box-shadow:none; } }
+.sbBoard.hiOn .sbRow.dim{ opacity:.28; }
+.sbBoard.hiOn .sbRow.hi{ outline:2px solid #ff4d6d; outline-offset:-2px; }
+.sbRow.sbHide{ display:none; }
+.sbBoard.full .sbRow{ padding-top:4px; padding-bottom:4px; }
+.sbMore{ grid-column:3 / -1; white-space:normal !important; font-size:11.5px; opacity:.8; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center; }
+.sbMore .nd{ display:inline-flex; gap:3px; margin:0; } .sbMore .nd i{ width:8px; height:8px; border-radius:50%; background:var(--c); display:inline-block; box-shadow:0 0 0 1px rgba(0,0,0,.3); }
+.sbMore .sbNote{ font-style:italic; } .sbMore .sbCastN{ font-style:normal; font-weight:600; }
+.sbDay{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; padding:7px 10px; background:#202124; border-top:1px solid #333; font-size:12px; }
+.sbDayWrap.over .sbDay{ background:#3a2220; }
+.sbDay .sbDn{ font-size:13.5px; }
+.sbDay .dtPick{ position:relative; display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:6px; border:1px solid var(--uiBorder); cursor:pointer; }
+.sbDay .dtPick.pinned{ border-color:rgba(241,199,107,.6); }
+.sbDay .dtPick input{ position:absolute; inset:0; opacity:0; width:100%; cursor:pointer; }
+.sbDay .unpin{ border:0; background:none; color:var(--uiMuted); cursor:pointer; }
+.sbDay .sbTot{ display:inline-flex; align-items:center; gap:6px; color:var(--uiMuted); }
+.sbDay .cap{ width:56px; height:5px; border-radius:3px; background:rgba(255,255,255,.12); overflow:hidden; display:inline-block; } .sbDay .cap i{ display:block; height:100%; background:#5ccf8a; }
+.sbDayWrap.over .cap i{ background:#ff6b5e; }
+.sbDW{ padding:1px 7px; border-radius:6px; background:rgba(255,255,255,.08); cursor:help; } .sbDW.warn{ background:rgba(255,107,94,.2); color:#ffb4ab; }
+.sbDay .place{ border:1px solid var(--uiBorder); background:none; color:inherit; font:inherit; font-size:12px; border-radius:6px; padding:2px 8px; cursor:pointer; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sbSun, .sbWx{ color:var(--uiMuted); }
+.sbT{ display:inline-flex; align-items:center; gap:4px; color:var(--uiMuted); }
+.sbT select, .sbSort{ height:26px; border-radius:6px; border:1px solid var(--uiBorder); background:#171717; color:var(--uiText); font:inherit; font-size:12px; }
+.sbFold{ border:0; background:none; color:var(--uiText); cursor:pointer; width:20px; font-size:12px; padding:0; }
+.sbBan{ padding:3px 12px 3px 72px; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; background:repeating-linear-gradient(135deg,#2b2b2b 0 8px,#262626 8px 16px); color:#cfcfcf; border-bottom:1px solid #000; }
+.sbBan.meal.late{ color:#ffb4ab; }
+.sbEnd{ padding:5px 12px; background:#000; color:#fff; font-size:11.5px; letter-spacing:.03em; border-bottom:2px solid #444; }
+.sbEnd b{ text-transform:uppercase; letter-spacing:.08em; } .sbEnd .over{ color:#ff8b83; font-weight:700; margin-left:6px; }
+.sbDayWrap.folded .sbEnd{ display:none; }
+.sbEmpty{ padding:12px; font-size:12px; color:var(--uiMuted); text-align:center; }
+.sbBone{ border-top:3px double #555; }
+.sbBone .sbDay{ background:#1b1b1b; }
+.sbBone .sbRow{ filter:saturate(.75); }
+.sbLine{ pointer-events:none; height:3px; background:#4c8dff; box-shadow:0 0 8px #4c8dff; }
+.sbDrop{ outline:2px dashed rgba(76,141,255,.6); outline-offset:-2px; }
+.sbFiltNote{ margin:8px 0; font-size:12px; color:var(--uiMuted); display:flex; gap:8px; align-items:center; }
+.ctlActs .sbView button{ font-size:12px; }
+#sbPrintCopy{ display:none; }
+@media (max-width:760px){
+  .sbHead, .sbRow{ grid-template-columns:22px 28px 30px minmax(80px,1fr) 38px 40px 46px; }
+  .sbHead .sbSyn, .sbHead .sbSD, .sbHead .sbTm, .sbRow .sbSD, .sbRow .sbTm{ display:none; }
+  .sbRow .sbSyn{ grid-column:3 / -1; grid-row:2; font-size:11.5px; }
+  .sbRow .sbCast{ grid-column:7; grid-row:1; }
+  .sbRow{ padding-top:3px; padding-bottom:3px; min-height:40px; }
+  .sbTools .sbQ{ max-width:none; }
+}
+@media print{
+  body.sbPrint > *:not(#sbPrintCopy){ display:none !important; }
+  body.sbPrint{ background:#fff !important; }
+  body.sbPrint #sbPrintCopy{ display:block; color:#000; font:11px/1.3 Inter, Arial, sans-serif; }
+  #sbPrintCopy h1{ font-size:15px; margin:0 0 2px; } #sbPrintCopy .sbPrintDate{ font-size:10px; color:#555; margin-bottom:8px; }
+  #sbPrintCopy .sbBoard{ border:1px solid #000; border-radius:0; background:#fff; overflow:visible; }
+  #sbPrintCopy .sbHead{ position:static; background:#eee; color:#000; }
+  #sbPrintCopy .sbRow{ -webkit-print-color-adjust:exact; print-color-adjust:exact; break-inside:avoid; outline:none !important; box-shadow:none !important; opacity:1 !important; }
+  #sbPrintCopy .sbRow.sbHide{ display:none; }
+  #sbPrintCopy .sbDay{ background:#ddd !important; color:#000; -webkit-print-color-adjust:exact; print-color-adjust:exact; break-after:avoid; }
+  #sbPrintCopy .sbDay .place, #sbPrintCopy .sbDay .dtPick{ border:0; padding:0; color:#000; }
+  #sbPrintCopy .sbEnd{ background:#000 !important; color:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; break-before:avoid; }
+  #sbPrintCopy .sbBan{ background:#eee !important; color:#000; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  #sbPrintCopy .sbT, #sbPrintCopy .sbTot, #sbPrintCopy .sbSun, #sbPrintCopy .sbWx{ color:#000; }
+  #sbPrintCopy .sbDW, #sbPrintCopy .sbCk{ display:none; }
+}
+`; document.head.appendChild(st2); }
+const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {}; }catch(_e){} return { sec: "strips", q: "", ie: "", dn: "", cast: "", hi: "", dense: v.dense === "full" ? "full" : "compact", bone: v.bone || "n", fold: {}, sel: [], anchor: null, drag: null, landed: [] }; })();
+const sbPrefs = () => lsSet(SBP_KEY, JSON.stringify({ dense: SB.dense, bone: SB.bone }));
+const SB_SECS = [["strips", "Stripboard"], ["dood", "Day Out of Days"], ["shots", "Shot list"], ["flags", "Script flags"], ["cast", "Cast"], ["locs", "Locations"]];
+const IE_SHORT = (ie) => { const t = String(ie || "").toUpperCase(); return /INT/.test(t) && /EXT/.test(t) ? "I/E" : /EXT/.test(t) ? "EXT" : /INT/.test(t) ? "INT" : ""; };
+const DN_SHORT = { D: "Day", N: "Night", M: "Dusk" };
+const openDetails = (h) => String(h || "").replace(/<details([^>]*)>/, (m, a) => "<details" + a.replace(/\sopen\b/g, "") + " open>");
+function sbView(c){
+  const { pid, pl, bd, byId, st, dates, stats, times, warns, shotMap, canEdit, rec, revOf, n, dood, shots, flagSec, castSec, locSec } = c;
+  const dis = canEdit ? "" : " disabled";
+  const secTabs = `<div class="sbSecs" role="tablist" aria-label="Plan views">${SB_SECS.map(([v, l]) => `<button type="button" role="tab" class="${SB.sec === v ? "on" : ""}" data-sb="sec" data-v="${v}" aria-selected="${SB.sec === v}">${l}</button>`).join("")}</div>`;
+  if(SB.sec !== "strips"){
+    const body = SB.sec === "dood" ? dood : SB.sec === "shots" ? shots : SB.sec === "flags" ? flagSec : SB.sec === "cast" ? castSec : locSec;
+    return secTabs + `<div class="sbSec">${openDetails(body) || `<div class="colEmpty">Nothing here yet.</div>`}</div>`;
+  }
+  const kids = {}; (bd.cast || []).forEach((x) => { if(x.minor) kids[x.name] = 1; });
+  // cast ID numbers for the legend: the breakdown's own numbers (cast lists run in the same order as their sorted numbers)
+  const noOf = {}; bd.scenes.forEach((x) => { if(x.castNo && x.cast && x.castNo.length === x.cast.length) x.cast.forEach((nm, k) => { if(noOf[nm] == null) noOf[nm] = x.castNo[k]; }); });
+  const castOpts = (bd.cast || []).map((x, i) => ({ name: x.name, no: noOf[x.name] || i + 1 }));
+  const F = { q: SB.q, ie: SB.ie, dn: SB.dn, cast: SB.cast };
+  const fold = SB.fold[pid] = SB.fold[pid] || {};
+  const sel = new Set(SB.sel), landed = new Set(SB.landed);
+  const nHidden = { n: 0 };
+  const strip = (id, tr, day) => {
+    const s = byId[id]; if(!s) return "";
+    const ok = P.stripMatch(s, F); if(!ok){ nHidden.n++; }
+    const stat = P.statusOf(pl, id), rv = revOf[id], isNew = n && n.added.indexOf(id) >= 0;
+    const ids = P.castIds(s, bd.cast), kidNight = s.dn === "N" && (s.cast || []).some((x) => kids[x]);
+    const hiOn = SB.hi && (s.cast || []).indexOf(SB.hi) >= 0;
+    const nsh = shotMap[id] ? shotMap[id].length : 0;
+    const cls = ["sbRow", sel.has(id) ? "sel" : "", landed.has(id) ? "landed" : "", ok ? "" : "sbHide", SB.hi ? (hiOn ? "hi" : "dim") : "", stat !== "Scheduled" ? "st-" + stat.replace(/[^a-z]/gi, "").toLowerCase() : ""].filter(Boolean).join(" ");
+    const badges = (stat !== "Scheduled" ? `<em class="sbStat">${esc(stat)}</em>` : "") + (rv ? `<em class="sbRev" title="${esc("Revised in the script: " + revText(rv))}">Rev</em>` : "") + (isNew ? `<em class="sbNew">New</em>` : "") + (kidNight ? `<em class="sbWarn" title="A cast member under 18 is in this night scene">⚠ minor</em>` : "") + (nsh ? `<em class="sbSh" title="${nsh} storyboard shot${nsh === 1 ? "" : "s"}">${nsh} sh</em>` : "");
+    const tip = s.heading + (s.syn ? " — " + s.syn : "") + (s.cast && s.cast.length ? "\nCast: " + s.cast.join(", ") : "") + (tr ? "\nShoot " + fmtTime(tr.shoot) + " · about " + fmtMins(tr.est) : "");
+    return `<div class="${cls}" role="row" tabindex="0" data-sid="${esc(id)}" data-day="${day}"${canEdit ? ` draggable="true"` : ""} style="--sc:${stripColor(s)}" title="${esc(tip)}" aria-selected="${sel.has(id)}">
+      ${canEdit ? `<span class="sbCk"><input type="checkbox" data-sbck="${esc(id)}"${sel.has(id) ? " checked" : ""} aria-label="Select scene ${s.n}" tabindex="-1"></span>` : `<span class="sbCk"></span>`}
+      <span class="sbNo">${s.n}</span><span class="sbIE">${esc(IE_SHORT(s.ie))}</span>
+      <span class="sbSet"><b>${esc(s.set || s.loc || s.heading || "")}</b>${s.loc && s.set && s.loc !== s.set ? `<small>${esc(s.loc)}</small>` : ""}</span>
+      <span class="sbDN">${esc(DN_SHORT[s.dn] || "")}</span><span class="sbPg">${P.fmtEighths(s.eighths)}</span>
+      <span class="sbSyn">${esc(s.syn || "")}${badges ? `<span class="sbBadges">${badges}</span>` : ""}</span>
+      <span class="sbCast" title="${esc((s.cast || []).join(", ") || "No cast")}">${ids.length ? ids.join(", ") : "—"}</span>
+      <span class="sbSD">${esc(s.storyDay || "")}</span>
+      <span class="sbTm">${tr ? esc(fmtTime(tr.shoot)) : "~" + fmtMins(P.estOf(s))}</span>
+      ${SB.dense === "full" ? `<span class="sbMore">${esc(s.heading || "")}${needDots(s.needs)}${s.note ? `<i class="sbNote">${esc(s.note)}</i>` : ""}${(s.cast || []).length ? `<i class="sbCastN">${esc(s.cast.join(", "))}</i>` : ""}</span>` : ""}
+    </div>`;
+  };
+  const dayWarn = (i) => warns.filter((w) => w.day === i + 1);
+  const days = pl.days.map((d, i) => {
+    const x = stats[i], tt = times[i], pct = Math.min(100, Math.round(x.eighths / st.maxEighths * 100)), folded = !!fold[i];
+    const w = P.whereOf(pl, i), sun = sunFor(w, dates[i]), wx = weatherFor(w, dates[i]), dw = dayWarn(i);
+    const rows = tt.rows.map((r) => r.type === "scene" ? strip(r.id, r, i)
+      : r.type === "meal" ? `<div class="sbBan meal${r.late ? " late" : ""}" title="${r.late ? "Past six hours from call: a meal penalty may apply" : "Meal break"}">Meal · ${esc(fmtTime(r.start))} – ${esc(fmtTime(r.end))}</div>`
+      : `<div class="sbBan move" title="Company move: ${esc(r.from)} → ${esc(r.to)}">Company move → ${esc(r.to)} · ${r.min} min</div>`).join("");
+    return `<section class="sbDayWrap${x.over ? " over" : ""}${folded ? " folded" : ""}" data-day="${i}">
+      <div class="sbDay" data-dropday="${i}">
+        <button type="button" class="sbFold" data-sb="fold" data-i="${i}" aria-expanded="${!folded}" aria-label="${folded ? "Show" : "Hide"} Day ${i + 1}'s strips">${folded ? "▸" : "▾"}</button>
+        <b class="sbDn">Day ${i + 1}</b>
+        <label class="dtPick${d.date ? " pinned" : ""}" title="${d.date ? "Set to this date. Click to change it" : "Click to choose this day's date. The days after it follow on"}"><span>${esc(fmtDate(dates[i]) || "Set date")}</span><input type="date" value="${esc(dates[i] || "")}" data-date="${i}"${dis}></label>${d.date && canEdit ? `<button type="button" class="unpin" data-a="unpin" data-day="${i}" title="Unpin: follow on from the day before">✕</button>` : ""}
+        <span class="sbTot"><span class="cap"><i style="width:${pct}%"></i></span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg · ${x.scenes} sc · ${x.cast.length} cast${Object.keys(shotMap).length ? " · " + P.dayShots(d, shotMap).total + " sh" : ""}</span>
+        ${dw.length ? `<span class="sbDW${dw.some((y) => y.level === "warn") ? " warn" : ""}" title="${esc(dw.map((y) => y.text).join("\n"))}">${dw.some((y) => y.level === "warn") ? "⚠" : "ⓘ"} ${dw.length}</span>` : ""}
+        <span class="sbSp"></span>
+        <button type="button" class="place${d.where ? " own" : ""}" data-a="dwhere" data-i="${i}"${dis} title="${w ? esc((w.label || w.name) + (d.where ? " (this day)" : " (the shoot's location)")) + ". Click to change this day's location" : "Set this day's location for sunrise, sunset and weather"}">📍 ${esc(w ? (w.name || w.label) : "Location")}</button>
+        ${sun ? `<span class="sbSun" title="Sunrise and sunset">☀ ${esc(fmtTime(sun.rise))} – ${esc(fmtTime(sun.set))}</span>` : ""}${wx ? `<span class="sbWx">${esc(wx)}</span>` : ""}
+        <label class="sbT">Call${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}</label>
+        <label class="sbT" title="Leave on Auto to let Camp place the lunch break">Lunch${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis)}</label>
+        <label class="sbT" title="Leave on Auto to let Camp work out the wrap time">Wrap${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</label>
+        ${canEdit && d.scenes.length > 1 ? `<select class="sbSort" data-sbsort="${i}" aria-label="Sort Day ${i + 1}" title="Re-order this day (Undo puts it back)"><option value="">Sort…</option><option value="loc">By location</option><option value="dn">Day → night</option><option value="n">Scene number</option></select>` : ""}
+      </div>
+      <div class="sbRows">${folded ? "" : (d.scenes.length ? rows : `<div class="sbEmpty" data-dropday="${i}">${canEdit ? "Drag scenes here" : "No scenes"}</div>`)}</div>
+      <div class="sbEnd" data-dropday="${i}"><b>End of Day ${i + 1}</b>${dates[i] ? " · " + esc(fmtDate(dates[i])) : ""} · ${P.fmtEighths(x.eighths)} pgs · ${x.scenes} scene${x.scenes === 1 ? "" : "s"}${tt.wrap ? " · wrap " + (tt.wrapManual ? "" : "~") + esc(fmtTime(tt.wrap)) : ""}${x.over ? ` <span class="over">over the page limit</span>` : ""}</div>
+    </section>`;
+  }).join("");
+  const boneSort = { n: (a, b) => byId[a].n - byId[b].n, loc: (a, b) => String(byId[a].loc || "").localeCompare(String(byId[b].loc || "")) || byId[a].n - byId[b].n,
+    dn: (a, b) => ({ D: 0, M: 1, N: 2 }[byId[a].dn] || 0) - ({ D: 0, M: 1, N: 2 }[byId[b].dn] || 0) || byId[a].n - byId[b].n,
+    pg: (a, b) => byId[b].eighths - byId[a].eighths || byId[a].n - byId[b].n }[SB.bone] || ((a, b) => byId[a].n - byId[b].n);
+  const un = rec.unscheduled.filter((id) => byId[id]).sort(boneSort);
+  const bone = `<section class="sbBone" data-dropday="-1"><div class="sbDay bone" data-dropday="-1"><b class="sbDn">Unscheduled</b><span class="sbTot">${un.length} scene${un.length === 1 ? "" : "s"} · ${P.fmtEighths(un.reduce((a, id) => a + byId[id].eighths, 0))} pg</span><span class="sbSp"></span>
+      <label class="sbT">Order<select data-sbf="bone">${[["n", "Scene number"], ["loc", "Location"], ["dn", "Day → night"], ["pg", "Longest first"]].map(([v, l]) => `<option value="${v}"${SB.bone === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+      ${canEdit && un.length ? `<button type="button" class="btn sm" data-a="auto" title="Put unscheduled scenes on days with room">Auto-schedule</button>` : ""}</div>
+    <div class="sbRows">${un.length ? un.map((id) => strip(id, null, -1)).join("") : `<div class="sbEmpty" data-dropday="-1">Every scene has a day ✓${canEdit ? " · drop a strip here to take it off the schedule" : ""}</div>`}</div></section>`;
+  const selIds = SB.sel.filter((id) => byId[id]);
+  const selBar = canEdit && selIds.length ? `<div class="sbSelBar" role="region" aria-label="Selected scenes"><b>${selIds.length} selected</b><span>${P.fmtEighths(selIds.reduce((a, id) => a + byId[id].eighths, 0))} pg · Sc ${selIds.map((id) => byId[id].n).sort((a, b) => a - b).join(", ")}</span>
+      <label>Move to<select data-sbmove="1"><option value="">Choose a day…</option><option value="-1">Unscheduled</option>${pl.days.map((d, i) => `<option value="${i}">Day ${i + 1}${dates[i] ? " · " + esc(fmtDate(dates[i])) : ""} (${P.fmtEighths(stats[i].eighths)} pg)</option>`).join("")}</select></label>
+      ${selIds.length === 1 ? `<label>Status<select data-status="${esc(selIds[0])}">${P.STATUSES.map((x) => `<option${x === P.statusOf(pl, selIds[0]) ? " selected" : ""}>${x}</option>`).join("")}</select></label>` : ""}
+      ${selIds.length === 1 ? `<button type="button" class="btn sm" data-sb="openbd" data-n="${byId[selIds[0]].n}" title="Open this scene's breakdown sheet">Breakdown sheet</button>` : ""}
+      <button type="button" class="btn sm" data-sb="clear">Clear</button></div>` : "";
+  const tools = `<div class="sbTools">
+      <input type="search" class="sbQ" data-sbq placeholder="Find a scene, set, cast or synopsis" value="${esc(SB.q)}" aria-label="Find a scene">
+      <select data-sbf="ie" aria-label="Interior or exterior"><option value="">INT + EXT</option><option value="INT"${SB.ie === "INT" ? " selected" : ""}>INT</option><option value="EXT"${SB.ie === "EXT" ? " selected" : ""}>EXT</option></select>
+      <select data-sbf="dn" aria-label="Day or night"><option value="">Day + night</option><option value="D"${SB.dn === "D" ? " selected" : ""}>Day</option><option value="M"${SB.dn === "M" ? " selected" : ""}>Dawn / dusk</option><option value="N"${SB.dn === "N" ? " selected" : ""}>Night</option></select>
+      <select data-sbf="cast" aria-label="Only scenes with"><option value="">Any cast</option>${castOpts.map((o) => `<option value="${esc(o.name)}"${SB.cast === o.name ? " selected" : ""}>Only ${esc(o.name)}</option>`).join("")}</select>
+      <select data-sbf="hi" aria-label="Highlight a cast member"><option value="">Highlight…</option>${castOpts.map((o) => `<option value="${esc(o.name)}"${SB.hi === o.name ? " selected" : ""}>${o.no ? o.no + ". " : ""}${esc(o.name)}</option>`).join("")}</select>
+      <span class="sbSp"></span>
+      <span class="seg sbDense"><button type="button" class="${SB.dense === "compact" ? "on" : ""}" data-sb="dense" data-v="compact" title="One line per strip">Compact</button><button type="button" class="${SB.dense === "full" ? "on" : ""}" data-sb="dense" data-v="full" title="Heading, needs, notes and cast names under each strip">Detailed</button></span>
+      <button type="button" class="btn sm" data-sb="foldall" title="${Object.keys(fold).some((k) => fold[k]) ? "Show every day's strips" : "Hide every day's strips (headers stay)"}">${Object.keys(fold).some((k) => fold[k]) ? "Unfold all" : "Fold all"}</button>
+      <button type="button" class="btn sm" data-sb="print" title="Print the stripboard, or save it as a PDF">Print</button>
+    </div>`;
+  const legend = `<div class="sbLegend" aria-hidden="true"><i style="--sc:#e8e8e8"></i>INT day <i style="--sc:#f2c94c"></i>EXT day <i style="--sc:#5b8cff"></i>INT night <i style="--sc:#5ccf8a"></i>EXT night <i style="--sc:#f2994a"></i>Dawn / dusk${canEdit ? ` <span>· Click to select, Shift / ${/Mac/.test(navigator.platform) ? "⌘" : "Ctrl"} for more, drag to move</span>` : ""}</div>`;
+  const colHead = `<div class="sbHead" role="row"><span class="sbCk"></span><span class="sbNo">Sc</span><span class="sbIE">I/E</span><span class="sbSet">Set</span><span class="sbDN">D/N</span><span class="sbPg">Pgs</span><span class="sbSyn">Synopsis</span><span class="sbCast" title="${esc(castOpts.map((o) => o.no + ". " + o.name).join("\n"))}">Cast</span><span class="sbSD" title="Story day">Story</span><span class="sbTm" title="Shoot time on a day, or the estimate">Time</span></div>`;
+  const filt = SB.q || SB.ie || SB.dn || SB.cast;
+  return secTabs + tools + legend + selBar + `<div class="sbBoard${SB.dense === "full" ? " full" : ""}${SB.hi ? " hiOn" : ""}" role="grid" aria-label="Stripboard">${colHead}${days}${bone}</div>`
+    + (filt ? `<div class="sbFiltNote">${nHidden.n} strip${nHidden.n === 1 ? "" : "s"} hidden by the filters. <button type="button" class="btn sm" data-sb="unfilter">Show all</button></div>` : "");
+}
+// Visible strips in board order (for Shift-select ranges)
+function sbOrder(box){ return Array.from(box.querySelectorAll(".sbRow:not(.sbHide)")).map((r) => r.dataset.sid); }
+function sbSetSel(ids, anchor){ SB.sel = ids.filter((x, i, a) => a.indexOf(x) === i); if(anchor !== undefined) SB.anchor = anchor; }
+function sbMove(pid, ids, toDay, beforeId){
+  if(!ids.length) return;
+  const { plan, from } = P.moveManyIn(planOf(pid), ids, toDay, beforeId);
+  save(pid, plan);
+  SB.landed = ids.slice(); clearTimeout(sbMove.t); sbMove.t = setTimeout(() => { SB.landed = []; rerender(); }, 1100);
+  const byId = S.lastBd ? P.sceneMap(S.lastBd) : {}, names = ids.map((id) => byId[id] ? byId[id].n : "?");
+  const what = ids.length === 1 ? "Sc " + names[0] : ids.length + " scenes";
+  if(toDay < 0) H().toast(what + " moved to Unscheduled", "ok", 1800);
+  else{ const stt = S.lastBd ? P.dayStats(plan.days[toDay], byId, plan.settings.maxEighths) : null;
+    H().toast(what + (ids.every((id) => from[id] === toDay) ? " reordered on Day " : " → Day ") + (toDay + 1) + (stt ? " · " + P.fmtEighths(stt.eighths) + " / " + P.fmtEighths(plan.settings.maxEighths) + " pg" + (stt.over ? " ⚠ over" : "") : ""), stt && stt.over ? "err" : "ok", 2000); }
+  rerender();
+}
+function sbPrint(){
+  const src = document.querySelector("#ctl .sbBoard"); if(!src) return;
+  const old = document.getElementById("sbPrintCopy"); if(old) old.remove();
+  const c = document.createElement("div"); c.id = "sbPrintCopy";
+  const title = (S.lastScriptId && H().scriptTitle(S.lastScriptId)) || "Stripboard";
+  c.innerHTML = `<h1>${esc(title)} · Stripboard</h1><div class="sbPrintDate">${esc(new Date().toLocaleDateString())}</div>` + src.outerHTML;
+  c.querySelectorAll("select, input, button.sbFold, button.unpin, .sbSort").forEach((x) => { if(x.classList.contains("sbSort")){ x.remove(); return; } if(x.tagName === "SELECT"){ const t = document.createElement("span"); t.textContent = x.options[x.selectedIndex] ? x.options[x.selectedIndex].text : ""; x.replaceWith(t); } else if(x.type === "date" || x.type === "checkbox"){ x.remove(); } else x.remove(); });
+  document.body.appendChild(c); document.body.classList.add("sbPrint");
+  const done = () => { document.body.classList.remove("sbPrint"); c.remove(); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  setTimeout(() => { window.print(); setTimeout(() => { if(document.body.classList.contains("sbPrint")) done(); }, 1500); }, 50);
+}
+// Clicks on the stripboard. Returns true when it handled the click.
+function sbClick(e, pid, canEdit){
+  const a = e.target.closest("[data-sb]");
+  if(a){
+    const k = a.dataset.sb;
+    if(k === "sec"){ SB.sec = a.dataset.v; render(pid); return true; }
+    if(k === "dense"){ SB.dense = a.dataset.v === "full" ? "full" : "compact"; sbPrefs(); render(pid); return true; }
+    if(k === "fold"){ const f = SB.fold[pid] = SB.fold[pid] || {}, i = a.dataset.i; f[i] = !f[i]; render(pid); return true; }
+    if(k === "foldall"){ const f = SB.fold[pid] = SB.fold[pid] || {}, any = Object.keys(f).some((x) => f[x]); SB.fold[pid] = {}; if(!any) planOf(pid).days.forEach((d, i) => { SB.fold[pid][i] = true; }); render(pid); return true; }
+    if(k === "clear"){ sbSetSel([], null); render(pid); return true; }
+    if(k === "unfilter"){ SB.q = ""; SB.ie = ""; SB.dn = ""; SB.cast = ""; render(pid); return true; }
+    if(k === "print"){ sbPrint(); return true; }
+    if(k === "openbd"){ try{ if(window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(Number(a.dataset.n)); }catch(_e){} return true; }
+    return true;
+  }
+  const row = e.target.closest(".sbRow");
+  if(!row || !canEdit || e.target.closest("[data-a], select, label.dtPick")) return false;
+  const id = row.dataset.sid, ck = e.target.closest("[data-sbck]");
+  if(ck){ const on = ck.checked; sbSetSel(on ? SB.sel.concat([id]) : SB.sel.filter((x) => x !== id), id); render(pid); return true; }
+  if(e.shiftKey && SB.anchor){ const ord = sbOrder(document.getElementById("ctl")), i = ord.indexOf(SB.anchor), j = ord.indexOf(id); if(i >= 0 && j >= 0){ sbSetSel(SB.sel.concat(ord.slice(Math.min(i, j), Math.max(i, j) + 1))); render(pid); return true; } }
+  if(e.ctrlKey || e.metaKey){ sbSetSel(SB.sel.indexOf(id) >= 0 ? SB.sel.filter((x) => x !== id) : SB.sel.concat([id]), id); render(pid); return true; }
+  sbSetSel(SB.sel.length === 1 && SB.sel[0] === id ? [] : [id], id); render(pid); return true;
+}
+function sbChange(e, pid, canEdit){
+  const t = e.target;
+  if(t.dataset.sbf){ const k = t.dataset.sbf; if(k === "bone"){ SB.bone = t.value; sbPrefs(); } else SB[k] = t.value; render(pid); return true; }
+  if(!canEdit) return false;
+  if(t.dataset.sbmove){ if(t.value === "") return true; const ord = sbOrder(document.getElementById("ctl")), ids = SB.sel.slice().sort((a, b) => { const i = ord.indexOf(a), j = ord.indexOf(b); return (i < 0 ? 1e9 : i) - (j < 0 ? 1e9 : j); }); sbSetSel([], null); sbMove(pid, ids, Number(t.value), null); return true; }
+  if(t.dataset.sbsort != null){ const by = t.value; if(!by) return true; const i = Number(t.dataset.sbsort), plan = planOf(pid); P.sortDay(plan, i, by, S.lastBd ? P.sceneMap(S.lastBd) : {}); save(pid, plan); H().toast("Day " + (i + 1) + " sorted " + (by === "loc" ? "by location" : by === "dn" ? "day to night" : "by scene number") + ". Undo puts it back.", "ok", 2200); rerender(); return true; }
+  return false;
+}
+function sbWire(box, pid, canEdit){
+  const q = box.querySelector("[data-sbq]");
+  if(q){ q.oninput = () => { SB.q = q.value; const f = { q: SB.q, ie: SB.ie, dn: SB.dn, cast: SB.cast }, by = S.lastBd ? P.sceneMap(S.lastBd) : {};
+    box.querySelectorAll(".sbRow").forEach((r) => r.classList.toggle("sbHide", !P.stripMatch(by[r.dataset.sid], f))); };
+    q.onkeydown = (e) => { e.stopPropagation(); if(e.key === "Escape"){ q.value = ""; q.oninput(); } };
+    q.onblur = () => { if(SB.q !== (q.dataset.was || "")) rerender(); }; q.dataset.was = SB.q; }
+  // double-click a strip: its breakdown sheet
+  box.ondblclick = (e) => { const row = e.target.closest(".sbRow"); if(!row || e.target.closest("input, select")) return; const s = S.lastBd && P.sceneMap(S.lastBd)[row.dataset.sid]; if(s && window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(s.n); };
+  if(!canEdit) return;
+  // keyboard: Space or Enter on a focused strip selects it (Shift / Ctrl / Cmd work as with the mouse)
+  box.onkeydown = (e) => { const row = e.target.closest && e.target.closest(".sbRow"); if(!row || e.target !== row || (e.key !== " " && e.key !== "Enter")) return; e.preventDefault(); const id = row.dataset.sid;
+    sbClick({ target: row, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey }, pid, canEdit);
+    setTimeout(() => { const again = document.querySelector('#ctl .sbRow[data-sid="' + CSS.escape(id) + '"]'); if(again) again.focus(); }, 30); };
+  const line = document.createElement("div"); line.className = "sbLine";
+  const target = (e) => {
+    const row = e.target.closest(".sbRow"), zone = e.target.closest("[data-dropday]");
+    if(row && !SB.drag.includes(row.dataset.sid)){
+      const r = row.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2, day = Number(row.dataset.day);
+      if(day < 0) return { day: -1, before: null, el: row, after };
+      let before = row.dataset.sid;
+      if(after){ let nx = row.nextElementSibling; while(nx && !(nx.classList.contains("sbRow") && !SB.drag.includes(nx.dataset.sid))) nx = nx.nextElementSibling; before = nx ? nx.dataset.sid : null; }
+      return { day, before, el: row, after };
+    }
+    if(zone){ const day = Number(zone.dataset.dropday), isHead = zone.classList.contains("sbDay") && day >= 0;
+      if(isHead){ const first = zone.parentElement.querySelector(".sbRow"); return { day, before: first ? first.dataset.sid : null, el: first || zone, after: !first }; }
+      return { day, before: null, el: zone, after: false, end: true }; }
+    return null;
+  };
+  box.ondragstart = (e) => {
+    const row = e.target.closest(".sbRow"); if(!row) return;
+    const id = row.dataset.sid, ord = sbOrder(box);
+    SB.drag = SB.sel.indexOf(id) >= 0 ? ord.filter((x) => SB.sel.indexOf(x) >= 0) : [id];
+    S.drag = id;   // stops the panel redrawing under the drag
+    try{ e.dataTransfer.setData("text/plain", SB.drag.join(",")); e.dataTransfer.effectAllowed = "move"; }catch(_e){}
+    setTimeout(() => SB.drag && SB.drag.forEach((x) => { const el = box.querySelector('.sbRow[data-sid="' + CSS.escape(x) + '"]'); if(el) el.classList.add("dragging"); }), 0);
+  };
+  box.ondragend = () => { SB.drag = null; S.drag = null; line.remove(); box.querySelectorAll(".sbDrop").forEach((x) => x.classList.remove("sbDrop")); rerender(); };
+  box.ondragover = (e) => {
+    if(!SB.drag) return; const t = target(e); if(!t) return; e.preventDefault();
+    box.querySelectorAll(".sbDrop").forEach((x) => x.classList.remove("sbDrop"));
+    const wrap = t.el.closest(".sbDayWrap, .sbBone"); if(wrap) wrap.classList.add("sbDrop");
+    if(t.day < 0 || t.end){ line.remove(); return; }
+    if(t.after){ if(t.el.nextSibling !== line) t.el.after(line); } else if(t.el.previousSibling !== line) t.el.before(line);
+  };
+  box.ondrop = (e) => {
+    if(!SB.drag) return; const t = target(e); if(!t) return; e.preventDefault();
+    const ids = SB.drag.slice(); SB.drag = null; S.drag = null; line.remove();
+    sbMove(pid, ids, t.day, t.before);
+  };
 }
 
 /* ---------- script flags: keep / watch / ignore, for a flag everywhere or one scene ---------- */
@@ -734,12 +1055,14 @@ function wire(box, pid, ctx){
     // The date chip hides its date input; open the calendar on any click (browsers only open it from the icon otherwise)
     const dp = e.target.closest(".dtPick");
     if(dp){ const inp = dp.querySelector("input[type=date]"); if(inp && !inp.disabled){ e.preventDefault(); try{ inp.showPicker(); }catch(_e){ inp.focus(); inp.click(); } } return; }
+    if(S.view === "strips" && sbClick(e, pid, canEdit)){ if(S.menu){ S.menu = false; render(pid); } return; }
     const a = e.target.closest("[data-a]"), sEl = e.target.closest(".strip");
     if(a){
       const k = a.dataset.a;
       if(k !== "menu") S.menu = false;
       if(k === "menu"){ S.menu = !S.menu; render(pid); return; }
       if(k === "dtab"){ S.dayTab[pid] = Number(a.dataset.i); render(pid); return; }
+      if(k === "pview"){ S.view = a.dataset.v === "classic" ? "classic" : "strips"; lsSet("Camp_PROD_VIEW_V1", S.view); S.pick = null; render(pid); return; }
       if(k === "undo" || k === "redo"){ stepHist(pid, k === "undo"); return; }
       if(k === "h24"){ lsSet(H24_KEY, is24() ? "0" : "1"); render(pid); return; }
       if(k === "warns"){ S.warnOpen = !S.warnOpen; render(pid); return; }
@@ -845,9 +1168,11 @@ function wire(box, pid, ctx){
     if(S.menu && !e.target.closest(".ctlMenu")){ S.menu = false; render(pid); return; }
     if(sEl && canEdit){ S.pick = S.pick === sEl.dataset.sid ? null : sEl.dataset.sid; render(pid); }
   };
-  box.querySelectorAll("details.setWrap").forEach((d) => { d.ontoggle = () => { if(matchMedia("(max-width:760px)").matches) S.setOpen = d.open; }; });
+  box.querySelectorAll("details.setWrap").forEach((d) => { d.ontoggle = () => { if(S.view === "strips" || matchMedia("(max-width:760px)").matches) S.setOpen = d.open; }; });
   box.onchange = (e) => {
-    const t = e.target; if(!canEdit) return;
+    const t = e.target;
+    if(S.view === "strips" && sbChange(e, pid, canEdit)) return;
+    if(!canEdit) return;
     if(t.dataset.move){ moveScene(pid, t.dataset.move, Number(t.value), -1); S.pick = null; return; }
     if(S.locForm && t.closest(".lcPick")){ (S.locForm.picked = S.locForm.picked || {})[t.value] = t.checked; return; }
     if(t.dataset.ctype != null){
@@ -873,6 +1198,7 @@ function wire(box, pid, ctx){
   const tm = box.querySelector("details.tmSet"); if(tm) tm.ontoggle = () => { S.tmOpen = tm.open; };
   const det = box.querySelector("details.dood:not(.fx)"); if(det) det.ontoggle = () => { S.doodOpen = det.open; lsSet(DOOD_KEY, det.open ? "1" : "0"); };
   box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : d.dataset.sec === "shots" ? SHOTS_KEY : d.dataset.sec === "cast" ? CAST_KEY : LOCS_KEY, d.open ? "1" : "0"); });
+  if(S.view === "strips"){ sbWire(box, pid, canEdit); return; }
   if(!canEdit) return;
   // drag and drop between columns
   const line = document.createElement("div"); line.className = "dropLine";
@@ -956,6 +1282,7 @@ function setMode(m){
 function csError(pid, msg){ if(msg) S.csErr[pid] = msg; else delete S.csErr[pid]; rerender(); }
 document.addEventListener("keydown", (e) => {
   if(e.key === "Escape" && S.menu){ S.menu = false; rerender(); return; }
+  if(e.key === "Escape" && S.mode === "plan" && S.view === "strips" && SB.sel.length && !/^(input|select|textarea)$/i.test((e.target && e.target.tagName) || "")){ SB.sel = []; SB.anchor = null; rerender(); return; }
   // Ctrl/Cmd+Z, Ctrl+Shift+Z / Ctrl+Y while the plan is showing (not while typing in a field)
   if(S.mode !== "plan" || !S.pid || !(e.ctrlKey || e.metaKey)) return;
   if(e.target.closest && e.target.closest("input, select, textarea, [contenteditable=true]")) return;
