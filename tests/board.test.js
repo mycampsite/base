@@ -50,7 +50,7 @@ test("links typed in the notes become buttons and leave the rest as text", () =>
   assert.deepStrictEqual(B.notesParts("IMDb imdb.com/name/nm1 · agent Pat").links.map((l) => l.url), ["https://imdb.com/name/nm1"]);   // pasted without https
   assert.strictEqual(B.notesParts("IMDb imdb.com/name/nm1 · agent Pat").text, "agent Pat");
   assert.deepStrictEqual(B.notesParts("https://a.com/x https://a.com/x").links.length, 1);   // a repeat is one button
-  assert.deepStrictEqual(B.notesParts(null), { text: "", links: [] });
+  assert.deepStrictEqual(B.notesParts(null), { text: "", links: [], tags: [], sites: [] });
 });
 
 /* ---------- cards ---------- */
@@ -282,6 +282,42 @@ test("groups can be moved up and down, and keep that order", () => {
   // only some numbered: those first, the rest in the Sheet's order
   const d2 = { cast: [{ name: "A", candidates: [] }, { name: "B", candidates: [] }, { name: "C", order: 1, candidates: [] }] };
   assert.deepStrictEqual(B.groupsOf(d2, "cast", "f").map((g) => g.name), ["C", "A", "B"]);
+});
+
+test("tags and websites live in the notes and come back out of them", () => {
+  const p = B.parseNotes("Great reel\n#agent #under-18\nWebsite https://x.com/a");
+  assert.deepStrictEqual(p.tags, ["Agent", "Under 18"]); assert.deepStrictEqual(p.sites, ["https://x.com/a"]); assert.strictEqual(p.rest, "Great reel");
+  assert.strictEqual(B.joinNotes("Great reel", ["Agent", "Under 18"], ["https://x.com/a"]), "Great reel\nWebsite https://x.com/a\n#agent #under-18");
+  assert.deepStrictEqual(B.parseNotes(B.joinNotes("Hi", ["Freelance"], [])).tags, ["Freelance"]);          // saved then read again
+  assert.strictEqual(B.parseNotes("Call #3 before noon").rest, "Call #3 before noon");                      // a number or mid-sentence # is not a tag
+  assert.strictEqual(B.joinNotes("", ["Agent"], ["javascript:alert(1)"]), "#agent");                        // an unsafe website is dropped
+  const np = B.notesParts("Website https://a.com\nWebsite https://b.com\n#freelance");
+  assert.deepStrictEqual(np.links.map((l) => l.label), ["a.com", "b.com"]); assert.deepStrictEqual(np.tags, ["Freelance"]); assert.strictEqual(np.text, "");
+  assert.strictEqual(B.notesParts("Website https://a.com").links[0].label, "Website");
+  const g = B.groupsOf({ cast: [{ name: "R", candidates: [{ key: "cast:R:1", n: 1, actor: "Jo", notes: "x\n#agent" }] }] }, "cast", "f")[0];
+  assert.deepStrictEqual(g.cards[0].tags, ["Agent"]); assert.strictEqual(g.cards[0].notes, "x");
+  assert.strictEqual(B.filterGroups([g], "All", "agent")[0].cards.length, 1);                              // search finds tags
+});
+test("several phones and emails each get a button", () => {
+  const g = B.groupsOf({ cast: [{ name: "R", candidates: [{ key: "cast:R:1", n: 1, actor: "Jo", phone: "0412 345 678\n0299 998 888", email: "a@x.com\nb@x.com" }] }] }, "cast", "f")[0];
+  assert.deepStrictEqual(g.cards[0].contact.map((x) => x.label), ["Call 1", "Call 2", "Email 1", "Email 2"]);
+  assert.strictEqual(B.checkEdit("cast", { email: "a@x.com\nnope" }, []), "That email address doesn't look right.");
+  assert.strictEqual(B.checkEdit("cast", { email: "a@x.com\nb@x.com", phone: "1\n2" }, []), "");
+  assert.strictEqual(B.tidyValues("cast", { phone: " 0412 \n\n0412 \n0299 " }).phone, "0412\n0299");
+});
+test("more video sites embed, and Drive files only when asked", () => {
+  assert.strictEqual(B.embedUrl("https://www.loom.com/share/0123456789abcdef0123456789abcdef"), "https://www.loom.com/embed/0123456789abcdef0123456789abcdef");
+  assert.strictEqual(B.embedUrl("https://streamable.com/abc12"), "https://streamable.com/e/abc12");
+  assert.strictEqual(B.embedUrl("https://www.instagram.com/reel/Cabc12345/"), "https://www.instagram.com/reel/Cabc12345/embed");
+  assert.strictEqual(B.embedUrl("https://www.tiktok.com/@jo/video/7123456789012345678"), "https://www.tiktok.com/embed/v2/7123456789012345678");
+  assert.strictEqual(B.embedUrl("https://www.dailymotion.com/video/x8abc12"), "https://www.dailymotion.com/embed/video/x8abc12");
+  const drive = "https://drive.google.com/file/d/1AbCdEfGhIjKl/view";
+  assert.strictEqual(B.embedUrl(drive), ""); assert.strictEqual(B.embedUrl(drive, { drive: true }), "https://drive.google.com/file/d/1AbCdEfGhIjKl/preview");
+  assert.strictEqual(B.embedUrl("https://evil.com/embed/loom.com/share/0123456789abcdef0123"), "");
+});
+test("a new option starts as Considering when the Sheet has that status", () => {
+  assert.strictEqual(B.startStatus(["Passed", "Considering", "Cast"]), "Considering"); assert.strictEqual(B.startStatus(["Cast"]), "");
+  assert.strictEqual(B.checkEdit("cast", { actor: "", status: "Considering" }, ["Considering"], true), "Type something first.");   // the starting status alone isn't something
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

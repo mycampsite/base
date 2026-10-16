@@ -82,6 +82,12 @@ const css = `
 .bdLinks{ display:flex; gap:5px; flex-wrap:wrap; margin-top:auto; padding-top:4px; }
 .bdBtn{ display:inline-flex; align-items:center; height:24px; padding:0 9px; border-radius:7px; border:1px solid rgba(255,255,255,.22); font-size:11.5px; font-weight:600; color:var(--uiText); text-decoration:none; }
 .bdBtn:hover{ background:rgba(255,255,255,.1); }
+.bdTags{ display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+.bdTag{ height:18px; padding:0 7px; border-radius:6px; font-size:10.5px; font-weight:600; display:inline-flex; align-items:center; background:rgba(138,180,255,.12); color:#9bbcff; border:1px solid rgba(138,180,255,.28); }
+.bdTagPick{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.bdTagBtn{ height:28px; padding:0 11px; border-radius:999px; border:1px solid var(--uiBorder); background:transparent; color:var(--uiMuted); font:inherit; font-size:12.5px; cursor:pointer; }
+.bdTagBtn.on{ background:rgba(138,180,255,.16); color:#bcd2ff; border-color:rgba(138,180,255,.55); }
+.bdTagIn{ height:28px; width:120px; padding:0 10px; border-radius:999px; border:1px dashed var(--uiBorder); background:transparent; color:var(--uiText); font:inherit; font-size:12.5px; }
 .bdSt{ align-self:flex-start; height:19px; padding:0 8px; border-radius:999px; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; display:inline-flex; align-items:center; border:1px solid var(--uiBorder); color:var(--uiMuted); }
 .bdSt.st-callback, .bdSt.st-scouted{ color:#8ab4ff; border-color:rgba(138,180,255,.5); }
 .bdSt.st-offered{ color:var(--gold); border-color:rgba(242,201,76,.5); }
@@ -302,7 +308,7 @@ function cardHtml(c, kind, o){
   const links = c.links.map((l) => `<a class="bdBtn" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>`).join("");
   const drag = o.can && !o.showGroup ? ` draggable="true"` : "";
   return `<article class="bdCard${c.passed ? " passed" : ""}${c.done ? " done" : ""}" tabindex="0" data-id="${esc(c.id)}" data-key="${esc(c.key)}" data-group="${esc(c.group)}"${drag} aria-label="${esc(c.title + ", " + c.group + (c.status ? ", " + c.status : ""))}">${ph}
-    <div class="bdInfo">${o.showGroup ? `<div class="bdGrp">${esc(c.group)}</div>` : ""}<div class="bdName">${esc(c.title)}</div>${c.status ? `<span class="bdSt ${slug(c.status)}">${esc(c.status)}</span>` : ""}${c.notes ? `<div class="bdNotes">${esc(c.notes)}</div>` : ""}${links ? `<div class="bdLinks">${links}</div>` : ""}</div></article>`;
+    <div class="bdInfo">${o.showGroup ? `<div class="bdGrp">${esc(c.group)}</div>` : ""}<div class="bdName">${esc(c.title)}</div>${c.status ? `<span class="bdSt ${slug(c.status)}">${esc(c.status)}</span>` : ""}${c.tags.length ? `<div class="bdTags">${c.tags.map((t) => `<span class="bdTag">${esc(t)}</span>`).join("")}</div>` : ""}${c.notes ? `<div class="bdNotes">${esc(c.notes)}</div>` : ""}${links ? `<div class="bdLinks">${links}</div>` : ""}</div></article>`;
 }
 function drawBody(p){
   const box = document.getElementById("bdBody"); if(!box) return;
@@ -397,8 +403,8 @@ function showDetail(id, keep){
   const bad = S.bad[id];
   const rows = [];
   if(c.kind === "loc" && c.main) rows.push(["Address", esc(c.main)]);
-  if(c.phone) rows.push(["Phone", `<a href="${esc(L.telUrl(c.phone) || "#")}">${esc(c.phone)}</a>`]);
-  if(c.email) rows.push(["Email", L.mailUrl(c.email) ? `<a href="${esc(L.mailUrl(c.email))}">${esc(c.email)}</a>` : esc(c.email)]);
+  c.phones.forEach((v, i) => rows.push([c.phones.length > 1 ? "Phone " + (i + 1) : "Phone", L.telUrl(v) ? `<a href="${esc(L.telUrl(v))}">${esc(v)}</a>` : esc(v)]));
+  c.emails.forEach((v, i) => rows.push([c.emails.length > 1 ? "Email " + (i + 1) : "Email", L.mailUrl(v) ? `<a href="${esc(L.mailUrl(v))}">${esc(v)}</a>` : esc(v)]));
   const hint = c.photoLink && !c.photo ? `This photo link can't be shown here. Use the Photo button to open it.` : (c.photo && bad ? `The photo didn't load. If it's a Drive file, set sharing to “Anyone with the link”.` : "");
   const can = canWrite(S.hubP);
   const btn = (l) => `<a class="bdBtn" href="${esc(l.url)}"${l.kind === "tel" || l.kind === "mail" ? "" : ` target="_blank" rel="noopener noreferrer"`}>${esc(l.label)}</a>`;
@@ -411,7 +417,7 @@ function showDetail(id, keep){
   const gal = c.photos.map((u, i) => [L.viewSrc(u), i]).filter((p) => p[0]);
   const galHtml = c.photos.length > 1 && gal.length ? `<div class="bdSec bdGal"><div class="bdLbl">Photos</div><div class="bdGalGrid">${gal.map((p) => `<button class="bdGalI${p[1] === S.heroI ? " on" : ""}" type="button" data-bd="hthumb" data-i="${p[1]}" aria-label="Show photo ${p[1] + 1}"><img class="gal" loading="lazy" referrerpolicy="no-referrer" src="${esc(p[0])}" alt=""></button>`).join("")}</div></div>` : "";
   const seenE = {}, vids = [];
-  c.links.forEach((l) => { const e = L.playerUrl(l.url); if(e && !seenE[e]){ seenE[e] = 1; vids.push({ label: l.label, e }); } });
+  c.links.forEach((l) => { const e = L.playerUrl(l.url, { drive: /^(Showreel|Audition)\b/.test(l.label) }); if(e && !seenE[e]){ seenE[e] = 1; vids.push({ label: l.label, e }); } });
   const vidHtml = vids.length ? `<div class="bdSec bdVids"><div class="bdLbl">Videos</div>${vids.map((v) => `<div class="bdVid"><div class="bdVidT">${esc(v.label)}</div><div class="bdFrame"><iframe src="${esc(v.e)}" title="${esc(c.title + " – " + v.label)}" loading="lazy" allow="encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe></div></div>`).join("")}</div>` : "";
   const same = (g) => g.cards.some((x) => x.id !== c.id && x.title.toLowerCase() === c.title.toLowerCase());
   const others = can ? current().groups.filter((g) => g.name !== c.group) : [];
@@ -423,6 +429,7 @@ function showDetail(id, keep){
       ${sec("Status", status)}
       ${sec(c.kind === "loc" ? "Address &amp; contact" : "Contact", rows.length ? `<dl class="bdRows">${rows.map((r) => `<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join("")}</dl>` : "")}
       ${sec("Links", c.links.length ? `<div class="bdLinks">${c.links.map(btn).join("")}</div>` : "")}
+      ${sec("Tags", c.tags.length ? `<div class="bdTags">${c.tags.map((t) => `<span class="bdTag">${esc(t)}</span>`).join("")}</div>` : "")}
       ${sec("Notes", c.notes ? `<div class="bdDNotes">${esc(c.notes)}</div>` : "")}
       ${hint ? `<div class="bdHint">${esc(hint)}</div>` : ""}
     </div>
@@ -623,9 +630,14 @@ function openEditor(c, groupName){
   const kind = S.tab;
   const base = c ? Object.assign({}, c.raw) : {};
   L.fieldsOf(kind).forEach((f) => { if(!(f in base)) base[f] = ""; });
-  S.edit = { kind, id: c ? c.id : "", key: c ? c.key : "", group: c ? c.group : groupName, base, vals: Object.assign({}, base), busy: false, err: "", conflict: null,
+  // A new option starts as "Considering" (it can be changed before saving)
+  const startVals = c ? {} : { status: L.startStatus(L.statusList((S.data[S.fileId] || {}).d, kind)) };
+  // tags and websites are kept inside the notes: the editor shows them separately and joins them back when saving
+  const pn = L.parseNotes(base.notes); startVals.notes = pn.rest;
+  S.edit = { kind, id: c ? c.id : "", key: c ? c.key : "", group: c ? c.group : groupName, base, vals: Object.assign({}, base, startVals), busy: false, err: "", conflict: null,
     photos: c ? c.photos.slice() : [], basePhotos: c ? c.photos.slice() : [], uploading: 0, linkDraft: "",
-    lists: { showreel: L.linesOf(base.showreel).concat([""]).slice(0, Math.max(1, L.linesOf(base.showreel).length)), audition: L.linesOf(base.audition).concat([""]).slice(0, Math.max(1, L.linesOf(base.audition).length)) } };
+    tags: pn.tags.slice(), tagDraft: "",
+    lists: ["showreel", "audition", "phone", "email"].reduce((o, f) => { const l = L.linesOf(base[f]); o[f] = l.length ? l : [""]; return o; }, { website: pn.sites.length ? pn.sites.slice() : [""] }) };
   if(!document.getElementById("bdShade")) lastFocus = document.activeElement;
   showEditor();
 }
@@ -647,9 +659,11 @@ function showEditor(){
     <form class="bdForm" id="bdForm" novalidate>
       ${inp(f1, kind === "cast" ? "Actor name" : "Address", `placeholder="${kind === "cast" ? "Who is it?" : "Street, suburb"}"`)}
       <label>Status<select data-f="status"><option value="">No status</option>${statusOptions(statuses, e.base.status)}</select></label>
-      <div class="two">${inp("phone", "Phone", `inputmode="tel"`)}${inp("email", "Email", `inputmode="email"`)}</div>
-      ${kind === "cast" ? multiBlock(e, "showreel", "Showreels", "YouTube, Vimeo…") + multiBlock(e, "audition", "Audition tapes", "Self-tape or audition link") : ""}
+      ${multiBlock(e, "phone", "Phone numbers", "Add a number", "tel")}${multiBlock(e, "email", "Emails", "Add an email", "email")}
+      ${kind === "cast" ? multiBlock(e, "showreel", "Showreels", "YouTube, Vimeo, Loom, Drive…") + multiBlock(e, "audition", "Audition tapes", "Self-tape or audition link") : ""}
+      ${multiBlock(e, "website", "Websites", "https://…")}
       ${photosBlock(e)}
+      ${tagsBlock(e)}
       <label>Notes<textarea data-f="notes" placeholder="Links to a reel, IMDb or listing become buttons">${esc(v.notes || "")}</textarea></label>
       ${conf}${e.err ? `<div class="bdErr" role="alert">${esc(e.err)}</div>` : ""}
       <div class="bdDFoot">${isAdd ? "" : `<button class="btn sm danger" type="button" data-be="remove"${e.busy ? " disabled" : ""}>Remove</button>`}<span class="sp"></span><button class="btn sm" type="button" data-be="cancel"${e.busy ? " disabled" : ""}>Cancel</button><button class="btn sm primary" type="submit"${e.busy || e.uploading ? " disabled" : ""}>${e.busy ? `<span class="spin"></span>` : ""}${isAdd ? "Add" : "Save"}</button></div>
@@ -660,10 +674,12 @@ function showEditor(){
   const shade = document.getElementById("bdShade"), form = shade.querySelector("#bdForm");
   form.querySelector("[data-f=status]").value = v.status || "";
   form.addEventListener("input", (ev) => { const n = ev.target.dataset && ev.target.dataset.f; if(n) e.vals[n] = ev.target.value; if(ev.target.dataset && "pl" in ev.target.dataset) e.linkDraft = ev.target.value;
+    if(ev.target.dataset && "tagin" in ev.target.dataset) e.tagDraft = ev.target.value;
     const ml = ev.target.dataset && ev.target.dataset.ml;
     if(ml){ const i = +ev.target.dataset.i, had = !!e.lists[ml][i]; e.lists[ml][i] = ev.target.value; syncList(e, ml); if(had !== !!ev.target.value && i === e.lists[ml].length - 1) refreshMulti(ev.target); } });
   form.addEventListener("keydown", (ev) => {
     if(ev.key !== "Enter" || ev.ctrlKey || ev.metaKey || !ev.target.dataset) return;
+    if("tagin" in ev.target.dataset){ ev.preventDefault(); ev.stopPropagation(); const t = ev.target.value; e.tagDraft = ""; if(L.tagSlug(t)){ if(!e.tags.some((x) => L.tagSlug(x) === L.tagSlug(t))) toggleTag(e, t); showEditor(); const n = document.querySelector("#bdForm [data-tagin]"); if(n) n.focus(); } return; }
     if("pl" in ev.target.dataset){ ev.preventDefault(); ev.stopPropagation(); addLinkFromInput(); }
     else if(ev.target.dataset.ml){ ev.preventDefault(); ev.stopPropagation(); addListRow(ev.target.dataset.ml); }
   });
@@ -686,6 +702,7 @@ function showEditor(){
     else if(k === "pick"){ const f = shade.querySelector("#bdFile"); if(f) f.click(); }
     else if(k === "addlink") addLinkFromInput();
     else if(k === "rmphoto"){ e.photos = L.removePhoto(e.photos, b.dataset.u); syncPhotoVal(e); showEditor(); }
+    else if(k === "tag"){ toggleTag(e, b.dataset.t); showEditor(); }
     else if(k === "mladd") addListRow(b.dataset.f);
     else if(k === "mlrm"){ const f = b.dataset.f; e.lists[f].splice(+b.dataset.i, 1); if(!e.lists[f].length) e.lists[f] = [""]; syncList(e, f); showEditor(); }
     else if(k === "mkmain"){ e.photos = L.makeDisplay(e.photos, b.dataset.u); syncPhotoVal(e); showEditor(); }
@@ -695,9 +712,20 @@ function showEditor(){
   const first = form.querySelector(e.err ? "[data-f]" : "[data-f=" + f1 + "]"); if(first && !e.conflict) first.focus();
 }
 /* ---------- several links in one field (showreels, audition tapes) ---------- */
-function multiBlock(e, f, label, ph){
+function multiBlock(e, f, label, ph, mode){
   const rows = e.lists[f];
-  return `<div class="bdMulti"><div class="bdPhLabel">${label}</div>${rows.map((v, i) => `<div class="bdLinkAdd"><input data-ml="${f}" data-i="${i}" value="${esc(v)}" inputmode="url" autocomplete="off" placeholder="${esc(ph)}" aria-label="${esc(label)} ${i + 1}">${rows.length > 1 || v ? `<button type="button" data-be="mlrm" data-f="${f}" data-i="${i}" aria-label="Remove this link" title="Remove">✕</button>` : ""}</div>`).join("")}${rows.length < 10 && rows[rows.length - 1] ? `<button class="bdMore" type="button" data-be="mladd" data-f="${f}">+ Add another</button>` : ""}</div>`;
+  return `<div class="bdMulti"><div class="bdPhLabel">${label}</div>${rows.map((v, i) => `<div class="bdLinkAdd"><input data-ml="${f}" data-i="${i}" value="${esc(v)}" inputmode="${mode || "url"}" autocomplete="off" placeholder="${esc(ph)}" aria-label="${esc(label)} ${i + 1}">${rows.length > 1 || v ? `<button type="button" data-be="mlrm" data-f="${f}" data-i="${i}" aria-label="Remove this one" title="Remove">✕</button>` : ""}</div>`).join("")}${rows.length < 10 && rows[rows.length - 1] ? `<button class="bdMore" type="button" data-be="mladd" data-f="${f}">+ Add another</button>` : ""}</div>`;
+}
+/* ---------- tags (Agent, Freelance…): chips to switch on, plus your own ---------- */
+function tagsBlock(e){
+  const preset = (L.TAG_PRESETS[e.kind] || []).slice(), custom = e.tags.filter((t) => !preset.some((p) => L.tagSlug(p) === L.tagSlug(t)));
+  const chip = (t) => `<button type="button" class="bdTagBtn${e.tags.some((x) => L.tagSlug(x) === L.tagSlug(t)) ? " on" : ""}" data-be="tag" data-t="${esc(t)}" aria-pressed="${e.tags.some((x) => L.tagSlug(x) === L.tagSlug(t))}">${esc(t)}</button>`;
+  return `<div class="bdMulti"><div class="bdPhLabel">Tags</div><div class="bdTagPick">${preset.concat(custom).map(chip).join("")}<input class="bdTagIn" data-tagin value="${esc(e.tagDraft || "")}" maxlength="25" placeholder="+ your own" autocomplete="off" aria-label="Add your own tag"></div></div>`;
+}
+function toggleTag(e, t){
+  const slug = L.tagSlug(t); if(!slug) return;
+  const i = e.tags.findIndex((x) => L.tagSlug(x) === slug);
+  if(i >= 0) e.tags.splice(i, 1); else if(e.tags.length < L.MAX_TAGS) e.tags.push(L.tagLabel(slug)); else e.err = "That's the most tags one option can have.";
 }
 function addListRow(f){
   const e = S.edit; if(!e) return;
@@ -787,8 +815,15 @@ async function saveEdit(force){
   if(e.uploading) return;
   const photosChanged = !L.samePhotos(e.photos, e.basePhotos), pf = L.photoFields(e.photos);
   if(photosChanged) e.vals.photo = pf.photo; else e.vals.photo = e.base.photo;   // an unchanged photo is never rewritten
+  // a tag typed but not yet added still counts
+  if(L.tagSlug(e.tagDraft) && !e.tags.some((x) => L.tagSlug(x) === L.tagSlug(e.tagDraft))) toggleTag(e, e.tagDraft);
+  e.tagDraft = "";
+  const sites = (e.lists.website || []).map((x) => x.trim()).filter(Boolean);
+  if(sites.some((x) => !L.safeUrl(x))){ e.err = "Each website needs to be a web link."; showEditor(); return; }
+  const typedNotes = e.vals.notes;
+  e.vals.notes = L.joinNotes(typedNotes, e.tags, sites.map(L.safeUrl));
   const bad = L.checkEdit(e.kind, e.vals, L.statusList(d, e.kind), isAdd);
-  if(bad){ e.err = bad; showEditor(); return; }
+  if(bad){ e.vals.notes = typedNotes; e.err = bad; showEditor(); return; }
   let body;
   if(isAdd){
     const fields = L.tidyValues(e.kind, e.vals); Object.keys(fields).forEach((k) => { if(!fields[k]) delete fields[k]; });
@@ -803,6 +838,7 @@ async function saveEdit(force){
     Object.keys(fields).forEach((k) => { if(!(k in base)) base[k] = e.base[k]; });
     body = { kind: e.kind, op: "set", rowKey: e.key, fields, base, force: !!force };
   }
+  e.vals.notes = typedNotes;   // the box keeps showing just the typed notes; tags and websites have their own controls
   e.busy = true; e.err = ""; showEditor();
   try{
     const res = await post(body);

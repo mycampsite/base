@@ -47,11 +47,21 @@ function photoSrc(u){
   if(h === "dropbox.com"){ x.searchParams.delete("dl"); x.searchParams.set("raw", "1"); return x.href; }
   return u;
 }
-// A YouTube or Vimeo link as the address its player can be embedded from, or "" for any other link.
-function embedUrl(u){
+// A video link as the address its player can be embedded from, or "" for any other link.
+// YouTube, Vimeo, Loom, Streamable, Dailymotion, Instagram reels/posts and TikTok always; a Google Drive file only
+// when opts.drive is set (a showreel or audition tape), since a Drive link in the notes is as likely a photo or a PDF.
+function embedUrl(u, opts){
   u = safeUrl(u); if(!u) return "";
   let x; try{ x = new URL(u); }catch(e){ return ""; }
   const h = x.hostname.replace(/^(www|m)\./i, "").toLowerCase(), p = x.pathname; let id = "", m;
+  const ok = (v, re) => re.test(v) ? v : "";
+  if(opts && opts.drive){ const d = driveId(u); if(d) return "https://drive.google.com/file/d/" + d + "/preview"; }
+  if(h === "loom.com" && (m = p.match(/^\/(?:share|embed)\/([0-9a-f]{20,40})/i))) return "https://www.loom.com/embed/" + m[1];
+  if(h === "streamable.com" && (m = p.match(/^\/(?:e\/|o\/)?([a-z0-9]{4,12})\/?$/i))) return "https://streamable.com/e/" + m[1];
+  if(h === "dai.ly" && (m = p.match(/^\/([a-z0-9]{5,12})\/?$/i))) return "https://www.dailymotion.com/embed/video/" + m[1];
+  if(h === "dailymotion.com" && (m = p.match(/^\/(?:embed\/)?video\/([a-z0-9]{5,12})/i))) return "https://www.dailymotion.com/embed/video/" + m[1];
+  if(h === "instagram.com" && (m = p.match(/^\/(?:[\w.]+\/)?(reel|reels|p|tv)\/([\w-]{5,20})/))) return "https://www.instagram.com/" + (m[1] === "reels" ? "reel" : m[1]) + "/" + m[2] + "/embed";
+  if(h === "tiktok.com" && (m = p.match(/^\/@[\w.-]+\/video\/(\d{8,25})/))) return "https://www.tiktok.com/embed/v2/" + ok(m[1], /^\d+$/);
   if(h === "youtu.be") id = p.slice(1).split("/")[0];
   else if(h === "youtube.com" || h === "youtube-nocookie.com"){
     if(p === "/watch") id = x.searchParams.get("v") || "";
@@ -65,8 +75,9 @@ function embedUrl(u){
   return "";
 }
 // The embed address with the player trimmed down: the title, sound and quality controls stay, the extras (suggestions, branding, share, like, fullscreen) go.
-function playerUrl(u){
-  const e = embedUrl(u); if(!e) return "";
+function playerUrl(u, opts){
+  const e = embedUrl(u, opts); if(!e) return "";
+  if(!/youtube|vimeo/.test(e)) return e;
   const q = /youtube/.test(e) ? "rel=0&modestbranding=1&iv_load_policy=3&fs=0&playsinline=1&cc_load_policy=0" : "title=1&byline=0&portrait=0&badge=0&like=0&watchlater=0&share=0&dnt=1";
   return e + (e.indexOf("?") < 0 ? "?" : "&") + q;
 }
@@ -85,6 +96,10 @@ function siteLabel(u){
   if(/(^|\.)vimeo\.com$/.test(h)) return "Vimeo";
   if(/(^|\.)imdb\.com$/.test(h)) return "IMDb";
   if(/(^|\.)instagram\.com$/.test(h)) return "Instagram";
+  if(/(^|\.)loom\.com$/.test(h)) return "Loom";
+  if(/(^|\.)tiktok\.com$/.test(h)) return "TikTok";
+  if(/(^|\.)streamable\.com$/.test(h)) return "Streamable";
+  if(/(^|\.)(dailymotion\.com|dai\.ly)$/.test(h)) return "Dailymotion";
   if(/(^|\.)(drive\.google\.com|docs\.google\.com)$/.test(h)) return "Drive";
   if(/(^|\.)(photos\.app\.goo\.gl|photos\.google\.com)$/.test(h)) return "Photos";
   if(/(^|\.)(maps\.app\.goo\.gl|google\.[a-z.]+)$/.test(h) && /maps/.test(u)) return "Map";
@@ -92,19 +107,52 @@ function siteLabel(u){
   if(venue) return venue[1].replace(/^./, (c) => c.toUpperCase());
   return h || "Link";
 }
+// ---------- tags and websites (kept inside the notes, so the Sheet needs no new columns) ----------
+// "#agent #freelance" on its own line is a row of tags; a "Website https://…" line is a website. Both are lifted out of the
+// notes for display and written back at the end of the notes when saved. Anyone reading the Sheet sees them as plain text.
+const TAG_PRESETS = { cast: ["Agent", "Freelance", "Union", "Under 18", "Stunt trained"], loc: ["Owner", "Agent", "Permit needed", "Free"] };
+const MAX_TAGS = 12;
+function tagSlug(t){ return clean(t).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 25); }
+function tagLabel(slug){ const t = String(slug || "").replace(/-/g, " ").trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
+const TAG_LINE = /^[ \t]*(?:#[a-z][a-z0-9-]{0,24}[ \t]*)+$/i;
+const SITE_LINE = /^[ \t]*website[ \t]*[:\-\u2013\u2014]?[ \t]*(\S+)[ \t]*$/i;
+function parseNotes(notes){
+  const tags = [], sites = [], keep = [];
+  String(notes == null ? "" : notes).split(/\r?\n/).forEach((line) => {
+    if(TAG_LINE.test(line)){ line.match(/#[a-z][a-z0-9-]{0,24}/gi).forEach((t) => { const l = tagLabel(tagSlug(t)); if(l && tags.indexOf(l) < 0) tags.push(l); }); return; }
+    const m = SITE_LINE.exec(line), u = m && safeUrl(m[1].replace(/[.,;:!?]+$/, ""));
+    if(u){ if(sites.indexOf(u) < 0) sites.push(u); return; }
+    keep.push(line);
+  });
+  return { tags, sites, rest: keep.join("\n").replace(/^\s*\n+|\n+\s*$/g, "") };
+}
+// The notes as they are saved: the text, then the websites, then one line of tags
+function joinNotes(rest, tags, sites){
+  const out = [];
+  const r = String(rest == null ? "" : rest).replace(/\s+$/, ""); if(r.trim()) out.push(r);
+  (sites || []).forEach((u) => { const x = safeUrl(u); if(x) out.push("Website " + x); });
+  const t = (tags || []).map(tagSlug).filter((x, i, a) => x && a.indexOf(x) === i).slice(0, MAX_TAGS);
+  if(t.length) out.push(t.map((x) => "#" + x).join(" "));
+  return out.join("\n");
+}
 function notesParts(notes){
   const links = [], seen = {};
-  const text = String(notes == null ? "" : notes).replace(URL_RE, (m, word, rawUrl) => {
+  const pn = parseNotes(notes);
+  const text = pn.rest.replace(URL_RE, (m, word, rawUrl) => {
     const raw = rawUrl.replace(/[.,;:!?]+$/, ""), url = safeUrl(raw);   // a comma or full stop after the link isn't part of it
     if(!url) return m;
     if(!seen[url]){ seen[url] = 1; links.push({ url, label: (word && WORDS[word.toLowerCase().replace(/[\s]+/g, "-")]) || siteLabel(url) }); }
     return " ";
   });
-  return { text: clean(text).replace(/(?:\s*[,;])+(?=\s*(?:[,;.]|$))/g, "").replace(/\s+([.,;])/g, "$1").replace(/^[\s\-\u2013\u2014\u00b7:,;]+|[\s\-\u2013\u2014\u00b7:,;]+$/g, ""), links };
+  const sites = pn.sites.map((url) => ({ url, label: pn.sites.length > 1 ? siteLabel(url) : "Website" }));
+  sites.forEach((l) => { if(!seen[l.url]) seen[l.url] = 1; });
+  return { text: clean(text).replace(/(?:\s*[,;])+(?=\s*(?:[,;.]|$))/g, "").replace(/\s+([.,;])/g, "$1").replace(/^[\s\-\u2013\u2014\u00b7:,;]+|[\s\-\u2013\u2014\u00b7:,;]+$/g, ""), links: sites.concat(links.filter((l) => !sites.some((x) => x.url === l.url))), tags: pn.tags, sites: pn.sites };
 }
 
 // ---------- turning the Sheet's rows into cards ----------
 function isFilled(kind, c){ return !!(c && [c[KINDS[kind].field], c.photo, c.phone, c.email, c.status, c.notes].some((v) => clean(v))); }
+// The status a new option starts with: "Considering" when the Sheet has it, else none
+function startStatus(statuses){ const s = (statuses || []).find((x) => /^consider/i.test(String(x))); return s ? String(s) : ""; }
 function statusList(data, kind){
   const s = data && data.statuses && data.statuses[kind]; if(Array.isArray(s) && s.length) return s.map(String);
   return kind === "cast" ? ["Passed", "Considering", "Callback", "Offered", "Cast"] : ["Passed", "Considering", "Scouted", "Confirmed"];
@@ -165,7 +213,8 @@ function withBrief(data, kind, group, text){
 // Casting also has a showreel and an audition tape; a location has neither (just its map link and notes)
 function fieldsOf(kind){ return [KINDS[kind].field, "photo", "phone", "email", "status", "notes"].concat(kind === "cast" ? ["showreel", "audition"] : []); }
 const LINK_FIELDS = ["photo"];
-const MULTI_FIELDS = ["showreel", "audition"];          // several links each, one per line in the Sheet
+const MULTI_FIELDS = ["showreel", "audition", "phone", "email"];   // several values each, one per line in the Sheet
+const LINK_MULTI = ["showreel", "audition"];
 function linesOf(v){ return String(v == null ? "" : v).split(/\n/).map((x) => x.trim()).filter(Boolean); }
 // The Sheet's own text for each field (notes keep their line breaks), used as the starting point of an edit
 function rawOf(kind, c){ const o = {}; fieldsOf(kind).forEach((f) => { o[f] = String(c && c[f] != null ? c[f] : "").trim(); }); return o; }
@@ -173,7 +222,7 @@ function rawOf(kind, c){ const o = {}; fieldsOf(kind).forEach((f) => { o[f] = St
 function tidyValues(kind, vals){
   const o = {}; fieldsOf(kind).forEach((f) => { if(vals && f in vals) o[f] = String(vals[f] == null ? "" : vals[f]).trim(); });
   LINK_FIELDS.forEach((f) => { if(o[f]){ const u = safeUrl(o[f]); if(u) o[f] = u; } });
-  MULTI_FIELDS.forEach((f) => { if(f in o) o[f] = linesOf(o[f]).map((x) => safeUrl(x) || x).filter((u, i, a) => a.indexOf(u) === i).join("\n"); });
+  MULTI_FIELDS.forEach((f) => { if(f in o) o[f] = linesOf(o[f]).map((x) => LINK_MULTI.indexOf(f) >= 0 ? (safeUrl(x) || x) : x).filter((u, i, a) => a.indexOf(u) === i).join("\n"); });
   return o;
 }
 // "" when fine, else what to tell the person
@@ -183,8 +232,8 @@ function checkEdit(kind, vals, statuses, needSomething){
   if(v.photo && !safeUrl(v.photo)) return "The photo needs to be a web link, like https://… or a Drive share link.";
   if(linesOf(v.showreel).some((x) => !safeUrl(x))) return "Each showreel needs to be a web link.";
   if(linesOf(v.audition).some((x) => !safeUrl(x))) return "Each audition tape needs to be a web link.";
-  if(v.email && !mailUrl(v.email)) return "That email address doesn't look right.";
-  if(needSomething && !fieldsOf(kind).some((f) => v[f])) return "Type something first.";
+  if(linesOf(v.email).some((x) => !mailUrl(x))) return "That email address doesn't look right.";
+  if(needSomething && !fieldsOf(kind).some((f) => f !== "status" && v[f])) return "Type something first.";
   return "";
 }
 // Only the fields that differ from what the Board last showed
@@ -229,13 +278,13 @@ function cardOf(kind, group, c, fileId){
   const many = (v, label) => { const l = linesOf(v).map(safeUrl).filter((u) => u && !seen[u] && (seen[u] = 1)); l.forEach((u, i) => links.push({ kind: "web", label: l.length > 1 ? label + " " + (i + 1) : label, url: u })); };
   many(c.showreel, "Showreel"); many(c.audition, "Audition");
   np.links.forEach((l) => { if(!seen[l.url]) links.push({ kind: "web", label: l.label, url: l.url }); });
-  const ph = telUrl(c.phone), em = mailUrl(c.email);
-  if(ph) contact.push({ kind: "tel", label: "Call", url: ph });
-  if(em) contact.push({ kind: "mail", label: "Email", url: em });
+  const phones = linesOf(c.phone), emails = linesOf(c.email);
+  phones.forEach((v, i) => { const u = telUrl(v); if(u) contact.push({ kind: "tel", label: phones.length > 1 ? "Call " + (i + 1) : "Call", url: u, value: v }); });
+  emails.forEach((v, i) => { const u = mailUrl(v); if(u) contact.push({ kind: "mail", label: emails.length > 1 ? "Email " + (i + 1) : "Email", url: u, value: v }); });
   const photoLink = safeUrl(c.photo);
   const photos = [c.photo].concat(Array.isArray(c.photos) ? c.photos : []).map(safeUrl).filter((u, i, a) => u && a.indexOf(u) === i);
   return { id: (fileId || "") + "|" + c.key, key: c.key, row: c.row, n: c.n, kind, group: group.name, groupType: clean(group.type), title, main,
-    status: clean(c.status), phone: clean(c.phone), email: clean(c.email), notes: np.text, photo: photoSrc(c.photo), photoLink, photos, links, contact, raw: rawOf(kind, c),
+    status: clean(c.status), phone: clean(c.phone), email: clean(c.email), notes: np.text, tags: np.tags, phones, emails, photo: photoSrc(c.photo), photoLink, photos, links, contact, raw: rawOf(kind, c),
     fav: !!c.fav, order: Number(c.order) || 0, passed: clean(c.status) === PASSED, done: clean(c.status) === DONE[kind] };
 }
 // All cards for one tab, grouped by role / location in the Sheet's order. Passed options sink to the end of their group.
@@ -256,7 +305,7 @@ function groupsOf(data, kind, fileId){
 // The visible groups for a status chip ("All" | a status | "Unfilled") and a search
 function filterGroups(groups, status, q){
   q = clean(q).toLowerCase();
-  const hit = (c) => !q || [c.title, c.group, c.status, c.notes, c.phone, c.email].some((v) => String(v || "").toLowerCase().indexOf(q) >= 0);
+  const hit = (c) => !q || [c.title, c.group, c.status, c.notes, c.phone, c.email, (c.tags || []).join(" ")].some((v) => String(v || "").toLowerCase().indexOf(q) >= 0);
   const out = [];
   groups.forEach((g) => {
     if(status === "Unfilled"){ if(!g.cards.length && (!q || g.name.toLowerCase().indexOf(q) >= 0)) out.push(Object.assign({}, g)); return; }
@@ -286,6 +335,6 @@ function neighbour(groups, id, dir){
   return flat[i + dir] || "";
 }
 
-const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, embedUrl, playerUrl, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, linesOf, withOrder, withBrief, moveGroup, withGroupOrder, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
+const api = { DONE, KINDS, clean, safeUrl, hostOf, driveId, photoSrc, embedUrl, playerUrl, mapUrl, telUrl, mailUrl, siteLabel, notesParts, isFilled, statusList, startStatus, parseNotes, joinNotes, tagSlug, tagLabel, TAG_PRESETS, MAX_TAGS, cardOf, groupsOf, filterGroups, counts, progressText, neighbour, fieldsOf, rawOf, tidyValues, checkEdit, changes, keyParts, withCandidate, withoutCandidate, favoritesOf, reorder, swap, linesOf, withOrder, withBrief, moveGroup, withGroupOrder, MAX_PHOTOS, viewSrc, photoFields, addPhotos, makeDisplay, removePhoto, samePhotos, imageOk };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampBoard = Object.assign(root.CampBoard || {}, { logic: api });
 })(typeof window !== "undefined" ? window : this);
