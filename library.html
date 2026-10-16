@@ -514,8 +514,7 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
   <button data-act="newfolder" class="ownerOnly">New folder…</button>
   <button data-act="openlink">Open from link…</button>
   <div class="sep"></div>
-  <button data-act="team" class="ownerOnly">Team password…</button>
-  <button data-act="settings">Cloud &amp; password…</button>
+  <button data-act="settings">Cloud settings…</button>
 </div>
 <div class="menu" id="acctMenu" hidden></div>
 
@@ -565,12 +564,10 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
 <!-- Settings -->
 <div class="shade" id="setShade" hidden>
   <div class="modal" role="dialog" aria-labelledby="setTitle">
-    <h3 id="setTitle">Cloud &amp; password</h3>
-    <p class="sub">Where your scripts are saved (your Google Apps Script link) and your password.</p>
+    <h3 id="setTitle">Cloud settings</h3>
+    <p class="sub">Where your scripts are saved (your Google Apps Script link). Access is by signing in with your Google account.</p>
     <label for="setUrl">Apps Script web app URL</label>
     <input id="setUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false" autocomplete="off">
-    <label for="setPw">Password <span style="opacity:.7">(leave blank if you haven't set one)</span></label>
-    <div class="pwWrap"><input id="setPw" type="password" autocomplete="current-password"><button type="button" id="setPwShow">Show</button></div>
     <div class="msg" id="setMsg"></div>
     <div class="row"><button class="btn" id="setTest">Test</button><span style="flex:1"></span><button class="btn" id="setCancel">Cancel</button><button class="btn primary" id="setSave">Save</button></div>
   </div>
@@ -769,7 +766,6 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
   $("pwInput").addEventListener("keydown", (e) => { if(e.key === "Enter") $("pwOk").click(); if(e.key === "Escape") closePw(false); });
   const toggleShow = (btn, input) => { btn.onclick = () => { const s = input.type === "password"; input.type = s ? "text" : "password"; btn.textContent = s ? "Hide" : "Show"; }; };
   toggleShow($("pwShow"), $("pwInput"));
-  toggleShow($("setPwShow"), $("setPw"));
 
   // ---------------- Data ----------------
   let files = [];          // [{id, name, modified, tp}]
@@ -1029,14 +1025,14 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
     e.stopPropagation();
     const m = $("acctMenu");
     const open = !m.hidden; closeMenus(); if(open) return;
-    m.innerHTML = `<div class="mh">${isCollab() ? "Team member" : "Owner"}</div>` + (isCollab() ? `<button data-a="name">Change my name…</button>` : `<button data-a="team">Team password…</button>`) + `<button data-a="out" class="danger">Sign out on this device</button>`;
+    m.innerHTML = `<div class="mh">${isCollab() ? "Team member" : "Owner"}</div>` + (isCollab() ? `<button data-a="name">Change my name…</button>` : "") + `<button data-a="out" class="danger">Sign out on this device</button>`;
     m.onclick = async (ev) => {
       const x = ev.target.closest("button"); if(!x) return; closeMenus();
       if(x.dataset.a === "team") openTeam();
       if(x.dataset.a === "name") askMyName();
       if(x.dataset.a === "out"){
-        if(!(await window.CampUI.confirm("Sign out on this device?\n\nYou'll need the password to get back in.", "Sign out"))) return;
-        setKey(""); lsDel(LIST_KEY); lsDel("SCRIPTY_ME_V1"); files = []; setRole(null); render(); refresh();
+        if(!(await window.CampUI.confirm("Sign out on this device?\n\nYou'll sign in with Google to get back in.", "Sign out"))) return;
+        setKey(""); try{ if(window.campSignOut) await window.campSignOut(); }catch(_e){} lsDel(LIST_KEY); lsDel("SCRIPTY_ME_V1"); files = []; setRole(null); render(); refresh();
       }
     };
     placeMenu(m, $("acctBtn"));
@@ -1320,7 +1316,7 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
     $("mainSection").hidden = !!(q && !list.length && q.length >= 2 && getEndpoint());
     if(!list.length){
       const e = document.createElement("div"); e.className = "empty";
-      if(!getEndpoint()) e.innerHTML = `<b>Cloud isn't set up.</b><br>Open <b>⋯ → Cloud &amp; password</b> and paste your Apps Script link.`;
+      if(!getEndpoint()) e.innerHTML = `<b>Cloud isn't set up.</b><br>Open <b>⋯ → Cloud settings</b> and paste your Apps Script link.`;
       else if(q) e.innerHTML = `No titles match “${esc(q)}”.`;
       else if(fold) e.innerHTML = `<b>This folder is empty.</b><br>Drag scripts onto “${esc(fold.name)}” in the sidebar, or use a script's <b>⋯ → Move to folder</b>.`;
       else if(view === "unfiled") e.innerHTML = `Every script is in a folder.`;
@@ -1922,10 +1918,9 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
   let afterSettings = null;
   function openSettings(){
     $("setUrl").value = getEndpoint();
-    $("setPw").value = getKey();
     $("setMsg").textContent = ""; $("setMsg").className = "msg";
     $("setShade").hidden = false;
-    setTimeout(() => (getEndpoint() ? $("setPw") : $("setUrl")).focus(), 30);
+    setTimeout(() => $("setUrl").focus(), 30);
   }
   const closeSettings = () => { $("setShade").hidden = true; };
   $("setCancel").onclick = closeSettings;
@@ -1935,10 +1930,10 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
     if(!url){ msg.textContent = "Paste your Apps Script link first."; msg.className = "msg err"; return; }
     msg.textContent = "Testing…"; msg.className = "msg";
     try{
-      const qs = new URLSearchParams({ action: "list", key: $("setPw").value.trim(), ...(await tokObj()), _: Date.now() });
+      const qs = new URLSearchParams({ action: "list", ...(await tokObj()), _: Date.now() });
       let res;
       try{ res = await (await fetch(url + "?" + qs, { cache: "no-store" })).json(); }catch(_e){ res = await jsonp(url + "?" + qs); }
-      if(res && res.auth === false){ msg.textContent = "Connected, but the password is wrong or missing."; msg.className = "msg err"; return; }
+      if(res && res.auth === false){ msg.textContent = "Connected, but this Google account isn't on Camp's list."; msg.className = "msg err"; return; }
       if(!res || res.ok === false) throw new Error((res && res.error) || "Unexpected answer.");
       const n = (res.files || []).length;
       msg.textContent = `Working. Found ${n} script${n === 1 ? "" : "s"}.` + (res.library ? "" : " (Folders need the v4 Google script to sync.)"); msg.className = "msg ok";
@@ -1947,13 +1942,13 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
   $("setSave").onclick = () => {
     const url = normalizeEndpoint($("setUrl").value);
     if(!url){ $("setMsg").textContent = "Paste your Apps Script link."; $("setMsg").className = "msg err"; return; }
-    setEndpoint(url); setKey($("setPw").value.trim());
+    setEndpoint(url);
     closeSettings();
     const next = afterSettings; afterSettings = null;
     if(next){ next(); return; }
     files = []; refresh();
   };
-  [$("setUrl"), $("setPw")].forEach(i => i.addEventListener("keydown", (e) => { if(e.key === "Enter") $("setSave").click(); if(e.key === "Escape") closeSettings(); }));
+  [$("setUrl")].forEach(i => i.addEventListener("keydown", (e) => { if(e.key === "Enter") $("setSave").click(); if(e.key === "Escape") closeSettings(); }));
 
   // ---------------- Open from link ----------------
   function parseLink(input){

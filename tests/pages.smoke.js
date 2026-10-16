@@ -218,6 +218,14 @@ let BASE = "";
     await expect(p, () => { const L = Object.values(__CampHub.project().layouts)[0]; return Object.values(L.items).some((i) => i.t === "note" && /Key light/.test(i.text)); }, "a sticky note with text");
     void items;
   });
+  await page(browser, "layouts: a hostile colour, angle or link from a teammate is not drawn or opened", "/tests/fixtures/layouts.html", async (p) => {
+    await expect(p, () => {
+      const bad = { t: "note", x: 0, y: 0, w: 100, h: 60, c: '"/><script>window.__pwned=1</script>', r: '0"/><script>window.__pwned=1</script>', text: "hi", url: "javascript:window.__pwned=1" };
+      const svg = CampLayouts._itemSvg(bad, "n1", false), link = CampLayouts._itemSvg({ t: "link", x: 0, y: 0, w: 200, h: 60, url: "javascript:alert(1)" }, "l1", false);
+      const d = document.createElement("div"); d.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg">' + svg + link + "</svg>";
+      return !window.__pwned && !d.querySelector("script") && !/javascript:/i.test(svg + link) && !/<script/i.test(svg);
+    }, "hostile colour/angle/link values are cleaned before drawing");
+  });
   await page(browser, "calendar: popover, add an event, write notes, search the day", "/tests/fixtures/calendar.html", async (p) => {
     await expect(p, () => !document.getElementById("calPop").hidden && document.querySelectorAll(".caC").length >= 28, "the popover with a month");
     await p.fill('.caAdd input', 'Location recce'); await p.press('.caAdd input', 'Enter'); await p.waitForTimeout(300);

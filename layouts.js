@@ -18,6 +18,11 @@ const r1 = (v) => Math.round(v * 10) / 10;
 const GRID = 20;
 const INKS = ["#f2f2f2", "#ff6b61", "#ffb02e", "#ffd84d", "#6bd68f", "#5aa9ff", "#b18cff", "#8a8a8a"];
 const NOTES = ["#ffe58a", "#ffb7a8", "#b9f0c4", "#b8dcff", "#e2ccff", "#f2f2f2"];
+// Items come from everyone on the project, so check them before they are drawn or opened: colours must look like colours,
+// sizes and angles must be numbers, links must be http(s). Anything else falls back to the default.
+const safeColor = (v) => (typeof v === "string" && /^(#[0-9a-f]{3,8}|(rgb|hsl)a?\([0-9 ,.%]+\))$/i.test(v.trim())) ? v.trim() : "";
+const safeNum = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+const safeUrl = (u) => { const t = String(u == null ? "" : u).trim(); return /^https?:\/\//i.test(t) ? t : ""; };
 const WIDTHS = [2, 4, 8];
 const LOCAL = (pid) => "Camp_LAYOUTS_LOCAL_" + pid;
 
@@ -120,7 +125,8 @@ function svgLines(text, x, y, px, maxW, fill, weight, maxH){
   const lh = px * 1.25, lines = wrapText(text, px, maxW, weight).slice(0, Math.max(1, Math.floor((maxH || 1e6) / lh)));
   return `<text x="${x}" y="${y + px}" font-family="Inter, system-ui, sans-serif" font-weight="${weight || 500}" font-size="${px}" fill="${fill}">${lines.map((l, i) => `<tspan x="${x}" dy="${i ? lh : 0}">${esc(l)}</tspan>`).join("")}</text>`;
 }
-function itemSvg(it, id, exp){
+function itemSvg(it0, id, exp){
+  const it = Object.assign({}, it0, { x: safeNum(it0.x, 0), y: safeNum(it0.y, 0), w: safeNum(it0.w, 1), h: safeNum(it0.h, 1), r: safeNum(it0.r, 0), sw: safeNum(it0.sw, 2), fs: safeNum(it0.fs, 0), c: safeColor(it0.c), url: safeUrl(it0.url) });
   const c = it.c || INKS[0], sw = it.sw || 2, w = Math.max(1, it.w || 1), h = Math.max(1, it.h || 1);
   const rot = it.r ? ` transform="rotate(${it.r} ${it.x + w/2} ${it.y + h/2})"` : "";
   let body = "";
@@ -427,7 +433,7 @@ function drawOver(){
   if(S.sel.length === 1){
     const it = items[S.sel[0]]; if(!it){ EL.over.innerHTML = ""; return; }
     const w = it.w || 1, h = it.h || 1, cx = it.x + w / 2, cy = it.y + h / 2, hs = 9 * s, line = it.t === "line" || it.t === "arrow";
-    let m = `<g transform="rotate(${it.r || 0} ${cx} ${cy})"><rect x="${it.x - 4 * s}" y="${it.y - 4 * s}" width="${w + 8 * s}" height="${h + 8 * s}" fill="none" stroke="#7fb6ff" stroke-width="${1.2 * s}" stroke-dasharray="${5 * s} ${4 * s}" pointer-events="none"/>`;
+    let m = `<g transform="rotate(${safeNum(it.r, 0)} ${cx} ${cy})"><rect x="${it.x - 4 * s}" y="${it.y - 4 * s}" width="${w + 8 * s}" height="${h + 8 * s}" fill="none" stroke="#7fb6ff" stroke-width="${1.2 * s}" stroke-dasharray="${5 * s} ${4 * s}" pointer-events="none"/>`;
     if(line){ const p = ptsOf(it); [[0, p[0]], [1, p[p.length - 1]]].forEach(([i, q]) => { m += `<circle data-h="end${i}" cx="${it.x + q[0]}" cy="${it.y + q[1]}" r="${6 * s}" fill="#fff" stroke="#7fb6ff" stroke-width="${1.5 * s}" style="cursor:move"/>`; }); }
     else {
       [["nw", it.x, it.y], ["ne", it.x + w, it.y], ["sw", it.x, it.y + h], ["se", it.x + w, it.y + h]].forEach(([k, x, y]) => { m += `<rect data-h="${k}" x="${x - hs / 2}" y="${y - hs / 2}" width="${hs}" height="${hs}" rx="${2 * s}" fill="#fff" stroke="#7fb6ff" stroke-width="${1.5 * s}" style="cursor:${k === "nw" || k === "se" ? "nwse" : "nesw"}-resize"/>`; });
@@ -575,7 +581,7 @@ function wire(){
     else if(a === "del") delSel();
     else if(a === "dup") dupSel();
     else if(a === "front" || a === "back") restack(a === "front");
-    else if(a === "open"){ const it = curItems()[S.sel[0]]; if(it && it.url) window.open(it.url, "_blank", "noopener"); }
+    else if(a === "open"){ const it = curItems()[S.sel[0]]; if(it && safeUrl(it.url)) window.open(safeUrl(it.url), "_blank", "noopener"); }
   });
   EL.pane.addEventListener("keydown", (e) => { const c = e.target.closest && e.target.closest(".lyCard"); if(c && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); c.click(); } });
   EL.props.addEventListener("input", (e) => {
@@ -596,10 +602,10 @@ function wire(){
     const u = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain"); if(u && /^https?:\/\//i.test(u.trim())) addLink(u.trim(), at);
   });
   svg.addEventListener("dblclick", (e) => {
-    const g = e.target.closest("[data-id]"); if(!g || !canEdit()){ if(g){ const it = curItems()[g.dataset.id]; if(it && it.url) window.open(it.url, "_blank", "noopener"); } return; }
+    const g = e.target.closest("[data-id]"); if(!g || !canEdit()){ if(g){ const it = curItems()[g.dataset.id]; if(it && safeUrl(it.url)) window.open(safeUrl(it.url), "_blank", "noopener"); } return; }
     const it = curItems()[g.dataset.id]; if(!it) return;
     if(it.t === "text" || it.t === "note"){ S.sel = [g.dataset.id]; startEdit(g.dataset.id); }
-    else if(it.t === "link") window.open(it.url, "_blank", "noopener");
+    else if(it.t === "link" && safeUrl(it.url)) window.open(safeUrl(it.url), "_blank", "noopener");
     else if(it.t === "kit"){ S.sel = [g.dataset.id]; drawProps(); const i = EL.props.querySelector("[data-prop=lbl]"); if(i) i.focus(); }
   });
   svg.addEventListener("pointerdown", down);

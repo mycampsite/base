@@ -10541,7 +10541,7 @@ function xdrPost_(endpoint, payloadObj, timeoutMs=20000) {
     };
     
     const onMessage = (ev) => {
-      if (!ev.origin || !ev.origin.includes("script.google.com")) return;
+      if (ev.origin !== "https://script.google.com" || ev.source !== iframe.contentWindow) return;   // only the frame this save opened
       const data = ev.data;
       if (!data || typeof data !== "object") return;
       

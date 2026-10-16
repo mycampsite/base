@@ -109,5 +109,7 @@
     })().finally(() => { asking = null; });
     return asking;
   };
+  // Sign this device out of Google/Camp (the Library's "Sign out on this device")
+  window.campSignOut = async function(){ try{ const auth = await within(start(), 4000); if(auth) await auth.signOut(); }catch(_e){} cur = ""; };
   start(); window.campIdToken();
 })();
