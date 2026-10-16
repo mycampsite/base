@@ -484,13 +484,29 @@ function readImage(file){
     fr.readAsDataURL(file);
   });
 }
+const driveSrc = (id) => "https://drive.google.com/thumbnail?id=" + id + "&sz=w1200";
+async function uploadToDrive(dataUrl, name){
+  try{
+    const hub = H(); if(!hub || !hub.ripPost) return "";
+    const r = await hub.ripPost({ action:"layoutphoto", dataUrl, name:name || "layout" });
+    return r && r.ok === true && r.id && r.shared !== false ? String(r.id) : "";
+  }catch(_e){ return ""; }
+}
+const driveCache = {};
+async function driveData(id){
+  if(driveCache[id]) return driveCache[id];
+  const r = await H().ripPost({ action:"layoutimage", imageId:id });
+  if(!r || r.ok !== true) throw new Error("no image");
+  return (driveCache[id] = "data:" + r.mime + ";base64," + r.dataB64);
+}
 async function addImages(files, at){
   const list = Array.from(files || []).filter((f) => /^image\//.test(f.type)).slice(0, 8); if(!list.length) return;
   let [cx, cy] = at || centre(); const changes = {}, ids = []; let z = nextZ();
   for(const f of list){
     const got = await readImage(f); if(!got) continue;
     const s = Math.min(1, 420 / Math.max(got.w, got.h)), w = Math.round(got.w * s), h = Math.round(got.h * s), id = uid();
-    changes[id] = { t:"img", src:got.src, x:r1(cx - w / 2), y:r1(cy - h / 2), w, h, r:0, z:z++ }; ids.push(id); cx += 30; cy += 30;
+    const up = await uploadToDrive(got.src, f.name);        // in Drive when the script can keep it, else inline as before
+    changes[id] = Object.assign({ t:"img", src:up ? driveSrc(up) : got.src, x:r1(cx - w / 2), y:r1(cy - h / 2), w, h, r:0, z:z++ }, up ? { did:up } : {}); ids.push(id); cx += 30; cy += 30;
   }
   if(ids.length){ commit(changes); S.sel = ids; S.tool = "select"; draw(); }
 }
@@ -740,8 +756,9 @@ async function exportPng(){
   // room for light spill and labels around the pieces
   const pad = 40 + (ids.some((k) => items[k] && items[k].t === "kit") ? 140 : 0), X = b.x - pad, Y = b.y - pad, W = b.w + pad * 2, Hh = b.h + pad * 2;
   const scale = Math.min(3, Math.max(1, 4000 / Math.max(W, Hh))), cw = Math.round(W * scale), ch = Math.round(Hh * scale);
-  const keep = new Set(ids);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cw}" height="${ch}" viewBox="${X} ${Y} ${W} ${Hh}">${DEFS}<rect x="${X}" y="${Y}" width="${W}" height="${Hh}" fill="#151515"/>${sortItems(items).filter((k) => keep.has(k)).map((k) => itemSvg(items[k], k, true)).join("")}</svg>`;
+  const keep = new Set(ids), exp = {};
+  for(const k of ids){ const it = items[k]; if(it && it.t === "img" && it.did){ try{ exp[k] = Object.assign({}, it, { src: await driveData(it.did) }); }catch(_e){ /* left as the Drive link */ } } }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cw}" height="${ch}" viewBox="${X} ${Y} ${W} ${Hh}">${DEFS}<rect x="${X}" y="${Y}" width="${W}" height="${Hh}" fill="#151515"/>${sortItems(items).filter((k) => keep.has(k)).map((k) => itemSvg(exp[k] || items[k], k, true)).join("")}</svg>`;
   const url = URL.createObjectURL(new Blob([svg], { type:"image/svg+xml" }));
   try{
     const im = new Image(); await new Promise((ok, no) => { im.onload = ok; im.onerror = no; im.src = url; });
