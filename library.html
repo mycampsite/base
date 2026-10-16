@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="ui.css">
 <script src="ui.js" defer></script>
+<script src="idtoken.js"></script>
 <title>Library — Camp</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -634,6 +635,8 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
   };
   const setEndpoint = (u) => { const v = normalizeEndpoint(u); for(const k of ENDPOINT_KEYS) lsSet(k, v); };
   const getKey = () => String(lsGet(KEY_KEY) || "");
+  // The person's sign-in token (idtoken.js) goes with every cloud request so the cloud can check the whitelist
+  const tokObj = async () => { try{ const t = window.campIdToken ? await window.campIdToken() : ""; return t ? { idToken: t } : {}; }catch(_e){ return {}; } };
   const setKey = (k) => { if(k) lsSet(KEY_KEY, k); else lsDel(KEY_KEY); };
 
   // ---------------- DOM helpers ----------------
@@ -701,7 +704,7 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
   async function apiGet(params, ms = 20000){
     const ep = getEndpoint();
     if(!ep) throw new Error("Cloud isn't set up yet.");
-    const qs = new URLSearchParams(Object.assign({}, params, { key: getKey(), _: Date.now() }));
+    const qs = new URLSearchParams(Object.assign({}, params, { key: getKey(), ...(await tokObj()), _: Date.now() }));
     const url = ep + "?" + qs.toString();
     let res;
     try{
@@ -723,7 +726,7 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
     try{
       const r = await fetch(ep, {
         method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify(Object.assign({ key: getKey() }, payload)), cache: "no-store", signal: ctl.signal
+        body: JSON.stringify(Object.assign({ key: getKey(), ...(await tokObj()) }, payload)), cache: "no-store", signal: ctl.signal
       });
       res = await r.json();
     }catch(err){
@@ -1525,7 +1528,7 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
   window.addEventListener("pagehide", () => {
     const ep = getEndpoint();
     for(const x of pendingDeletes()){
-      try{ navigator.sendBeacon && navigator.sendBeacon(ep, new Blob([JSON.stringify({ key: getKey(), action: "delete", fileId: x.fileId, folder: folderOf(x.fileId) })], { type: "text/plain" })); }catch(_e){}
+      try{ navigator.sendBeacon && navigator.sendBeacon(ep, new Blob([JSON.stringify({ key: getKey(), idToken: (window.campIdTokenNow && window.campIdTokenNow()) || undefined, action: "delete", fileId: x.fileId, folder: folderOf(x.fileId) })], { type: "text/plain" })); }catch(_e){}
     }
   });
 
@@ -1929,7 +1932,7 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
     if(!url){ msg.textContent = "Paste your Apps Script link first."; msg.className = "msg err"; return; }
     msg.textContent = "Testing…"; msg.className = "msg";
     try{
-      const qs = new URLSearchParams({ action: "list", key: $("setPw").value.trim(), _: Date.now() });
+      const qs = new URLSearchParams({ action: "list", key: $("setPw").value.trim(), ...(await tokObj()), _: Date.now() });
       let res;
       try{ res = await (await fetch(url + "?" + qs, { cache: "no-store" })).json(); }catch(_e){ res = await jsonp(url + "?" + qs); }
       if(res && res.auth === false){ msg.textContent = "Connected, but the password is wrong or missing."; msg.className = "msg err"; return; }

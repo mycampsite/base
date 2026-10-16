@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
 <link rel="stylesheet" href="ui.css">
 <script src="signin.js" defer></script>
+<script src="idtoken.js"></script>
 <script src="ui.js" defer></script>
 <title>Camp</title>
 <link rel="icon" type="image/png" href="favicon.png">
@@ -10388,6 +10389,8 @@ $("#newBtn").addEventListener("click", async () => {
   // Password for the Apps Script (set in Library > Cloud). Never stored on GitHub.
   const CLOUD_KEY_KEY = "SCRIPTY_CLOUD_KEY_V1";
   function getCloudKey(){ return String(lsGetRaw(CLOUD_KEY_KEY) || ""); }
+  // The person's sign-in token (idtoken.js) goes with every cloud request so the cloud can check the whitelist
+  async function __idTokObj(){ try{ const t = window.campIdToken ? await window.campIdToken() : ""; return t ? { idToken: t } : {}; }catch(_e){ return {}; } }
 
   // Password box: shown when Drive says the password is missing or wrong. Remembered on this device.
   let __pwPromise = null;
@@ -10713,6 +10716,7 @@ function getPreferredCloudName_(doc, route){
     const name = route && route.name ? route.name : "";
     const params = fileId ? { action:"load", fileId, id:fileId } : { action:"load", name };
     params.key = getCloudKey();
+    Object.assign(params, await __idTokObj());
     try{
       const p = await jsonpGet_(ep, params, 20000);
       return p;
@@ -10732,12 +10736,12 @@ function getPreferredCloudName_(doc, route){
     return btoa(bin);
   }
   async function __saveBody(payload){
-    const plain = JSON.stringify(Object.assign({ key: getCloudKey() }, payload || {}));
+    const plain = JSON.stringify(Object.assign({ key: getCloudKey(), ...(await __idTokObj()) }, payload || {}));
     if(!(__cloud && __cloud.gz) || typeof CompressionStream !== "function" || plain.length < 16000) return plain;
     try{
       const rest = Object.assign({}, payload || {}); const action = rest.action; delete rest.action;
       const gz = await __gzipB64(JSON.stringify(rest));
-      return gz.length < plain.length ? JSON.stringify({ key: getCloudKey(), action, gz }) : plain;
+      return gz.length < plain.length ? JSON.stringify({ key: getCloudKey(), ...(await __idTokObj()), action, gz }) : plain;
     }catch(_e){ return plain; }
   }
 
@@ -10864,6 +10868,7 @@ let AUTOSAVE_ENABLED = true;
       const payloadObj = {
         action: "save",
         key: getCloudKey(),
+        idToken: (window.campIdTokenNow && window.campIdTokenNow()) || undefined,   // page is closing: no time to wait for a fresh one
         expectRev: baseRev,
         pid: String(__cloud.pid || (d.meta && d.meta.pid) || ""),
         fileId: String(__cloud.fileId || ""),
@@ -12302,7 +12307,7 @@ async function __exportPdfExactInner(opts){
     const post = async (body) => {
       const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 120000);
       try{
-        const r = await fetch(normalizeEndpoint(__cloud.endpoint), { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey() }, body)), cache: "no-store", signal: ctl.signal });
+        const r = await fetch(normalizeEndpoint(__cloud.endpoint), { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey(), ...(await __idTokObj()) }, body)), cache: "no-store", signal: ctl.signal });
         return await r.json();
       }catch(err){ throw new Error(err && err.name === "AbortError" ? "Google took too long. Try again." : "Couldn't reach Drive."); }
       finally{ clearTimeout(t); }
@@ -12757,7 +12762,7 @@ ${TP.join("\n")}
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), 240000);
       try{
-        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey() }, body)), cache: "no-store", signal: ctl.signal });
+        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey(), ...(await __idTokObj()) }, body)), cache: "no-store", signal: ctl.signal });
         const txt = await r.text();
         try{ return JSON.parse(txt); }catch(_e){ throw new Error("Google's reply couldn't be read. Check the Apps Script is deployed."); }
       }catch(err){
@@ -12840,7 +12845,7 @@ ${TP.join("\n")}
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), 240000);
       try{
-        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey() }, body)), cache: "no-store", signal: ctl.signal });
+        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey(), ...(await __idTokObj()) }, body)), cache: "no-store", signal: ctl.signal });
         const txt = await r.text();
         try{ return JSON.parse(txt); }catch(_e){ throw new Error("Google's reply couldn't be read. Check the Apps Script is deployed."); }
       }catch(err){
@@ -12923,7 +12928,7 @@ ${TP.join("\n")}
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), 240000);
       try{
-        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey() }, body)), cache: "no-store", signal: ctl.signal });
+        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey(), ...(await __idTokObj()) }, body)), cache: "no-store", signal: ctl.signal });
         const txt = await r.text();
         try{ return JSON.parse(txt); }catch(_e){ throw new Error("Google's reply couldn't be read. Check the Apps Script is deployed."); }
       }catch(err){
@@ -13005,7 +13010,7 @@ ${TP.join("\n")}
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), 240000);
       try{
-        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey() }, body)), cache: "no-store", signal: ctl.signal });
+        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ key: getCloudKey(), ...(await __idTokObj()) }, body)), cache: "no-store", signal: ctl.signal });
         const txt = await r.text();
         try{ return JSON.parse(txt); }catch(_e){ throw new Error("Google's reply couldn't be read. Check the Apps Script is deployed."); }
       }catch(err){
@@ -13162,10 +13167,10 @@ ${TP.join("\n")}
     };
     const get = async (params) => {
       const ep = normalizeEndpoint(__cloud.endpoint);
-      let res = await jsonpGet_(ep, Object.assign({ key: getCloudKey() }, params), 20000);
+      let res = await jsonpGet_(ep, Object.assign({ key: getCloudKey(), ...(await __idTokObj()) }, params), 20000);
       for(let i = 0; i < 3 && res && res.auth === false; i++){
         if(!(await __askCloudPassword(true))) break;
-        res = await jsonpGet_(ep, Object.assign({ key: getCloudKey() }, params), 20000);
+        res = await jsonpGet_(ep, Object.assign({ key: getCloudKey(), ...(await __idTokObj()) }, params), 20000);
       }
       if(res && res.auth === false) throw new Error("Locked: enter your password.");
       if(res && res.ok === false && /Unknown action/i.test(String(res.error || ""))) throw new Error("Version history needs the updated Google script (Code.gs v3). Paste it into Apps Script and deploy a new version.");
@@ -14240,8 +14245,9 @@ ${TP.join("\n")}
   const __LIVE_SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
   function __liveLoadScript(src){
     return new Promise((res, rej) => {
-      if(document.querySelector(`script[src="${src}"]`)) return res();
-      const s = document.createElement("script"); s.src = src; s.async = true; s.onload = () => res(); s.onerror = () => rej(new Error("Couldn't load " + src.split("/").pop()));
+      const have = document.querySelector(`script[src="${src}"]`);
+      if(have){ if(have.dataset.loaded) return res(); have.addEventListener("load", () => res()); have.addEventListener("error", () => rej(new Error("Couldn't load " + src.split("/").pop()))); return; }
+      const s = document.createElement("script"); s.src = src; s.async = true; s.onload = () => { s.dataset.loaded = "1"; res(); }; s.onerror = () => rej(new Error("Couldn't load " + src.split("/").pop()));
       document.head.appendChild(s);
     });
   }

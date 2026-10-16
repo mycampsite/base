@@ -35,9 +35,10 @@
 
   function loadScript(src){
     return new Promise((res, rej) => {
-      if(document.querySelector(`script[src="${src}"]`)) return res();
+      const have = document.querySelector(`script[src="${src}"]`);
+      if(have){ if(have.dataset.loaded) return res(); have.addEventListener("load", () => res()); have.addEventListener("error", () => rej(new Error("Couldn't load " + String(src).split("/").pop()))); return; }
       const s = document.createElement("script"); s.src = src; s.async = true;
-      s.onload = () => res(); s.onerror = () => rej(new Error("Couldn't load " + String(src).split("/").pop()));
+      s.onload = () => { s.dataset.loaded = "1"; res(); }; s.onerror = () => rej(new Error("Couldn't load " + String(src).split("/").pop()));
       document.head.appendChild(s);
     });
   }
@@ -78,12 +79,15 @@
     }finally{ clearTimeout(t); }
   }
   const NO_CLOUD = "Cloud isn't set up. Open the Library and connect your Apps Script link first.";
+  // The person's sign-in token (idtoken.js), so the script cloud can check them against the whitelist
+  async function idTok_(){ try{ return window.campIdToken ? await window.campIdToken() : ""; }catch(_e){ return ""; } }
+  const withTok_ = (o, t) => (t ? Object.assign(o, { idToken: t }) : o);
   async function apiGet(action, params){
     const ep = await getCloudEndpoint();
     if(!ep) return { ok:false, error:NO_CLOUD };
     let key = getCloudKey();
     for(let tries = 0; tries < 2; tries++){
-      const qs = new URLSearchParams(Object.assign({ action, key }, params || {}));
+      const qs = new URLSearchParams(withTok_(Object.assign({ action, key }, params || {}), await idTok_()));
       let j = await fetchJson_(ep + "?" + qs.toString());
       // A read can be repeated safely: when Drive is slow to answer (or answers with an error page) try once more, with longer to wait
       if(j && (j.network || j.transient) && navigator.onLine !== false){ await new Promise((r) => setTimeout(r, 1500)); j = await fetchJson_(ep + "?" + qs.toString(), null, 50000); }
@@ -98,7 +102,7 @@
     if(!ep) return { ok:false, error:NO_CLOUD };
     let key = getCloudKey();
     for(let tries = 0; tries < 2; tries++){
-      const j = await fetchJson_(ep, { method:"POST", headers:{ "Content-Type":"text/plain;charset=UTF-8" }, body: JSON.stringify(Object.assign({ action, key }, body || {})) }, ms || 60000);
+      const j = await fetchJson_(ep, { method:"POST", headers:{ "Content-Type":"text/plain;charset=UTF-8" }, body: JSON.stringify(withTok_(Object.assign({ action, key }, body || {}), await idTok_())) }, ms || 60000);
       if(j && j.auth === false){ await askPassword(tries > 0); key = getCloudKey(); continue; }
       return j;
     }

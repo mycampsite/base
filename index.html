@@ -554,6 +554,11 @@ const CAN_SHARE = !!navigator.share && !FINE;
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+// The person's sign-in token goes with every script-cloud request so the cloud can check the whitelist (same names as idtoken.js)
+let __campTok = "";
+window.campIdToken = async () => { try { const u = auth.currentUser; if (!u || u.isAnonymous) return ""; const t = await u.getIdToken(); if (t) __campTok = t; return __campTok; } catch (_e) { return __campTok; } };
+window.campIdTokenNow = () => __campTok;
+const tokObj = async () => { const t = await window.campIdToken(); return t ? { idToken: t } : {}; };
 const db = getDatabase(app);
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
@@ -919,7 +924,7 @@ async function loadCamp() {
   try {
     if (!RIP.ep) RIP.ep = await CampEndpoint();
     if (!RIP.ep) throw new Error("The script cloud isn't set up on this device. Open the Script library once to set it up.");
-    const url = RIP.ep + "?" + new URLSearchParams({ action: "list", key: lsGet(KEY_KEY) || "", _: Date.now() });
+    const url = RIP.ep + "?" + new URLSearchParams({ action: "list", key: lsGet(KEY_KEY) || "", ...(await tokObj()), _: Date.now() });
     let res;
     try { res = await (await fetch(url, { cache: "no-store" })).json(); } catch (_e) { res = await jsonp(url); }
     if (res && res.auth === false) { RIP.state = "locked"; RIP.err = ""; renderBody(); return; }
@@ -1674,7 +1679,7 @@ async function exportDoc(kind, fileId, retried) {
   try {
     const r = await fetch(RIP.ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, cache: "no-store", signal: ctl.signal,
       // The Production plan travels with every export, so the schedule and budget follow the panel
-      body: JSON.stringify({ key: lsGet(KEY_KEY) || "", action: kind, fileId, folderId: p.folderId, tz, plan: (p && p.production && p.production.scriptId === fileId) ? p.production : null, breakdown,
+      body: JSON.stringify({ key: lsGet(KEY_KEY) || "", ...(await tokObj()), action: kind, fileId, folderId: p.folderId, tz, plan: (p && p.production && p.production.scriptId === fileId) ? p.production : null, breakdown,
         // call / shoot / wrap per scene, the meal and company moves, worked out in the hub (the Schedule sheet lays them out)
         times, shotMins, castNos }) });
     res = await r.json();
@@ -2138,7 +2143,7 @@ const openDrafts = {};
 async function ripGet(params, ms) {
   if (!RIP.ep) RIP.ep = await CampEndpoint();
   if (!RIP.ep) throw new Error("The script cloud isn't set up on this device.");
-  const url = RIP.ep + "?" + new URLSearchParams(Object.assign({}, params, { key: lsGet(KEY_KEY) || "", _: Date.now() }));
+  const url = RIP.ep + "?" + new URLSearchParams(Object.assign({}, params, { key: lsGet(KEY_KEY) || "", ...(await tokObj()), _: Date.now() }));
   try { return await (await fetch(url, { cache: "no-store" })).json(); } catch (_e) { return await jsonp(url, ms || 20000); }
 }
 async function ripPost(body, rawAuth) {
@@ -2146,7 +2151,7 @@ async function ripPost(body, rawAuth) {
   if (!RIP.ep) throw new Error("The script cloud isn't set up on this device.");
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 60000);
   try {
-    const r = await fetch(RIP.ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, cache: "no-store", signal: ctl.signal, body: JSON.stringify(Object.assign({ key: lsGet(KEY_KEY) || "" }, body)) });
+    const r = await fetch(RIP.ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, cache: "no-store", signal: ctl.signal, body: JSON.stringify(Object.assign({ key: lsGet(KEY_KEY) || "", ...(await tokObj()) }, body)) });
     const res = await r.json();
     if (res && res.auth === false && !rawAuth) throw new Error("Locked: enter your script password.");
     return res;
