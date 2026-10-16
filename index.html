@@ -492,7 +492,7 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="production.js" defer></script>
 <script src="elements.js?v=2" defer></script>
 <script src="prodpanel.js?v=2" defer></script>
-<script src="bdpanel.js?v=7" defer></script>
+<script src="bdpanel.js?v=8" defer></script>
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=2" defer></script>
 <script type="module">
@@ -1944,6 +1944,8 @@ window.__CampHub = {
   // ⚠ needs the breakdown rule (projects/$pid/breakdown).
   writeBreakdown: (pid, sid, paths) => update(ref(db, "projects/" + pid + "/breakdown/" + sid), paths),
   toast: (m, kind, ms) => toast(m, kind, ms),
+  // Open a script in the editor at one line, selecting the words (the editor reads ?line=<id>&hl=<words>)
+  openScript: (sid, line, hl) => { const u = new URL(toolHref("editor.html", sid), location.href); if (line) u.searchParams.set("line", line); if (hl) u.searchParams.set("hl", String(hl).slice(0, 80)); location.href = u.href; },
   confirm: (title, text, ok, danger) => confirmDlg(title, text, ok, !!danger),
   prompt: (title, label, value) => dialog({ title, fields: [{ name: "v", label, value: value || "" }], ok: "OK" }).then(v => v ? String(v.v || "").trim() : ""),
   layoutChanged: () => {},

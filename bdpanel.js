@@ -241,6 +241,13 @@ const css = `
 #bdctl tr.er:hover .edBtn, #bdctl .edBtn:focus-visible{ opacity:1; color:var(--uiText); border-color:rgba(255,255,255,.35); }
 @media (hover:none){ #bdctl .edBtn{ opacity:1; } }
 #bdctl .scBtns{ display:flex; flex-wrap:wrap; gap:3px; }
+#bdctl .scGo{ display:inline-flex; align-items:center; }
+#bdctl .scGo .scBtn{ border-top-right-radius:0; border-bottom-right-radius:0; }
+#bdctl .goText{ border:1px solid var(--uiBorder); background:transparent; color:var(--uiMuted); cursor:pointer; font:inherit; font-size:11px; line-height:1; padding:0 5px; height:19px; border-radius:0 6px 6px 0; border-left:0; opacity:.55; }
+#bdctl .goText:hover, #bdctl .goText:focus-visible{ opacity:1; color:var(--uiText); background:rgba(255,255,255,.08); }
+#bdctl table.ct .c-nm .goText{ border:0; border-radius:6px; margin-left:5px; height:18px; opacity:0; }
+#bdctl table.ct tr:hover .c-nm .goText, #bdctl table.ct .c-nm .goText:focus-visible{ opacity:.8; }
+@media (hover:none){ #bdctl table.ct .c-nm .goText{ opacity:.6; } }
 #bdctl .scBtn{ border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:inherit; border-radius:6px; padding:0 6px; font-size:11.5px; cursor:pointer; font-family:inherit; }
 #bdctl .scBtn:hover{ border-color:rgba(255,255,255,.4); }
 #bdctl .edForm{ display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; padding:8px 10px; background:#202020; border-radius:9px; }
@@ -609,7 +616,7 @@ function sheetsView(b, can){
       const e = b.elements[k], tip = (e.auto ? "Found in the script: " + e.why.join(", ") : "Added by hand") + (e.scenes.length > 1 ? " · in scenes " + e.scenes.join(", ") : "");
       return `<tr class="${e.manual && !e.auto ? "man" : ""}" title="${esc(tip)}">
         <td class="c-no">${isCast && e.no ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}</td>
-        <td class="c-nm"><b data-a="edit" data-k="${esc(k)}">${esc(e.name)}</b></td>
+        <td class="c-nm"><b data-a="edit" data-k="${esc(k)}">${esc(e.name)}</b><button type="button" class="goText" data-a="opentext" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in the script" title="Show in the script: opens the script at the first mention in this scene">↗</button></td>
         <td class="c-q">${s.qty && s.qty[k] ? s.qty[k] : isCast ? "" : "1"}</td>
         <td class="c-nt">${e.note ? esc(e.note) : `<span class="mu">—</span>`}</td>
         <td class="c-sc" title="${e.scenes.length} scene${e.scenes.length === 1 ? "" : "s"}">${e.scenes.length > 1 ? e.scenes.length : ""}</td>
@@ -744,6 +751,21 @@ function sceneText(b, s){
   const can = H().canEdit(H().project(S.pid));
   return `<div class="shText" aria-label="Scene text"><div class="stHd"><span>Scene text</span>${can ? `<small>Select words to add them below</small>` : ""}</div><div class="stBody">${html}</div></div>`;
 }
+// Open the script itself at an element's first mention in a scene: the editor scrolls to that line and selects the words.
+// Falls back to the scene heading when the words can't be found (an element tagged by hand without any quote).
+function openInScript(sk, n, k){
+  const m = S.model, sc = m && m.scenes.find((x) => (sk ? x.key === sk : x.n === n)); if(!sc || !S.sid) return;
+  const doc = S.scripts[S.sid] && S.scripts[S.sid].doc, lines = sceneLines(doc, sc), needles = ((sc.hits && sc.hits[k]) || []).filter(Boolean);
+  let target = null;
+  for(const l of lines){
+    const texts = l.type === "dual" && l.dual ? [l.dual.left && runsText(l.dual.left.characterRuns), l.dual.left && runsText(l.dual.left.dialogueRuns), l.dual.right && runsText(l.dual.right.characterRuns), l.dual.right && runsText(l.dual.right.dialogueRuns)] : [runsText(l.runs)];
+    let best = null;
+    texts.forEach((t) => { if(!t) return; needles.forEach((q) => { const f = findAll(t, q)[0]; if(f && (!best || f[0] < best.a)) best = { a: f[0], hl: t.slice(f[0], f[1]) }; }); });
+    if(best){ target = { id: l.id, hl: best.hl }; break; }
+  }
+  const id = (target && target.id) || sc.id || (lines[0] && lines[0].id) || "";
+  try{ H().openScript(S.sid, id, target ? target.hl : ""); }catch(err){ console.error(err); H().toast("Couldn't open the script.", "err"); }
+}
 function hubTitle(){ try{ return H().scriptTitle(S.sid) || ""; }catch(_e){ return ""; } }
 // Small line icons for each category (24px grid, drawn with currentColor)
 const CAT_ICON = {
@@ -798,7 +820,7 @@ function elementsView(b, can){
         <button class="btn sm" type="button" data-a="edcancel">Cancel</button></div></td></tr>` : "";
     return `${grp}<tr class="er${S.edit === k ? " on" : ""}" style="--cc:${c.color}"><td>${e.no && e.cat === "cast" ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}<b>${esc(e.name)}</b>${can ? `<button type="button" class="star${e.hero ? " on" : ""}" data-a="hero" data-k="${esc(k)}" data-on="${e.hero ? 0 : 1}" aria-pressed="${e.hero}" aria-label="${e.hero ? "Remove hero from " : "Make "}${esc(e.name)}${e.hero ? "" : " a hero"}" title="${e.hero ? "Hero: plan doubles and continuity. Click to turn off" : "Make this a hero"}" style="margin-left:6px">${e.hero ? "★" : "☆"}</button>` : e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.hero && !e.heroSet ? `<span class="tag" title="Found automatically: written in CAPS or handled in several scenes">auto</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
       ${grouped ? "" : `<td><span class="cpill">${esc(c.short)}</span></td>`}
-      <td><div class="scBtns">${e.scenes.map((n) => `<button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${n}">${n}</button>`).join("")}</div></td>
+      <td><div class="scBtns">${e.scenes.map((n) => `<span class="scGo"><button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${n}'s sheet">${n}</button><button type="button" class="goText" data-a="opentext" data-n="${n}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in the script, scene ${n}" title="Show in the script: scene ${n}">↗</button></span>`).join("")}</div></td>
       <td class="num">${E.fmtEighths(e.eighths)}</td>
       <td class="act">${can ? `<button class="edBtn" type="button" data-a="edit" data-k="${esc(k)}" aria-label="Edit ${esc(e.name)}" title="Rename, recategorise, merge or ignore">Edit</button>` : ""}</td></tr>${form}`;
   }).join("");
@@ -889,6 +911,7 @@ function wire(box, pid){
     const k = a.dataset.a;
     if(k === "view"){ const was = S.view; S.view = a.dataset.v; lsSet(VIEW_KEY, S.view); S.edit = null; S.adding = null; rerender(); if(was !== S.view) navStep(); return; }
     if(k === "scf"){ S.scF = a.dataset.v; rerender(); return; }
+    if(k === "opentext"){ openInScript(a.dataset.sk, Number(a.dataset.n) || 0, a.dataset.k); return; }
     if((k === "pick" || k === "goto") && !Number(a.dataset.n)) return;
     if(k === "pick" || k === "goto"){ const was = S.view; S.qQuote = ""; S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; if(S.lock){ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); return; } rerender(); if(was !== S.view) navStep(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
