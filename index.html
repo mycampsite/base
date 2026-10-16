@@ -492,7 +492,7 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="production.js" defer></script>
 <script src="elements.js?v=2" defer></script>
 <script src="prodpanel.js?v=2" defer></script>
-<script src="bdpanel.js?v=6" defer></script>
+<script src="bdpanel.js?v=7" defer></script>
 <script src="board.js" defer></script>
 <script src="boardpanel.js" defer></script>
 <script type="module">
@@ -621,15 +621,32 @@ let gone = new Set(); try { gone = new Set(JSON.parse(lsGet(GONE_KEY) || "[]"));
 const saveGone = () => lsSet(GONE_KEY, JSON.stringify([...gone]));
 const leaving = new Set();   // scripts being removed right now: hidden at once, shown again if it fails
 const scriptIds = p => Object.keys((p && p.scripts) || {}).filter(id => !gone.has(id) && !leaving.has(id));
-function saveLast() {
+// Each place you go (project, tab, sub-tab, Breakdown view) is a browser history step, so Back walks back through them
+const bdView = () => { try { return (window.CampBdPanel && window.CampBdPanel.getView && window.CampBdPanel.getView()) || ""; } catch (_e) { return ""; } };
+const navState = () => ({ camp: 1, pid: current.pid, tab: current.tab, key: current.key || null, view: current.tab === "breakdown" ? bdView() : "" });
+const sameNav = (a, b) => !!a && !!b && a.pid === b.pid && a.tab === b.tab && (a.key || null) === (b.key || null) && (a.view || "") === (b.view || "");
+function saveLast(push) {
   lsSet(LS_LAST, JSON.stringify({ pid: current.pid, tab: current.tab, keys: lastKey }));
   try {
     const q = new URLSearchParams(location.search);
     if (current.pid) q.set("pid", current.pid); else q.delete("pid");
     q.set("tab", current.tab);
-    history.replaceState(null, "", location.pathname + "?" + q.toString());
+    const st = navState(), url = location.pathname + "?" + q.toString();
+    if (push && !document.body.classList.contains("popout") && history.state && history.state.camp && !sameNav(history.state, st)) history.pushState(st, "", url);
+    else history.replaceState(st, "", url);
   } catch (_e) {}
 }
+window.addEventListener("popstate", e => {
+  const st = e.state;
+  if (!st || !st.camp || document.body.classList.contains("popout")) return;
+  if (st.pid && !projects[st.pid]) return;
+  current.pid = st.pid; current.tab = TABS.includes(st.tab) ? st.tab : "scripts"; current.key = st.key || null;
+  if (current.key) rememberKey(current.key);
+  try { if (st.view && window.CampBdPanel && window.CampBdPanel.setView) window.CampBdPanel.setView(st.view); } catch (err) { console.error(err); }
+  render();
+});
+// The Breakdown panel switched view (Sheets / Elements / Reports): make it a Back step
+window.addEventListener("camp:bd-nav", () => saveLast(true));
 
 // ---------- toast ----------
 let toastTimer;
@@ -1112,8 +1129,8 @@ function wireList(pane) {
   });
 }
 // A strip on the Stripboard opens that scene's sheet on the Breakdown tab
-window.addEventListener("camp:open-breakdown", () => { current.tab = "breakdown"; current.key = "@bd"; rememberKey("@bd"); saveLast(); renderBody(); });
-document.querySelectorAll(".mtab").forEach(t => t.addEventListener("click", () => { current.tab = t.dataset.tab; if (isProdTab(current.tab)) pickKey(); saveLast(); renderBody(); }));
+window.addEventListener("camp:open-breakdown", () => { current.tab = "breakdown"; current.key = "@bd"; rememberKey("@bd"); saveLast(true); renderBody(); });
+document.querySelectorAll(".mtab").forEach(t => t.addEventListener("click", () => { current.tab = t.dataset.tab; if (isProdTab(current.tab)) pickKey(); saveLast(true); renderBody(); }));
 
 // Tabs show the kind of sheet, not the film's title ("Film - Budget" -> "Budget"; the crew sheet is the Directory)
 function tabLabel(name) {
@@ -1128,7 +1145,7 @@ function renderTabs() {
     const b = document.createElement("button");
     b.type = "button"; b.setAttribute("role", "tab"); b.className = "tab pseudo" + (current.key === key ? " on" : "");
     b.setAttribute("aria-selected", current.key === key ? "true" : "false"); b.textContent = label; b.title = title; b.dataset.id = key;
-    b.onclick = () => { current.key = key; rememberKey(key); saveLast(); renderTabs(); showFrame(); };
+    b.onclick = () => { current.key = key; rememberKey(key); saveLast(true); renderTabs(); showFrame(); };
     box.appendChild(b);
   };
   const sep = () => { const i = document.createElement("span"); i.className = "tabSep"; box.appendChild(i); };
@@ -1142,7 +1159,7 @@ function renderTabs() {
     b.setAttribute("aria-selected", s.id === current.key ? "true" : "false");
     b.textContent = tabLabel(s.name); b.title = s.name;
     b.draggable = FINE; b.dataset.id = s.id;
-    b.onclick = () => { holdScroll(); current.key = s.id; rememberKey(s.id); saveLast(); renderTabs(); showFrame(); };
+    b.onclick = () => { holdScroll(); current.key = s.id; rememberKey(s.id); saveLast(true); renderTabs(); showFrame(); };
     const after = e => { const r = b.getBoundingClientRect(); return e.clientX > r.left + r.width / 2; };
     b.ondragstart = e => { dragSheet = s.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", s.id); } catch (_e) {} };
     b.ondragend = () => { dragSheet = null; box.querySelectorAll(".tab").forEach(t => t.classList.remove("dl", "dr")); };
@@ -1617,7 +1634,9 @@ function openProject(pid) {
   current.pid = pid; current.key = null; current.tab = current.tab || "scripts";
   prefs.opened[pid] = Date.now(); savePrefs();
   $("drawer").classList.add("hidden");
-  document.body.classList.remove("sideOpen"); render();
+  document.body.classList.remove("sideOpen");
+  if (projects[pid]) { pickKey(); saveLast(true); }
+  render();
 }
 function orderedAll() {
   const ids = liveIds(), byName = (a, b) => (projects[a].name || "").localeCompare(projects[b].name || "");

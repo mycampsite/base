@@ -151,6 +151,18 @@ const css = `
 #bdctl .stBody .dualRow .t-character{ margin-left:6ch; } #bdctl .stBody .dualRow .t-dialogue{ margin-left:0; }
 ::highlight(bdpick){ background:rgba(127,182,255,.45); color:inherit; }
 #bdctl .stBody mark{ background:color-mix(in srgb, var(--cc) 30%, transparent); color:inherit; border-radius:3px; padding:0 1px; box-shadow:inset 0 -2px 0 var(--cc); }
+#bdctl .stBody mark{ cursor:help; }
+#bdctl .stBody mark.multi{ outline:1px dashed color-mix(in srgb, var(--cc) 70%, transparent); outline-offset:1px; }
+#bdctl .stBody mark.multi::after{ content:attr(data-n); font-size:9px; font-weight:700; vertical-align:super; line-height:0; margin-left:1px; padding:0 3px; border-radius:6px; background:#2a2a2a; color:#ececf0; }
+#bdctl .qRemPick{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:6px 0 2px; font-size:12px; color:var(--uiMuted,#9a9aa0); }
+#bdctl .qRemPick .btn i{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--cc); margin-right:5px; }
+#bdctl .qRemPick .btn small{ color:var(--uiMuted,#9a9aa0); margin-left:4px; }
+#bdTagTip{ position:fixed; z-index:9999; display:none; min-width:150px; max-width:280px; padding:7px 9px; border-radius:8px; background:#1d1d1f; border:1px solid #3a3a3c; box-shadow:0 6px 20px rgba(0,0,0,.45); font:12px/1.35 system-ui,sans-serif; color:#ececf0; pointer-events:none; }
+#bdTagTip.show{ display:block; }
+#bdTagTip .h{ color:#9a9aa0; font-size:11px; margin-bottom:4px; }
+#bdTagTip .r{ display:flex; align-items:center; gap:7px; padding:2px 0; }
+#bdTagTip .r i{ width:9px; height:9px; border-radius:50%; flex:none; }
+#bdTagTip .r span{ margin-left:auto; color:#9a9aa0; font-size:11px; padding-left:10px; }
 #bdctl .stBody ::selection{ background:rgba(127,182,255,.45); }
 #bdctl .shCats{ display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:12px; align-items:start; }
 #bdctl .cat{ border:1px solid color-mix(in srgb, var(--cc) 40%, #262626); border-radius:10px; background:#181818; overflow:hidden; }
@@ -309,6 +321,7 @@ const printCss = `
   #bdctl .shBar, #bdctl .qAdd, #bdctl .cat > .ch .add, #bdctl .c-x, #bdctl .addRow, #bdctl .cat.isEmpty{ display:none !important; }
   #bdctl .shGrid{ grid-template-columns:1fr !important; }
   #bdctl .stBody{ max-height:none !important; } #bdctl .stHd small{ display:none !important; }
+  #bdctl .stBody mark.multi{ outline:none; } #bdctl .stBody mark.multi::after{ display:none; }
   #bdctl .stBody mark{ box-shadow:inset 0 -2px 0 var(--cc) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   #bdctl .shSide{ position:static !important; border:0 !important; }
   #bdctl .shFields{ grid-template-columns:repeat(8,auto) !important; border-color:#000 !important; }
@@ -676,6 +689,23 @@ function sceneLines(doc, s){
   for(let j = i + 1; j < ls.length && ls[j].type !== "scene"; j++) out.push(ls[j]);
   return out;
 }
+const catRank = (id) => { const i = E.CATS.findIndex((c) => c.id === id); return i < 0 ? 999 : i; };
+// Hover card for underlined words: every tag on them, with its colour, in list order
+function tagTip(on){
+  let tip = document.getElementById("bdTagTip");
+  if(!on){ if(tip) tip.classList.remove("show"); return; }
+  if(!tip){ tip = document.createElement("div"); tip.id = "bdTagTip"; tip.setAttribute("role", "tooltip"); document.body.appendChild(tip); }
+  let rows = []; try { rows = JSON.parse(on.dataset.tags || "[]"); } catch(_e){ rows = []; }
+  if(!rows.length){ tip.classList.remove("show"); return; }
+  tip.innerHTML = (rows.length > 1 ? `<div class="h">${rows.length} tags on these words</div>` : "") + rows.map(([c, n, l]) => `<div class="r"><i style="background:${esc(c)}"></i><b>${esc(n)}</b><span>${esc(l)}</span></div>`).join("");
+  tip.classList.add("show");
+  const r = on.getBoundingClientRect(), w = tip.offsetWidth, hh = tip.offsetHeight;
+  let x = Math.min(Math.max(8, r.left), window.innerWidth - w - 8), y = r.bottom + 8;
+  if(y + hh > window.innerHeight - 8) y = Math.max(8, r.top - hh - 8);
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+document.addEventListener("mouseover", (ev) => { const m = ev.target && ev.target.closest && ev.target.closest("#bdctl .stBody mark[data-tags]"); tagTip(m || null); });
+document.addEventListener("scroll", () => tagTip(null), true);
 function sceneText(b, s){
   const sc = S.scripts[S.sid], lines = sceneLines(sc && sc.doc, s);
   if(!lines.length) return "";
@@ -693,10 +723,13 @@ function sceneText(b, s){
     all.forEach((p) => { const g = spans[spans.length - 1]; if(g && p.a < g.z){ g.z = Math.max(g.z, p.z); g.nds.push(p.nd); } else spans.push({ a: p.a, z: p.z, nds: [p.nd] }); });
     let h = "", at = 0;
     spans.forEach((p) => {
-      const cols = [], tips = [];
-      p.nds.forEach((nd) => { const c = E.CAT[nd.c]; if(cols.indexOf(c.color) < 0) cols.push(c.color); tips.push(nd.name + " · " + c.label); });
-      const shadow = cols.map((c, i) => i ? `0 ${2 * i}px 0 ${c}` : `inset 0 -2px 0 ${c}`).join(",");   // the first underline stays put; each extra tag adds one below it
-      h += esc(txt.slice(at, p.a)) + `<mark style="--cc:${cols[0]};box-shadow:${shadow}" title="${esc(tips.join("; "))}">${esc(txt.slice(p.a, p.z))}</mark>`; at = p.z;
+      // one entry per element, in the same order as the category boxes below, so the top underline is the first box's colour
+      const seen = {}, nds = p.nds.filter((nd) => !seen[nd.k] && (seen[nd.k] = 1)).sort((x, y) => catRank(x.c) - catRank(y.c) || String(x.name).localeCompare(String(y.name)));
+      const cols = [];
+      nds.forEach((nd) => { const c = E.CAT[nd.c]; if(cols.indexOf(c.color) < 0) cols.push(c.color); });
+      const shadow = cols.map((c, i) => i ? `0 ${3 * i}px 0 ${c}` : `inset 0 -2px 0 ${c}`).join(",");   // the first underline stays put; each extra colour adds one below it
+      const tags = JSON.stringify(nds.map((nd) => [E.CAT[nd.c].color, nd.name, E.CAT[nd.c].label]));
+      h += esc(txt.slice(at, p.a)) + `<mark class="${nds.length > 1 ? "multi" : ""}" style="--cc:${cols[0]};box-shadow:${shadow}" data-tags="${esc(tags)}"${nds.length > 1 ? ` data-n="${nds.length}"` : ""} aria-label="${esc(nds.map((nd) => nd.name + ", " + E.CAT[nd.c].label).join("; "))}">${esc(txt.slice(p.a, p.z))}</mark>`; at = p.z;
     });
     return h + esc(txt.slice(at));
   };
@@ -854,10 +887,10 @@ function wire(box, pid){
   box.onclick = (ev) => {
     const a = ev.target.closest("[data-a]"); if(!a || a.tagName === "SELECT" || a.tagName === "INPUT") return;
     const k = a.dataset.a;
-    if(k === "view"){ S.view = a.dataset.v; lsSet(VIEW_KEY, S.view); S.edit = null; S.adding = null; rerender(); return; }
+    if(k === "view"){ const was = S.view; S.view = a.dataset.v; lsSet(VIEW_KEY, S.view); S.edit = null; S.adding = null; rerender(); if(was !== S.view) navStep(); return; }
     if(k === "scf"){ S.scF = a.dataset.v; rerender(); return; }
     if((k === "pick" || k === "goto") && !Number(a.dataset.n)) return;
-    if(k === "pick" || k === "goto"){ S.qQuote = ""; S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; if(S.lock){ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); return; } rerender(); return; }
+    if(k === "pick" || k === "goto"){ const was = S.view; S.qQuote = ""; S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; if(S.lock){ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); return; } rerender(); if(was !== S.view) navStep(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
     if(k === "csv"){ const m = model(); if(m) download(((hub.scriptTitle(sid) || "breakdown") + " - breakdown.csv").replace(/[\\/:*?"<>|]/g, "-"), E.csv(m)); return; }
     if(k === "rpby"){ S.rpBy = a.dataset.v; rerender(); return; }
@@ -870,6 +903,8 @@ function wire(box, pid){
     if(k === "addcancel"){ S.adding = null; rerender(); return; }
     if(k === "qadd"){ quickAdd(box, a.dataset.sk, ed); return; }
     if(k === "qrem"){ quickRemove(box, a.dataset.sk, ed); return; }
+    if(k === "qrempick"){ quickRemove(box, a.dataset.sk, ed, a.dataset.k); return; }
+    if(k === "qrempickx"){ const pk2 = box.querySelector(".qRemPick"); if(pk2) pk2.remove(); return; }
     if(k === "addok"){ commitAdd(box, a.dataset.sk, a.dataset.c, ed); return; }
     if(k === "rm"){ const sk = a.dataset.sk, key = a.dataset.k; ed((st) => E.untag(st, sk, key)); return; }
     if(k === "hero"){ const key = a.dataset.k, on = a.dataset.on === "1"; ed((st) => E.setHero(st, key, on)); return; }
@@ -942,7 +977,7 @@ function wire(box, pid){
   // clicking off (anywhere but the quick-add controls) drops the highlight, like a normal selection
   if(!document.__bdPickOff){
     document.__bdPickOff = true;
-    document.addEventListener("mousedown", (ev) => { if(S.pick && !(ev.target.closest && ev.target.closest(".qAdd"))) pickClear(); }, true);
+    document.addEventListener("mousedown", (ev) => { if(S.pick && !(ev.target.closest && ev.target.closest(".qAdd, .qRemPick"))) pickClear(); }, true);
   }
   box.onmouseup = () => {
     if(!can) return;
@@ -985,7 +1020,7 @@ function quickAdd(box, sk, ed){
   setTimeout(() => { const j = box.querySelector("#bdQuick"); if(j) j.focus(); }, 60);
 }
 // Remove the tag on the highlighted words: only that mention. If the element has other mentions in the scene they keep their underline; if that was the last one the element comes off the scene.
-function quickRemove(box, sk, ed){
+function quickRemove(box, sk, ed, onlyK){
   const m = S.model, sc = m && m.scenes.find((x) => x.key === sk), sel = box.querySelector("#bdQCat"), pk = S.pick;
   const nope = () => H().toast("Highlight the tagged words in the scene text first.", "err", 2000);
   if(!sc || !pk || pk.li == null){ nope(); return; }
@@ -998,8 +1033,20 @@ function quickRemove(box, sk, ed){
   }));
   if(!cand.length){ H().toast("No tag on those words in this scene.", "err", 2000); return; }
   const kinds = []; cand.forEach((x) => { if(!kinds.some((y) => y.k === x.k)) kinds.push(x); });
-  const pick = kinds.length === 1 ? kinds[0] : kinds.filter((x) => sel && x.c === sel.value)[0];
-  if(!pick){ H().toast("Several tags are on those words. Choose the one to remove in the category box, then press Remove.", "err", 3200); return; }
+  const pick = onlyK ? kinds.filter((x) => x.k === onlyK)[0] : kinds.length === 1 ? kinds[0] : null;
+  if(!pick && onlyK){ H().toast("That tag isn't on those words any more.", "err", 2000); return; }
+  // Several tags on the words: offer just those tags to choose from
+  if(!pick){
+    const q = box.querySelector(".qAdd"); if(!q) return;
+    let pk2 = box.querySelector(".qRemPick"); if(pk2) pk2.remove();
+    pk2 = document.createElement("div"); pk2.className = "qRemPick";
+    kinds.sort((x, y) => catRank(x.c) - catRank(y.c) || x.name.localeCompare(y.name));
+    pk2.innerHTML = `<span>Remove which tag?</span>` + kinds.map((x) => `<button type="button" class="btn sm" data-a="qrempick" data-sk="${esc(sk)}" data-k="${esc(x.k)}" style="--cc:${E.CAT[x.c].color}"><i></i>${esc(x.name)} <small>${esc(E.CAT[x.c].short)}</small></button>`).join("") + `<button type="button" class="btn sm" data-a="qrempickx" aria-label="Cancel">✕</button>`;
+    q.insertAdjacentElement("afterend", pk2);
+    const f = pk2.querySelector("button"); if(f) f.focus();
+    return;
+  }
+  { const old = box.querySelector(".qRemPick"); if(old) old.remove(); }
   const all = muted.concat(cand.filter((x) => x.k === pick.k).map((x) => x.key));
   let left = 0;   // mentions of this element still underlined after this one goes
   box.querySelectorAll(".sl[data-li]").forEach((n) => { const t = n.textContent, li = n.dataset.li; ((sc.hits && sc.hits[pick.k]) || []).forEach((q) => { if(q) findAll(t, q).forEach(([a]) => { if(all.indexOf(pick.k + "|" + li + "|" + a) < 0) left++; }); }); });
@@ -1040,5 +1087,9 @@ window.addEventListener("storage", (e) => {
   S.model = null; rerender();
 });
 function setMode(on, lock){ on = !!on; lock = on && lock ? lock : null; if(on === S.on && lock === (S.lock || null)) return; S.on = on; S.lock = lock; if(on){ S.edit = null; S.adding = null; S.seen = {}; S.model = null; } rerender(); const box = document.getElementById("bdctl"); if(box) box.className = on ? "on" : ""; }
-window.CampBdPanel = { enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, reloadScript: (id) => loadScript(id, true) };
+// Tell the hub a view change happened, so the browser's Back button can return to the previous view
+function navStep(){ try { window.dispatchEvent(new CustomEvent("camp:bd-nav")); } catch(_e){} }
+function getView(){ return S.view === "strips" ? "sheets" : S.view; }
+function setView(v){ if(!["sheets", "elements", "reports"].includes(v) || v === getView()) return; S.view = v; lsSet(VIEW_KEY, v); S.edit = null; S.adding = null; rerender(); }
+window.CampBdPanel = { enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, getView, setView, reloadScript: (id) => loadScript(id, true) };
 })();

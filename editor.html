@@ -5639,15 +5639,74 @@ function snapshot(reason="edit"){
       return null;
     };
 
-    let line = findLineForward(i) || findLineBackward(i-1) || editor.querySelector(".line");
+    const fwd = findLineForward(i), back = fwd ? null : findLineBackward(i-1);
+    let line = fwd || back || editor.querySelector(".line");
     if(!line) return false;
 
+    // Past the last line (e.g. after deleting the end of the script): land at the END of the line before, not its start
+    if(back){ try{ if(caretToLineEdge(back, true)) return true; }catch(_e){} }
     try{
       placeCaretAtLineIndex(line.dataset.id, 0);
       return true;
     }catch(_e){}
     return false;
   }
+
+  // ---------- Clicks in blank page space ----------
+  // The page margins, the gap between pages and the space under the last line aren't text, so a click there
+  // used to drop the caret on the editor itself: invisible, or snapped to the start of the next page.
+  // Instead put it in the nearest line: at its end when you click below it, at its start when you click above it.
+  function caretToLineEdge(lineEl, atEnd){
+    const editor = $("#scriptEditor");
+    if(!editor || !lineEl) return false;
+    let host = lineEl;
+    if((lineEl.dataset.type || "") === "dual"){
+      const f = lineEl.querySelectorAll(".dualField");
+      if(f.length) host = atEnd ? f[f.length - 1] : f[0];
+    }
+    const texts = []; const w = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    for(let n = w.nextNode(); n; n = w.nextNode()){ if(!(n.parentElement && n.parentElement.closest("#caretAnchor"))) texts.push(n); }
+    const r = document.createRange();
+    if(texts.length){
+      const t = atEnd ? texts[texts.length - 1] : texts[0];
+      let off = atEnd ? t.length : 0;
+      // don't sit after a trailing newline/NBSP placeholder in an otherwise empty line
+      if(atEnd && off > 0 && /[\n\r]$/.test(t.data)) off--;
+      r.setStart(t, off);
+    } else {
+      r.setStart(host, 0);
+    }
+    r.collapse(true);
+    try{ editor.focus({ preventScroll:true }); }catch(_e){ try{ editor.focus(); }catch(_e2){} }
+    const sel = window.getSelection(); if(!sel) return false;
+    sel.removeAllRanges(); sel.addRange(r);
+    try{ __pendingSelectionOverride = null; }catch(_e){}
+    try{ refreshTypeSelFromCaret(); }catch(_e){}
+    return true;
+  }
+  document.addEventListener("mousedown", (ev) => {
+    if(ev.button !== 0 || ev.shiftKey || ev.altKey || ev.metaKey || ev.ctrlKey || ev.detail > 1) return;
+    const editor = $("#scriptEditor"), stack = $("#scriptStack");
+    if(!editor || !stack || editor.getAttribute("contenteditable") !== "true") return;
+    if(document.body.classList.contains("previewLock") || document.body.classList.contains("phoneView")) return;
+    const t = ev.target; if(!t || !t.closest) return;
+    if(!stack.contains(t) || t.closest(".line")) return;              // a click on real text is the browser's job
+    if(t !== editor && t !== stack && !t.closest(".editorLayer") && !t.closest(".pageSpacer") && !t.closest("#caretAnchor")) return;
+    const lines = Array.from(editor.querySelectorAll(":scope > .line")).filter((l) => l.offsetHeight > 0);
+    if(!lines.length) return;
+    const y = ev.clientY;
+    let above = null, below = null;
+    for(const l of lines){
+      const r = l.getBoundingClientRect();
+      if(r.bottom <= y) above = { l, d: y - r.bottom };
+      else if(r.top >= y){ below = { l, d: r.top - y }; break; }
+      else return;                                                      // level with a line (its side margin): let the browser place it in that line
+    }
+    const pick = above && (!below || above.d <= below.d) ? above : below;
+    if(!pick) return;
+    ev.preventDefault();
+    caretToLineEdge(pick.l, pick === above);
+  }, true);
 
 
 
