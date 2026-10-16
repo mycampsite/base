@@ -105,6 +105,11 @@
   /* Project header + tabs */
   .pHead{ display:flex; align-items:center; gap:8px; padding:8px 14px 0 22px; flex-wrap:wrap; }
   .pHead #members{ margin-left:auto; }
+  .pOnline{ display:inline-flex; align-items:center; gap:0; margin-left:4px; }
+  .pOnline:empty{ display:none; }
+  .pOnline .liveFace.tent{ cursor:default; }
+  .pOnline .liveFace.tent::after{ white-space:nowrap; max-width:none; }
+  .pOnline .liveFace.more{ font:600 11px/1 Inter, system-ui, sans-serif; color:var(--uiMuted, #9a9aa0); padding:0 4px; }
   #pRole{ display:none !important; }
   .pHead h2{ flex:0 1 auto; min-width:0; margin:0; font-size:17px; line-height:28px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .mtabs{ display:flex; gap:2px; padding:0 10px; border-bottom:1px solid var(--uiBorder); overflow-x:auto; scrollbar-width:none; margin-top:4px; }
@@ -420,6 +425,7 @@
       <div class="pHead">
         <h2 id="pName"></h2>
         <span class="badge" id="pRole"></span>
+        <span class="liveFaces pOnline" id="pOnline" aria-label="Who else is in this project"></span>
         <button id="members" class="btn hidden" type="button" title="Members and invites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span class="lbl" id="membersLbl">Members</span></button>
         <a id="folder" class="btn" target="_blank" rel="noopener" title="Open the project's Drive folder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="lbl">Drive folder</span></a>
       </div>
@@ -498,7 +504,7 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, onValue, set, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "__API_KEY__",
@@ -626,6 +632,7 @@ const bdView = () => { try { return (window.CampBdPanel && window.CampBdPanel.ge
 const navState = () => ({ camp: 1, pid: current.pid, tab: current.tab, key: current.key || null, view: current.tab === "breakdown" ? bdView() : "" });
 const sameNav = (a, b) => !!a && !!b && a.pid === b.pid && a.tab === b.tab && (a.key || null) === (b.key || null) && (a.view || "") === (b.view || "");
 function saveLast(push) {
+  try { presSync(); } catch (_e) {}
   lsSet(LS_LAST, JSON.stringify({ pid: current.pid, tab: current.tab, keys: lastKey }));
   try {
     const q = new URLSearchParams(location.search);
@@ -647,6 +654,67 @@ window.addEventListener("popstate", e => {
 });
 // The Breakdown panel switched view (Sheets / Elements / Reports): make it a Back step
 window.addEventListener("camp:bd-nav", () => saveLast(true));
+
+// ---------- who's here (presence) ----------
+// Each open tab writes projects/<pid>/presence/<uid>/<tab> = { a: area, at, pg } and removes it when the tab closes or the
+// connection drops (onDisconnect). Other pages (script, treatment, storyboard) write the same place through camp-core.js.
+// ⚠ needs the presence rule (projects/$pid/presence/$uid). Without it the writes are refused and nobody shows; nothing else breaks.
+const PRES = { tab: Math.random().toString(36).slice(2, 10), pid: null, ref: null, unsub: null, data: {}, timer: 0, connected: false, off: false };
+const TAB_NAMES = { scripts: "Scripts", treatment: "Treatment", storyboard: "Storyboard", breakdown: "Breakdown", schedule: "Schedule", docs: "Docs", board: "Board" };
+function presArea() {
+  const t = TAB_NAMES[current.tab] || "Hub";
+  if (current.tab === "breakdown") { const v = bdView(); return "Breakdown › " + (v ? v.charAt(0).toUpperCase() + v.slice(1) : "Sheets"); }
+  if (current.tab === "schedule") return "Schedule › " + (current.key === "@strip" ? "Stripboard" : current.key === "@cs" ? "Call sheets" : "Shoot plan");
+  if (current.tab === "docs") { const c = sheetsByProject[current.pid], sh = c && c.list.find(x => x.id === current.key); return "Docs" + (sh ? " › " + tabLabel(sh.name) : ""); }
+  return t;
+}
+function presSignedIn() { return !!(auth && auth.currentUser && me && auth.currentUser.uid === me.uid); }
+function presPut() {
+  if (!PRES.ref || !presSignedIn() || PRES.off) return;
+  set(PRES.ref, { a: ("Hub · " + presArea()).slice(0, 79), at: Date.now(), pg: "hub" }).catch(err => { if (/permission/i.test(String(err && err.message))) PRES.off = true; });
+}
+function presLeave() {
+  const r = PRES.ref; PRES.ref = null;
+  if (PRES.unsub) { try { PRES.unsub(); } catch (_e) {} PRES.unsub = null; }
+  PRES.data = {}; drawOnline();
+  if (r) { try { onDisconnect(r).cancel(); } catch (_e) {} return remove(r).catch(() => {}); }
+  return Promise.resolve();
+}
+// Join the open project (or move to another one), then keep the area up to date
+function presSync() {
+  const pid = presSignedIn() && projects[current.pid] ? current.pid : null;
+  if (pid !== PRES.pid) {
+    presLeave(); PRES.pid = pid; PRES.off = false;
+    if (pid) {
+      PRES.ref = ref(db, "projects/" + pid + "/presence/" + me.uid + "/" + PRES.tab);
+      if (PRES.connected) { onDisconnect(PRES.ref).remove().catch(() => {}); presPut(); }
+      PRES.unsub = onValue(ref(db, "projects/" + pid + "/presence"), s => { PRES.data = s.val() || {}; drawOnline(); }, () => { PRES.data = {}; drawOnline(); });
+    }
+    return;
+  }
+  clearTimeout(PRES.timer); PRES.timer = setTimeout(presPut, 400);
+}
+// Re-register after a dropped connection (the server already ran onDisconnect and removed us)
+onValue(ref(db, ".info/connected"), s => {
+  PRES.connected = s.val() === true;
+  if (PRES.connected && PRES.ref) { onDisconnect(PRES.ref).remove().catch(() => {}); presPut(); }
+});
+window.addEventListener("pagehide", () => { if (PRES.ref) { try { remove(PRES.ref); } catch (_e) {} } });
+const presColor = uid => { const C = (window.CampTent && window.CampTent.colors) || ["#7d8f4e"]; let h = 0; for (const ch of String(uid)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return C[h % C.length]; };
+function drawOnline() {
+  const box = $("pOnline"); if (!box) return;
+  const mem = (projects[PRES.pid] && projects[PRES.pid].members) || {};
+  const people = Object.keys(PRES.data || {}).filter(uid => (!me || uid !== me.uid) && mem[uid]).map(uid => {
+    const tabs = Object.values(PRES.data[uid] || {}).filter(x => x && typeof x === "object");
+    tabs.sort((a, b) => (b.at || 0) - (a.at || 0));
+    return tabs.length ? { uid, a: String(tabs[0].a || "In the project"), at: tabs[0].at || 0, more: tabs.length - 1 } : null;
+  }).filter(Boolean).sort((a, b) => b.at - a.at);
+  if (!people.length) { box.innerHTML = ""; return; }
+  const T = window.CampTent, shown = people.slice(0, 5);
+  box.innerHTML = shown.map(p => { const col = presColor(p.uid), n = T ? T.label("", col) : "Someone", tip = n + " · " + p.a + (p.more ? " (+" + p.more + " more tab" + (p.more > 1 ? "s" : "") + ")" : "");
+    return `<span class="liveFace tent" tabindex="0" role="img" style="--tc:${col}" data-name="${esc(tip)}" aria-label="${esc(tip)}">${T ? T.svg(col) : ""}</span>`; }).join("")
+    + (people.length > shown.length ? `<span class="liveFace more" title="${esc(people.slice(5).map(p => (T ? T.label("", presColor(p.uid)) : "Someone") + " · " + p.a).join("\n"))}">+${people.length - shown.length}</span>` : "");
+}
 
 // ---------- toast ----------
 let toastTimer;
@@ -882,7 +950,7 @@ $("signIn").onclick = async () => {
   }
   catch (e) { if (!/popup-closed|cancelled/i.test(String(e.code || e.message))) toast("Sign-in failed: " + (e.message || e)); }
 };
-$("signOut").onclick = () => { [SESSION_KEY, PROJ_CACHE, FILES_CACHE, SHEETS_CACHE, DRAFTS_CACHE].forEach(k => { try { localStorage.removeItem(k); } catch (_e) {} }); signOut(auth); };
+$("signOut").onclick = async () => { try { await Promise.race([presLeave(), new Promise(r => setTimeout(r, 1500))]); } catch (_e) {} PRES.pid = null; [SESSION_KEY, PROJ_CACHE, FILES_CACHE, SHEETS_CACHE, DRAFTS_CACHE].forEach(k => { try { localStorage.removeItem(k); } catch (_e) {} }); signOut(auth); };
 
 function teardown() {
   if (userProjectsUnsub) userProjectsUnsub();
@@ -1007,6 +1075,7 @@ function render() {
     else if (RIP.state === "ok" && scriptIds(p).some(id => !RIP.files[id] && !RIP.tried.has(id))) { scriptIds(p).forEach(id => RIP.tried.add(id)); RIP.state = "idle"; loadCamp(); }
   }
   document.title = "Hub - Camp";
+  try { presSync(); } catch (_e) {}
   renderProjectList();
   renderBody();
   renderMembers();

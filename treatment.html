@@ -4911,6 +4911,7 @@
         if(sr > T.rev){ T.rev = sr; T.base = flatFromVal(LV.lastVal); }
       });
       LV.me = LV.pres.child(LV.uid); LV.me.onDisconnect().remove();
+      try{ const hp = new URLSearchParams(location.search).get("hub"); if(hp && window.camp && window.camp.presenceJoin) window.camp.presenceJoin(fb.database(), hp, LV.uid, "treatment", () => "Treatment · " + ((typeof T !== "undefined" && T && T.title) || (document.title || "").replace(/\s*[—–|-]\s*(Treatment|Camp).*$/i, ""))); }catch(_e){}
       const mine = () => ({ n:LV.name, j:TS, h:TS, pg:(curPage() && curPage().id) || "", sel:"" });
       await withTimeout(LV.me.set(mine()), 10000);
       setInterval(() => { if(LV.me) LV.me.update({ h:TS }).catch(() => {}); electLeader(); renderLivePill(); updateNavDots(); drawRemote(); }, 25000);

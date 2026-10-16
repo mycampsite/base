@@ -130,5 +130,19 @@
       return out && out.ok ? out.data : { linked:false };
     }catch(_e){ return { linked:false }; }
   }
-   window.camp = { ensureGoogleUser, roomAccess, route, normalizeEndpoint, loadConfig_, getCloudEndpoint, getCloudKey, setCloudKey, cloudParam, escapeHtml, loadScript, askPassword, fetchJson_, apiGet, apiPost };
+  // ---------- who's here (presence), for the Script, Treatment and Storyboard pages ----------
+  // Writes projects/<pid>/presence/<uid>/<tab> = { a: area, at, pg } with the compat SDK the page already loaded for live
+  // editing, and removes it when the tab closes or the connection drops. The hub shows it as tents with the area on hover.
+  // ⚠ needs the presence rule (projects/$pid/presence/$uid); if it's missing the write is refused quietly.
+  function presenceJoin(db, pid, uid, page, getArea){
+    if(!db || !pid || !uid) return null;
+    const tab = Math.random().toString(36).slice(2, 10), r = db.ref("projects/" + pid + "/presence/" + uid + "/" + tab);
+    let off = false, t = 0;
+    const put = () => { if(off) return; let a = ""; try{ a = String(getArea() || ""); }catch(_e){} r.set({ a: a.replace(/\s+/g, " ").trim().slice(0, 79) || page, at: Date.now(), pg: page }).catch((e) => { if(/permission/i.test(String(e && e.message))) off = true; }); };
+    db.ref(".info/connected").on("value", (s) => { if(s.val() === true && !off){ r.onDisconnect().remove(); put(); } });
+    window.addEventListener("pagehide", () => { try{ r.remove(); }catch(_e){} });
+    return { touch(){ clearTimeout(t); t = setTimeout(put, 600); }, leave(){ off = true; try{ r.onDisconnect().cancel(); r.remove(); }catch(_e){} } };
+  }
+
+   window.camp = { ensureGoogleUser, roomAccess, route, normalizeEndpoint, loadConfig_, getCloudEndpoint, getCloudKey, setCloudKey, cloudParam, escapeHtml, loadScript, askPassword, fetchJson_, apiGet, apiPost, presenceJoin };
 })();

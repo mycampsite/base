@@ -1724,6 +1724,7 @@ window.SB3D={
     // presence
     const PR = LIVE.room.child("storyboardPresence");
     LIVE.me = PR.child(LIVE.uid); LIVE.me.onDisconnect().remove();
+    try{ const hp = new URLSearchParams(location.search).get("hub"); if(hp && window.camp && window.camp.presenceJoin) window.camp.presenceJoin(fb.database(), hp, LIVE.uid, "storyboard", () => "Storyboard · " + (S.title || "")); }catch(_e){}
     const mine = () => ({ n: "", j: TS, h: TS, s: S.view === "focus" ? S.curShotKey : "" });
     await LIVE.me.set(mine());
     LIVE.on = true;

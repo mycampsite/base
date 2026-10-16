@@ -14710,6 +14710,8 @@ ${TP.join("\n")}
       const myName = (window.__scriptyMe && window.__scriptyMe.name) || "Someone";
       me.onDisconnect().remove();
       await me.set({ n: myName, j: TS, h: TS });
+      // the hub's "who's here" tents (only when opened from a project in the hub)
+      try{ const hp = new URLSearchParams(location.search).get("hub"); if(hp && window.camp && window.camp.presenceJoin) window.camp.presenceJoin(fb.database(), hp, __LIVE.uid, "script", () => "Script · " + ((document.getElementById("topTitle") || {}).textContent || "")); }catch(_e){}
       __LIVE.hb = setInterval(() => { me.update({ h: TS }).catch(() => {}); }, 30000);
       room.child("presence").on("value", (s) => { __LIVE.presence = s.val() || {}; if(!__LIVE.presence[__LIVE.uid] && !__LIVE.leaving) { me.set({ n: myName, j: TS, h: TS }).catch(() => {}); } __liveElect(); });
       // listeners
