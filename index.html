@@ -928,7 +928,7 @@ async function loadCamp() {
     const url = RIP.ep + "?" + new URLSearchParams({ action: "list", key: lsGet(KEY_KEY) || "", ...(await tokObj()), _: Date.now() });
     let res;
     try { res = await (await fetch(url, { cache: "no-store" })).json(); } catch (_e) { res = await jsonp(url); }
-    if (res && res.auth === false) { RIP.state = "locked"; RIP.err = ""; renderBody(); return; }
+    if (res && res.auth === false) { RIP.state = "locked"; RIP.err = String(res.error || ""); renderBody(); return; }
     if (!res || res.ok === false) throw new Error((res && res.error) || "Couldn't load your scripts.");
     const fresh = {};
     for (const f of (res.files || res.items || [])) {
@@ -1200,7 +1200,7 @@ function renderList(p) {
     wireList(pane); return;
   }
   if (RIP.state === "locked") {
-    pane.innerHTML = `<div class="emptyBox"><b>Scripts are locked</b><p>Your Google account isn’t on Camp’s list for scripts yet.</p><button class="btn primary" type="button" data-act="unlock">Try again</button></div>`;
+    pane.innerHTML = `<div class="emptyBox"><b>Scripts are locked</b><p>Your Google account isn’t on Camp’s list for scripts yet.</p>${RIP.err ? `<p class="muted" style="font-size:12px;word-break:break-word">${esc(RIP.err)}</p>` : ""}<button class="btn primary" type="button" data-act="unlock">Try again</button></div>`;
     wireList(pane); return;
   }
   if (!RIP.files && tab !== "scripts") {
