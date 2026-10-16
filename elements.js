@@ -975,6 +975,7 @@ function toRemote(st) {
   (st.drop || []).forEach(function (k) { (out.drop = out.drop || {})[encKey(k)] = true; });
   MAPS_.forEach(function (m) { Object.keys(st[m] || {}).forEach(function (k) { if (st[m][k] != null && st[m][k] !== "") (out[m] = out[m] || {})[encKey(k)] = String(st[m][k]); }); });
   Object.keys(st.scene || {}).forEach(function (sk) { const v = st.scene[sk]; if (v && Object.keys(v).length) (out.scene = out.scene || {})[encKey(sk)] = JSON.parse(JSON.stringify(v)); });
+  if (typeof st.reset === "number" && st.reset > 0) out.reset = st.reset;
   return out;
 }
 function fromRemote(r) {
@@ -995,10 +996,11 @@ function fromRemote(r) {
   const dr = Object.keys(obj(r.drop)).filter(function (k) { return r.drop[k]; }).map(decKey); if (dr.length) st.drop = dr;
   MAPS_.forEach(function (m) { Object.keys(obj(r[m])).forEach(function (k) { if (typeof r[m][k] === "string") (st[m] = st[m] || {})[decKey(k)] = r[m][k]; }); });
   Object.keys(obj(r.scene)).forEach(function (sk) { const v = obj(r.scene[sk]); if (Object.keys(v).length) (st.scene = st.scene || {})[decKey(sk)] = JSON.parse(JSON.stringify(v)); });
+  if (typeof r.reset === "number" && r.reset > 0) st.reset = r.reset;
   return st;
 }
 // The entries that differ between two stores, as { "tags/<scene>/<element>": value | null, … } for one update()
-const DEPTH_ = { tags: 3, off: 3, drop: 2, alias: 2, names: 2, notes: 2, heroes: 2, scene: 2 };
+const DEPTH_ = { tags: 3, off: 3, drop: 2, alias: 2, names: 2, notes: 2, heroes: 2, scene: 2, reset: 1 };
 function flat(r) {
   const out = {};
   Object.keys(DEPTH_).forEach(function (top) {
@@ -1017,11 +1019,17 @@ function diff(a, b) {
   return out;
 }
 // Put two stores together without losing either's entries (b's single values win when both have one)
+// A reset wins over older copies: if a (the team's) was reset after b was last in step, b's entries are dropped
+// (all of them for a whole-script reset; that scene's for a one-scene reset, marked by scene/<sk>/rs).
 function mergeStores(a, b) {
   const ra = toRemote(a), rb = toRemote(b), out = JSON.parse(JSON.stringify(ra));
+  if ((ra.reset || 0) > (rb.reset || 0)) return fromRemote(out);
+  const rsOf = function (r, k) { return (r.scene && r.scene[k] && Number(r.scene[k].rs)) || 0; };
   Object.keys(rb).forEach(function (top) {
+    if (top === "reset") { out.reset = Math.max(ra.reset || 0, rb.reset || 0); return; }
     out[top] = out[top] || {};
     Object.keys(rb[top]).forEach(function (k) {
+      if ((top === "tags" || top === "off" || top === "scene") && rsOf(ra, k) > rsOf(rb, k)) return;   // that scene was reset since
       if ((top === "tags" || top === "off") && out[top][k]) Object.keys(rb[top][k]).forEach(function (e) {
         const x = out[top][k][e], y = rb[top][k][e];
         if (top === "tags" && x && y) { const q = (x.q || []).concat((y.q || []).filter(function (w) { return (x.q || []).indexOf(w) < 0; })).slice(0, 6); out[top][k][e] = Object.assign({}, y, q.length ? { q: q } : {}); }
@@ -1033,13 +1041,70 @@ function mergeStores(a, b) {
   return fromRemote(out);
 }
 // Edits the editor made while the hub wasn't watching: [{ t:"tag", sk, c, n, q } | { t:"untag", sk, k }]
+// An edit queued before a reset (o.at older than the reset, or no time at all) is dropped, so it can't bring old tags back.
 function applyOps(st, ops) {
   (Array.isArray(ops) ? ops : []).forEach(function (o) {
     if (!o || typeof o !== "object") return;
+    const at = Number(o.at) || 0, rs = st && st.scene && st.scene[String(o.sk || "")] && Number(st.scene[String(o.sk || "")].rs);
+    if ((st && st.reset && at < st.reset) || (rs && at < rs)) return;
     if (o.t === "tag") st = tag(st, String(o.sk || ""), o.c, o.n, o.q);
     else if (o.t === "untag" && o.k) st = untag(st, String(o.sk || ""), String(o.k));
   });
   return st;
+}
+
+// ---------- Clear and re-tag ----------
+// Clears the hand-made tagging of one scene (o.scene = its key) or the whole script, so the automatic tags are rebuilt
+// from the script as it is now. Always cleared: tags added by hand, items taken out, muted words, and entries for scenes
+// that no longer exist (o.live = the keys of the scenes there are now; leftovers are only swept when it's given).
+// Whole script also clears the "ignore everywhere" list. Kept unless o.keep says otherwise: renames/merges (names),
+// element notes (notes), heroes (heroes) and per-scene fields like synopsis and day (scene).
+// The reset time is stamped (st.reset, or scene/<sk>/rs) so edits queued earlier on any device can't bring old tags back.
+const SCENE_TOP_ = ["tags", "off", "scene"];
+function resetStore(st, o) {
+  st = copy(st); o = o || {};
+  const keep = o.keep || {}, at = Number(o.at) || Date.now();
+  const live = Array.isArray(o.live) && o.live.length ? o.live.map(String) : null;
+  if (live) SCENE_TOP_.forEach(function (m) { Object.keys(st[m] || {}).forEach(function (sk) { if (live.indexOf(sk) < 0) delete st[m][sk]; }); });
+  const one = o.scene ? String(o.scene) : "";
+  const hit = function (sk) { return !one || sk === one; };
+  ["tags", "off"].forEach(function (m) { Object.keys(st[m] || {}).forEach(function (sk) { if (hit(sk)) delete st[m][sk]; }); });
+  Object.keys(st.scene || {}).forEach(function (sk) {
+    if (!hit(sk)) return;
+    const v = st.scene[sk] || {};
+    if (keep.scene) { delete v.mute; delete v.rs; } else Object.keys(v).forEach(function (f) { delete v[f]; });
+    if (Object.keys(v).length) st.scene[sk] = v; else delete st.scene[sk];
+  });
+  if (!one) {
+    delete st.drop;
+    if (!keep.names) { delete st.alias; delete st.names; }
+    if (!keep.notes) delete st.notes;
+    if (!keep.heroes) delete st.heroes;
+    st.reset = at;
+  } else {
+    st.scene = st.scene || {}; (st.scene[one] = st.scene[one] || {}).rs = at;
+  }
+  ["tags", "off", "scene", "alias", "names", "notes", "heroes"].forEach(function (m) { if (st[m] && !Object.keys(st[m]).length) delete st[m]; });
+  return st;
+}
+// What a reset would clear, for the confirm box
+function resetCounts(st, o) {
+  st = st && typeof st === "object" ? st : {}; o = o || {};
+  const keep = o.keep || {}, one = o.scene ? String(o.scene) : "";
+  const live = Array.isArray(o.live) && o.live.length ? o.live.map(String) : null;
+  const gone = function (sk) { return !!live && live.indexOf(String(sk)) < 0; };
+  const mine = function (sk) { return !gone(sk) && (!one || sk === one); };
+  const n = function (m, f) { return Object.keys(st[m] || {}).filter(f).reduce(function (a, sk) { return a + (st[m][sk] || []).length; }, 0); };
+  const c = { tags: n("tags", mine), off: n("off", mine), mute: 0, orphans: 0, drop: one ? 0 : (st.drop || []).length,
+    names: one || keep.names ? 0 : Object.keys(st.alias || {}).length + Object.keys(st.names || {}).length,
+    notes: one || keep.notes ? 0 : Object.keys(st.notes || {}).length, heroes: one || keep.heroes ? 0 : Object.keys(st.heroes || {}).length, scene: 0 };
+  Object.keys(st.scene || {}).forEach(function (sk) {
+    const v = st.scene[sk] || {};
+    if (mine(sk)) { c.mute += (v.mute || []).length; if (!keep.scene) c.scene += Object.keys(v).filter(function (f) { return f !== "mute" && f !== "rs"; }).length ? 1 : 0; }
+  });
+  SCENE_TOP_.forEach(function (m) { Object.keys(st[m] || {}).forEach(function (sk) { if (gone(sk)) c.orphans++; }); });
+  c.total = c.tags + c.off + c.mute + c.orphans + c.drop + c.names + c.notes + c.heroes + c.scene;
+  return c;
 }
 
 // ---------- Reports ----------
@@ -1063,7 +1128,7 @@ const api = { CATS: CATS, CAT: CAT, build: build, enrich: enrich, sheetPayload: 
   key: key, norm: norm, display: display, sceneKey: sceneKey, resolve: resolve,
   tag: tag, untag: untag, drop: dropEl, undrop: undrop, rename: rename, merge: merge, unmerge: unmerge, setNote: setNote, setHero: setHero, setScene: setScene,
   report: report, csv: csv, fmtEighths: fmtEighths,
-  encKey: encKey, decKey: decKey, toRemote: toRemote, fromRemote: fromRemote, diff: diff, mergeStores: mergeStores, applyOps: applyOps };
+  encKey: encKey, decKey: decKey, toRemote: toRemote, fromRemote: fromRemote, diff: diff, mergeStores: mergeStores, applyOps: applyOps, resetStore: resetStore, resetCounts: resetCounts };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.CampElements = api;
 })(typeof window !== "undefined" ? window : this);

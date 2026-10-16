@@ -23,7 +23,7 @@ function load(){ try{ const v = JSON.parse(lsGet(STORE_KEY) || "{}"); return v &
 function save(st){ lsSet(STORE_KEY, JSON.stringify(st || {})); }
 // The hub uploads these to the team's copy (Breakdown tab) the next time it's open, or straight away if it is
 const PEND_KEY = "Camp_BD_PENDING_V1_" + fileId;
-function queue(op){ try{ const l = JSON.parse(lsGet(PEND_KEY) || "[]"); (Array.isArray(l) ? l : []).push(op); lsSet(PEND_KEY, JSON.stringify(l.slice(-500))); }catch(_e){ lsSet(PEND_KEY, JSON.stringify([op])); } }
+function queue(op){ op = Object.assign({ at: Date.now() }, op); try{ const l = JSON.parse(lsGet(PEND_KEY) || "[]"); (Array.isArray(l) ? l : []).push(op); lsSet(PEND_KEY, JSON.stringify(l.slice(-500))); }catch(_e){ lsSet(PEND_KEY, JSON.stringify([op])); } }
 const showColours = () => lsGet(SHOW_KEY) === "1";
 
 /* ---------- styles ---------- */
@@ -180,6 +180,16 @@ document.addEventListener("keydown", (e) => {
 }, true);
 const menuItem = document.getElementById("mTagBreakdown");
 if(menuItem) menuItem.addEventListener("click", () => { setTimeout(open, 30); });
+// Reset happens on the hub (one place, with a backup and undo, shared live): go there with this script picked
+const resetItem = document.getElementById("mResetBreakdown");
+if(resetItem) resetItem.addEventListener("click", () => {
+  const qs = new URLSearchParams(location.search), hub = qs.get("hub") || "";
+  try{ if(typeof window.closeMenus === "function") window.closeMenus(); }catch(_e){}
+  if(!hub){ alert("Open this script from its project in the hub to reset its breakdown tags.\n\nThe reset lives in the hub's Breakdown tab, so it can make a backup and share the change with the team."); return; }
+  const q = new URLSearchParams({ pid: hub, tab: "breakdown", bdreset: fileId }); const c = qs.get("cloud"); if(c) q.set("cloud", c);
+  const go = () => { location.href = "index.html?" + q.toString(); };
+  try{ if(window.CampUI && window.CampUI.confirm) window.CampUI.confirm("Reset breakdown tags?\n\nThis opens the hub's Breakdown for this script, where you choose what to clear. Save first if you have unsaved changes.", "Open the hub").then((ok) => { if(ok) go(); }); else go(); }catch(_e){ go(); }
+});
 
 /* ---------- colour the tagged words in the script ---------- */
 const WORD = /[A-Za-z0-9]/;

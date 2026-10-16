@@ -496,9 +496,9 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 
 <script src="breakdown.js" defer></script>
 <script src="production.js" defer></script>
-<script src="elements.js?v=2" defer></script>
+<script src="elements.js?v=3" defer></script>
 <script src="prodpanel.js?v=2" defer></script>
-<script src="bdpanel.js?v=9" defer></script>
+<script src="bdpanel.js?v=10" defer></script>
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=2" defer></script>
 <script type="module">
@@ -610,7 +610,9 @@ const ICON = {};
 
 // URL (?pid=…&tab=…) wins, then what this device remembers
 try { const s = JSON.parse(lsGet(LS_LAST) || "{}"); lastKey = s.keys || {}; current.pid = s.pid || null; const t = fixTab(s.tab, lastKey[s.pid]); if (TABS.includes(t)) current.tab = t; } catch (_e) {}
-{ const q = new URLSearchParams(location.search); if (q.get("popout") === "1") document.body.classList.add("popout"); if (q.get("pid")) current.pid = q.get("pid"); { const t = fixTab(q.get("tab"), q.get("popout") === "1" ? "@plan" : lastKey[current.pid]); if (TABS.includes(t)) current.tab = t; } if (q.get("projects") === "1" && window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("sideOpen"); }
+{ const q = new URLSearchParams(location.search); if (q.get("popout") === "1") document.body.classList.add("popout"); if (q.get("pid")) current.pid = q.get("pid"); { const t = fixTab(q.get("tab"), q.get("popout") === "1" ? "@plan" : lastKey[current.pid]); if (TABS.includes(t)) current.tab = t; } if (q.get("projects") === "1" && window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("sideOpen");
+  // from the editor's Edit › Reset Breakdown Tags: open the Breakdown on that script with the reset box
+  if (q.get("bdreset")) { window.__campBdReset = q.get("bdreset"); current.tab = "breakdown"; current.key = "@bd"; try { q.delete("bdreset"); history.replaceState(null, "", location.pathname + "?" + q.toString()); } catch (_e) {} } }
 
 // authuser picks the Google account the hub is signed in with. Without it, a browser signed in to
 // several Google accounts opens the Sheet as the first one, which may have no access (Google's 400/401 page).

@@ -159,6 +159,14 @@ const css = `
 #bdctl .qRemPick{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:6px 0 2px; font-size:12px; color:var(--uiMuted,#9a9aa0); }
 #bdctl .qRemPick .btn i{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--cc); margin-right:5px; }
 #bdctl .qRemPick .btn small{ color:var(--uiMuted,#9a9aa0); margin-left:4px; }
+#bdReset .bdResetBox{ width:min(480px,100%); }
+#bdReset .fl{ font-size:12.5px; color:rgba(255,255,255,.62); margin-bottom:4px; }
+#bdReset .bdRScope{ border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:4px; }
+#bdReset .msRow input[disabled] + span{ opacity:.45; }
+#bdReset .bdRWhat{ margin-top:12px; padding:10px 12px; border-radius:10px; background:rgba(255,139,131,.08); border:1px solid rgba(255,139,131,.25); font-size:13px; }
+#bdReset .bdRWhat ul{ margin:6px 0 0; padding-left:18px; }
+#bdReset .bdRNote{ margin:10px 0 0; font-size:12px; color:rgba(255,255,255,.55); }
+#bdReset .bdRFoot{ display:flex; align-items:center; gap:8px; margin-top:16px; flex-wrap:wrap; }
 #bdTagTip{ position:fixed; z-index:9999; display:none; min-width:150px; max-width:280px; padding:7px 9px; border-radius:8px; background:#1d1d1f; border:1px solid #3a3a3c; box-shadow:0 6px 20px rgba(0,0,0,.45); font:12px/1.35 system-ui,sans-serif; color:#ececf0; pointer-events:none; }
 #bdTagTip.show{ display:block; }
 #bdTagTip .h{ color:#9a9aa0; font-size:11px; margin-bottom:4px; }
@@ -524,6 +532,8 @@ function render(pid){
   if(on){ const a = on.offsetTop - l2.offsetTop, z = a + on.offsetHeight; if(a < l2.scrollTop) l2.scrollTop = a - 6; else if(z > l2.scrollTop + l2.clientHeight) l2.scrollTop = z - l2.clientHeight + 6; }
   pickPaint();
   focusMention(box);
+  // opened from the editor's Edit › Reset Breakdown Tags: show the reset box once the breakdown is ready
+  if(window.__campBdReset && S.model && S.sid === window.__campBdReset){ const x = window.__campBdReset; window.__campBdReset = null; setTimeout(() => openReset(pid, x), 60); }
 }
 function head(chips, acts){ return `<div class="bdTop"><span class="bdTitle hid">${S.lock === "strips" ? "Stripboard" : "Breakdown"}</span><div class="bdChips">${chips || ""}</div>${acts || ""}</div>`; }
 
@@ -534,6 +544,7 @@ function draw(pid){
   if(!S.on) return;
   const p = hub.project(pid); if(!p){ box.innerHTML = ""; return; }
   const ids = hub.scriptIds(p), plan = P.normalize(p.production);
+  if(window.__campBdReset){ if(ids.indexOf(window.__campBdReset) >= 0) S.scriptPick[pid] = window.__campBdReset; else if(ids.length){ window.__campBdReset = null; hub.toast("That script isn't in this project, so its tags can't be reset here.", "err", 4000); } }
   const pick = S.scriptPick[pid];
   const sid = (pick && ids.indexOf(pick) >= 0) ? pick : (plan.scriptId && ids.indexOf(plan.scriptId) >= 0) ? plan.scriptId : ids[0] || "";
   S.sid = sid;
@@ -566,6 +577,7 @@ function draw(pid){
     ${shareChip(S.share[SKEY(pid, sid)], can)}`;
   const acts = `<div class="bdActs">${scriptSel}
     ${S.lock ? "" : `<div class="seg" role="tablist">${[["sheets", "Sheets"], ["elements", "Elements"], ["reports", "Reports"]].map(([v, n]) => `<button type="button" role="tab" class="${S.view === v ? "on" : ""}" data-a="view" data-v="${v}" aria-selected="${S.view === v}">${n}</button>`).join("")}</div>`}
+    ${can && !S.lock ? `<button class="btn sm" type="button" data-a="reset" title="Clear the hand tagging and re-tag from the script (with a backup)">Reset tags…</button>` : ""}
     ${can && !S.lock ? `<span class="seg"><button type="button" data-a="undo" title="Undo"${hh.undo.length ? "" : " disabled"}>↶</button><button type="button" data-a="redo" title="Redo"${hh.redo.length ? "" : " disabled"}>↷</button></span>` : ""}
     </div>`;
   const note = `<div class="bdNote">Suggestions come from the script. Remove what's wrong, add what's missing. Changes are shared with everyone on the project. <button class="btn sm" type="button" data-a="dismissnote" style="margin-left:8px">Got it</button></div>`;
@@ -907,6 +919,99 @@ function reportsView(b, p){
   return seg + `<div class="rpGrid">${cards || `<div class="bdEmpty">No elements yet.</div>`}</div>`;
 }
 
+/* ---------- clear and re-tag (⚠ deletes breakdown data, shared live with the team) ---------- */
+// Downloads a backup first, goes through edit() so ↶ Undo works for the session, and clears this device's queue of
+// editor tags. The reset time is saved with the breakdown, so tags queued earlier on other devices are dropped too.
+function saveBackup(pid, sid, st, why){
+  const title = (H().scriptTitle(sid) || "script").replace(/[\\/:*?"<>|]/g, "-"), d = new Date(), stamp = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + String(d.getMinutes()).padStart(2, "0");
+  const body = JSON.stringify({ kind: "camp-breakdown-backup", v: 1, why, pid, sid, title: H().scriptTitle(sid) || "", at: Date.now(), store: E.toRemote(st) }, null, 1);
+  try{
+    const blob = new Blob([body], { type: "application/json" }), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = title + " - breakdown backup " + stamp + ".json"; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+    return true;
+  }catch(_e){ return false; }
+}
+function openReset(pid, sid){
+  const hub = H(), p = hub.project(pid);
+  if(!p || !hub.canEdit(p)){ hub.toast("Only owners and editors can reset the breakdown.", "err"); return; }
+  const m = S.model; if(!m || !m.scenes.length){ hub.toast("The breakdown is still loading. Try again in a moment.", "err"); return; }
+  const cur = m.scenes.find((x) => x.n === S.sel) || m.scenes[0], live = m.scenes.map((x) => x.key);
+  const R = { scope: "all", keep: { names: true, notes: true, heroes: true, scene: true } };
+  const opts = () => ({ scene: R.scope === "scene" ? cur.key : "", live, keep: R.keep });
+  const old = document.getElementById("bdReset"); if(old) old.remove();
+  const shade = document.createElement("div"); shade.className = "shade"; shade.id = "bdReset";
+  const prev = document.activeElement;
+  const close = () => { shade.remove(); document.removeEventListener("keydown", onKey, true); try{ prev && prev.focus(); }catch(_e){} };
+  const onKey = (e) => { if(e.key === "Escape"){ e.preventDefault(); close(); } };
+  const plural = (n, a, b) => n + " " + (n === 1 ? a : b);
+  const draw = () => {
+    const c = E.resetCounts(storeOf(pid, sid), opts()), one = R.scope === "scene";
+    const lines = [[c.tags, "tag added by hand", "tags added by hand"], [c.off, "item taken out", "items taken out"], [c.mute, "muted word", "muted words"], [c.orphans, "leftover from a deleted scene", "leftovers from deleted scenes"], [c.drop, "ignored element", "ignored elements"], [c.names, "rename or merge", "renames and merges"], [c.notes, "element note", "element notes"], [c.heroes, "hero setting", "hero settings"], [c.scene, "scene's fields (synopsis, day, time, unit)", "scenes' fields (synopsis, day, time, unit)"]].filter((x) => x[0]).map((x) => `<li>${plural(x[0], x[1], x[2])}</li>`).join("");
+    const box = (k, label) => `<label class="msRow"><input type="checkbox" data-keep="${k}"${R.keep[k] ? "" : " checked"}${one && k !== "scene" ? " disabled" : ""}><span>${label}</span></label>`;
+    shade.innerHTML = `<form class="box bdResetBox" role="dialog" aria-modal="true" aria-label="Reset breakdown tags">
+      <h2>Reset breakdown tags</h2>
+      <p>Clears the tagging done by hand so the automatic tags are rebuilt from the script as it is now. Everyone on the project sees the change straight away.</p>
+      <div class="bdRScope">
+        <label class="msRow"><input type="radio" name="scope" value="all"${one ? "" : " checked"}><span><b>Whole script</b> · ${esc(hub.scriptTitle(sid) || "")}</span></label>
+        <label class="msRow"><input type="radio" name="scope" value="scene"${one ? " checked" : ""}><span><b>Only scene ${cur.n}</b> · ${esc(cur.heading || "")}</span></label>
+      </div>
+      <div class="fl" style="margin-top:12px">Also clear</div>
+      ${box("names", "Renames and merges")}${box("notes", "Element notes")}${box("heroes", "Hero settings")}${box("scene", "Scene fields (synopsis, story day, time estimate, unit)")}
+      <div class="bdRWhat"><b>${c.total ? "This will clear:" : "Nothing to clear."}</b>${c.total ? `<ul>${lines}</ul>` : ""}</div>
+      <p class="bdRNote">A backup file downloads first, and ↶ Undo puts it back while this page is open. Tags made in the editor before the reset, on any device, won't come back.</p>
+      <div class="bdRFoot"><button type="button" class="btn sm" data-r="restore" title="Put back a breakdown from a backup file">Restore from backup…</button><span style="flex:1"></span><button type="button" class="btn" data-r="cancel">Cancel</button><button type="submit" class="btn dangerFill"${c.total ? "" : " disabled"}>Reset</button></div>
+      <input type="file" accept="application/json,.json" data-r="file" hidden>
+    </form>`;
+  };
+  draw();
+  document.body.appendChild(shade);
+  document.addEventListener("keydown", onKey, true);
+  shade.addEventListener("mousedown", (e) => { if(e.target === shade) close(); });
+  shade.addEventListener("change", (e) => {
+    const t = e.target;
+    if(t.name === "scope"){ R.scope = t.value; draw(); return; }
+    if(t.dataset.keep){ R.keep[t.dataset.keep] = !t.checked; draw(); return; }
+    if(t.dataset.r === "file"){ const f = t.files && t.files[0]; t.value = ""; if(f) restoreBackup(pid, sid, f, close); }
+  });
+  shade.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-r]"); if(!b) return;
+    if(b.dataset.r === "cancel") close();
+    if(b.dataset.r === "restore"){ const f = shade.querySelector("[data-r=file]"); if(f) f.click(); }
+  });
+  shade.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const st = storeOf(pid, sid), o = opts();
+    if(!E.resetCounts(st, o).total) return;
+    if(!saveBackup(pid, sid, st, "before reset") && !window.confirm("The backup file couldn't be made. Reset anyway?")) return;
+    o.at = Date.now();
+    edit(pid, sid, (x) => E.resetStore(x, o));
+    if(!o.scene){ local.clearPending(sid, 1e9); local.dirty(sid, false); }
+    else{ const rest = local.pending(sid).filter((op) => !op || op.sk !== o.scene); local.clearPending(sid, 1e9); if(rest.length) lsSet("Camp_BD_PENDING_V1_" + sid, JSON.stringify(rest)); }
+    close();
+    hub.toast((o.scene ? "Scene " + cur.n : "The whole script") + " was reset and re-tagged from the script. Backup downloaded · ↶ Undo to put it back.", "ok", 6000);
+  });
+  setTimeout(() => { const f = shade.querySelector("input[name=scope]:checked"); if(f) f.focus(); }, 30);
+}
+async function restoreBackup(pid, sid, file, close){
+  const hub = H();
+  let data = null;
+  try{ data = JSON.parse(await file.text()); }catch(_e){}
+  if(!data || data.kind !== "camp-breakdown-backup" || !data.store || typeof data.store !== "object"){ hub.toast("That isn't a Camp breakdown backup file.", "err", 3500); return; }
+  const other = data.sid && data.sid !== sid;
+  const ok = await hub.confirm(other ? "This backup is from another script" : "Restore this backup?",
+    (other ? "It was saved from “" + (data.title || "another script") + "”, not “" + (hub.scriptTitle(sid) || "this script") + "”. " : "") + "Saved " + new Date(Number(data.at) || 0).toLocaleString() + ". It replaces the current tagging for everyone on the project (a backup of what's there now downloads first).", "Restore", true);
+  if(!ok) return;
+  const cur = storeOf(pid, sid);
+  saveBackup(pid, sid, cur, "before restore");
+  const back = E.fromRemote(data.store);   // only what the breakdown knows survives the round trip
+  back.reset = Date.now();                 // older queued edits stay out of the restored copy too
+  edit(pid, sid, () => back);
+  local.clearPending(sid, 1e9); local.dirty(sid, false);
+  close();
+  hub.toast("Backup restored. ↶ Undo to go back.", "ok", 4000);
+}
+
 /* ---------- interaction ---------- */
 function download(name, text){
   try{
@@ -934,6 +1039,7 @@ function wire(box, pid){
     if(k === "dismissnote"){ lsSet(NOTE_KEY, "1"); rerender(); return; }
     if(k === "cat"){ S.cat = a.dataset.c; rerender(); return; }
     if(k === "undo" || k === "redo"){ stepHist(pid, sid, k === "undo"); return; }
+    if(k === "reset"){ openReset(pid, sid); return; }
     if(!can) return;
     if(k === "add"){ S.adding = { sk: a.dataset.sk, cat: a.dataset.c }; rerender(); setTimeout(() => { const i = box.querySelector("#bdAdd"); if(i) i.focus(); }, 30); return; }
     if(k === "addcancel"){ S.adding = null; rerender(); return; }

@@ -338,5 +338,59 @@ test("hero: switch it on for any element, off for an automatic one, and it syncs
   assert.strictEqual(r.heroes["props|light"], "1");
 });
 
+
+/* ---------- clear and re-tag ---------- */
+const RST = () => ({ tags: { a: [{ c: "props", n: "Gun" }], b: [{ c: "props", n: "Hat" }], gone: [{ c: "props", n: "Old" }] }, off: { a: ["props|cup"], gone: ["props|x"] },
+  drop: ["props|thing"], alias: { "props|pistol": "props|gun" }, names: { "props|gun": "Gun" }, notes: { "props|gun": "loaded" }, heroes: { "props|gun": "1" },
+  scene: { a: { syn: "Fight", mute: ["props|gun|0|3"] }, b: { day: "D2" }, gone: { syn: "x" } } });
+test("a whole-script reset clears hand tagging and leftovers, keeps what was asked, and stamps the time", () => {
+  const r = E.resetStore(RST(), { live: ["a", "b"], keep: { names: true, notes: true, heroes: true, scene: true }, at: 500 });
+  assert.strictEqual(r.tags, undefined); assert.strictEqual(r.off, undefined); assert.strictEqual(r.drop, undefined);
+  assert.deepStrictEqual(r.scene, { a: { syn: "Fight" }, b: { day: "D2" } });           // muted words gone, fields kept, deleted scene swept
+  assert.deepStrictEqual(r.alias, { "props|pistol": "props|gun" }); assert.strictEqual(r.notes["props|gun"], "loaded"); assert.strictEqual(r.heroes["props|gun"], "1");
+  assert.strictEqual(r.reset, 500);
+  const all = E.resetStore(RST(), { live: ["a", "b"], keep: {}, at: 500 });
+  assert.deepStrictEqual(Object.keys(all).sort(), ["reset"]);
+});
+test("a one-scene reset touches only that scene and stamps it", () => {
+  const r = E.resetStore(RST(), { scene: "a", live: ["a", "b"], keep: { scene: true }, at: 700 });
+  assert.deepStrictEqual(Object.keys(r.tags), ["b"]); assert.strictEqual(r.off, undefined);
+  assert.deepStrictEqual(r.scene.a, { syn: "Fight", rs: 700 }); assert.deepStrictEqual(r.drop, ["props|thing"]); assert.strictEqual(r.notes["props|gun"], "loaded");
+  assert.strictEqual(r.reset, undefined);
+});
+test("without the list of scenes, nothing is swept as a leftover", () => {
+  const r = E.resetStore(RST(), { scene: "a", keep: {}, at: 1 });
+  assert.ok(r.tags.gone); assert.ok(r.scene.gone);
+});
+test("reset counts match what goes", () => {
+  const c = E.resetCounts(RST(), { live: ["a", "b"], keep: { names: true, notes: true, heroes: true, scene: true } });
+  assert.deepStrictEqual([c.tags, c.off, c.mute, c.orphans, c.drop, c.names, c.notes, c.heroes, c.scene], [2, 1, 1, 3, 1, 0, 0, 0, 0]);
+  const one = E.resetCounts(RST(), { scene: "b", live: ["a", "b"], keep: {} });
+  assert.deepStrictEqual([one.tags, one.off, one.scene, one.drop], [1, 0, 1, 0]);
+});
+test("edits queued before a reset can't bring old tags back; later ones still apply", () => {
+  const team = E.resetStore(RST(), { live: ["a", "b"], keep: {}, at: 1000 });
+  const r = E.applyOps(team, [{ t: "tag", sk: "a", c: "props", n: "Knife", at: 900 }, { t: "tag", sk: "a", c: "props", n: "Rope" }, { t: "tag", sk: "a", c: "props", n: "Lamp", at: 1100 }]);
+  assert.deepStrictEqual(r.tags.a.map((t) => t.n), ["Lamp"]);
+  const sc = E.resetStore(RST(), { scene: "a", live: ["a", "b"], keep: {}, at: 1000 });
+  const r2 = E.applyOps(sc, [{ t: "tag", sk: "a", c: "props", n: "Knife", at: 900 }, { t: "tag", sk: "b", c: "props", n: "Rope", at: 900 }]);
+  assert.deepStrictEqual(r2.tags.a, undefined); assert.ok(r2.tags.b.some((t) => t.n === "Rope"));
+});
+test("a device's old unshared copy can't undo a reset when merged", () => {
+  const old = RST(), team = E.resetStore(old, { live: ["a", "b"], keep: {}, at: 1000 });
+  assert.deepStrictEqual(E.mergeStores(team, old), { reset: 1000 });
+  const sc = E.resetStore(old, { scene: "a", live: ["a", "b"], keep: {}, at: 1000 }), m = E.mergeStores(sc, old);
+  assert.strictEqual(m.tags.a, undefined); assert.ok(m.tags.b); assert.strictEqual(m.scene.a.rs, 1000);
+  // after the reset is in step, new edits from that device merge as usual
+  const later = E.tag(team, "a", "props", "Lamp"), m2 = E.mergeStores(team, later);
+  assert.strictEqual(m2.tags.a[0].n, "Lamp"); assert.strictEqual(m2.reset, 1000);
+});
+test("the reset time goes to and from the database", () => {
+  const st = E.resetStore(RST(), { live: ["a", "b"], keep: {}, at: 1234 });
+  assert.strictEqual(E.toRemote(st).reset, 1234); assert.strictEqual(E.fromRemote(E.toRemote(st)).reset, 1234);
+  const d = E.diff(RST(), st); assert.strictEqual(d.reset, 1234); assert.strictEqual(d["tags/a/props%7Cgun"] === undefined, true);
+  assert.ok(Object.keys(d).some((k) => /^tags\/a\//.test(k) && d[k] === null));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
