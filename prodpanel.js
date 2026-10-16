@@ -747,6 +747,16 @@ body.sbDragging, body.sbDragging *{ cursor:grabbing !important; user-select:none
 .sbXHint{ grid-column:span 2; color:var(--uiMuted); font-size:11px; align-self:center; }
 .sbBan.meal.off{ background:none; border-style:dotted; opacity:.75; }
 .sbAddX{ font-size:12px; }
+/* the ⋯ menu on each strip (also right-click) */
+.sbMore{ position:absolute; right:4px; top:50%; transform:translateY(-50%); width:26px; height:26px; border-radius:6px; border:1px solid rgba(255,255,255,.25); background:#26272b; color:var(--uiText); font:inherit; font-size:15px; line-height:1; cursor:pointer; opacity:0; display:flex; align-items:center; justify-content:center; }
+.sbRow:hover .sbMore, .sbRow:focus-within .sbMore, .sbRow.sel .sbMore, .sbMore[aria-expanded="true"]{ opacity:1; }
+@media (hover:none){ .sbMore{ opacity:.85; } .sbRow{ padding-right:36px; } }
+.sbAddF{ padding:10px; border:1px solid rgba(127,182,255,.45); border-radius:8px; background:rgba(127,182,255,.06); font-size:12px; }
+.sbAddL{ max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; margin:6px 0 8px; }
+.sbAddL label{ display:grid; grid-template-columns:18px 34px minmax(0,1fr) 44px; gap:8px; align-items:center; padding:5px 6px; border-radius:6px; border-left:4px solid var(--sc,#ddd); background:color-mix(in srgb, var(--sc,#ddd) 8%, #1b1b1b); cursor:pointer; }
+.sbAddL label:hover{ background:color-mix(in srgb, var(--sc,#ddd) 16%, #1d1d1d); }
+.sbAddL b{ text-align:right; font-variant-numeric:tabular-nums; } .sbAddL .pl{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; text-transform:uppercase; font-weight:600; } .sbAddL .pg{ text-align:right; color:var(--uiMuted); }
+.sbAddF .sbXBtns{ display:flex; gap:8px; align-items:center; }
 /* the dropdown button (the real <select> stays hidden behind it) and its list, which always opens downwards */
 .sbNative{ position:absolute !important; opacity:0 !important; pointer-events:none !important; width:1px !important; height:1px !important; overflow:hidden; }
 .sbPick{ display:inline-flex; align-items:center; justify-content:space-between; gap:8px; height:28px; min-width:64px; max-width:220px; padding:0 8px 0 10px; border-radius:7px; border:1px solid var(--uiBorder); background:#171717; color:var(--uiText); font:inherit; font-size:12px; cursor:pointer; text-align:left; }
@@ -851,6 +861,7 @@ function sbView(c){
       <span class="sbPg">${P.fmtEighths(s.eighths)}</span>
       <span class="sbCast"${tipAttr((s.cast || []).length ? (s.cast || []).map((nm) => (noOf[nm] ? noOf[nm] + ". " : "") + nm).join(", ") : "No cast")}>${ids.length ? ids.join(", ") : "—"}</span>
       <span class="sbTm"${tipAttr(tr ? "Shoots about " + fmtTime(tr.shoot) + ", " + fmtMins(tr.est) + " of shooting" : "About " + fmtMins(P.estOf(s)) + " to shoot")}>${tr ? esc(fmtTime(tr.shoot)) : fmtMins(P.estOf(s))}</span>
+      ${canEdit ? `<button type="button" class="sbMore" data-sb="more" data-sid="${esc(id)}" data-day="${day}" aria-haspopup="listbox" aria-expanded="false" aria-label="Move or unschedule Sc ${s.n}">⋯</button>` : ""}
     </div>`;
   };
   const DAYMS = 864e5, fmtShort = (iso) => { try{ return new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }); }catch(_e){ return iso; } };
@@ -881,12 +892,13 @@ function sbView(c){
           <label class="sbT">Call${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}</label>
           <label class="sbT"${tipAttr("Auto lets Camp place the meal break. No meal takes it off this day")}>Lunch${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis).replace('<option value=""', '<option value="none"' + (d.noMeal ? " selected" : "") + '>No meal</option><option value=""').replace(d.noMeal ? '<option value="" selected>' : '\u0000', '<option value="">')}</label>
           <label class="sbT"${tipAttr("Auto lets Camp work out the wrap")}>Wrap${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</label>
+          ${canEdit && rec.unscheduled.length ? `<button type="button" class="btn sm sbAddX" data-sb="addsc" data-day="${i}"${tipAttr("Pick unscheduled scenes to add to the end of this day")}>＋ Add scenes</button>` : ""}
           ${canEdit ? `<button type="button" class="btn sm sbAddX" data-sb="xnew" data-day="${i}"${tipAttr("Add a break, a company move or a note to this day")}>＋ Break / move</button>` : ""}
           ${canEdit && d.scenes.length > 1 ? `<label class="sbT">Sort<select class="sbSort" data-sbsort="${i}" aria-label="Sort Day ${i + 1}"><option value="">…</option><option value="loc">By location</option><option value="dn">Day → night</option><option value="n">Scene number</option></select></label>` : ""}
           ${needsRow(x.needs)}
         </div>
       </div>
-      <div class="sbRows" data-day="${i}">${!folded && d.noMeal && d.scenes.length ? `<button type="button" class="sbBan meal off" data-sb="mealback" data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr("This day has no meal break. Click to put it back")}>No meal break · put it back</button>` : ""}${folded ? "" : (d.scenes.length || (d.extras || []).length ? rows : `<div class="sbEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`) + (SB.xform && SB.xform.day === i && !SB.xform.id ? xForm(i, d, null) : "")}</div>
+      <div class="sbRows" data-day="${i}">${SB.addTo === i && canEdit ? addForm(i, rec.unscheduled, byId) : ""}${!folded && d.noMeal && d.scenes.length ? `<button type="button" class="sbBan meal off" data-sb="mealback" data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr("This day has no meal break. Click to put it back")}>No meal break · put it back</button>` : ""}${folded ? "" : (d.scenes.length || (d.extras || []).length ? rows : `<div class="sbEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`) + (SB.xform && SB.xform.day === i && !SB.xform.id ? xForm(i, d, null) : "")}</div>
       <div class="sbEnd"><b>End of Day ${i + 1}</b><span>${dates[i] ? esc(fmtDate(dates[i])) + " · " : ""}${P.fmtEighths(x.eighths)} pg · ${x.scenes} scene${x.scenes === 1 ? "" : "s"}${tt.wrap ? " · wrap " + (tt.wrapManual ? "" : "~") + esc(fmtTime(tt.wrap)) : ""}</span>${x.over ? `<span class="over">Over the page limit</span>` : ""}</div>
     </section>`;
   }).join("");
@@ -970,6 +982,38 @@ function xSave(pid, del){
   SB.xform = null; save(pid, plan); rerender();
   H().toast(del ? "Removed. Undo puts it back." : (f.id ? "Saved." : "Added to Day " + (f.day + 1) + "."), "ok", 1600);
 }
+// "+ Add scenes": tick unscheduled scenes and add them to the end of a day
+function addForm(i, un, byId){
+  const ids = un.filter((id) => byId[id]).sort((a, b) => byId[a].n - byId[b].n);
+  return `<div class="sbAddF" data-day="${i}"><b>Add to the end of Day ${i + 1}</b><div class="sbAddL">${ids.map((id) => { const s = byId[id];
+    return `<label style="--sc:${stripColor(s)}"><input type="checkbox" data-af="${esc(id)}"><b>${s.n}</b><span class="pl">${esc(IE_SHORT(s.ie))} ${esc(placeOf(s))}</span><span class="pg">${P.fmtEighths(s.eighths)}</span></label>`; }).join("")}</div>
+    <span class="sbXBtns"><span class="sbAddN">0 ticked</span><span class="sbSp"></span><button type="button" class="btn sm" data-sb="addcancel">Cancel</button><button type="button" class="btn sm primary" data-sb="addgo">Add</button></span></div>`;
+}
+// The ⋯ menu (or right-click) on a strip: unschedule, or send it (or the selected strips) to a day.
+// It reuses the dropdown list: a select that never joins the page drives it.
+function sbActMenu(pid, btn){
+  if(SBM.btn === btn){ sbMenuClose(); return; }
+  const id = btn.dataset.sid, day = Number(btn.dataset.day), plan = planOf(pid), byId = S.lastBd ? P.sceneMap(S.lastBd) : {};
+  const ord = sbOrder(document.getElementById("ctl")), ids = SB.sel.length > 1 && SB.sel.indexOf(id) >= 0 ? ord.filter((x) => SB.sel.indexOf(x) >= 0) : [id];
+  const dates = P.planDates(plan), what = ids.length > 1 ? ids.length + " scenes" : "Sc " + (byId[id] ? byId[id].n : "");
+  const opts = [["", what, true], ["bd", "Open breakdown sheet", ids.length > 1]];
+  if(day >= 0){ opts.push(["un", "Unschedule"]); opts.push(["top:" + day, "Top of Day " + (day + 1)]); }
+  plan.days.forEach((d, k) => { if(k !== day) opts.push(["end:" + k, "→ Day " + (k + 1) + (dates[k] ? " · " + fmtDate(dates[k]) : "")]); });
+  if(day >= 0) opts.push(["end:" + day, "Bottom of Day " + (day + 1)]);
+  const sel = document.createElement("select");
+  sel.innerHTML = opts.map(([v, l, off]) => `<option value="${esc(v)}"${off ? " disabled" : ""}>${esc(l)}</option>`).join("");
+  sel.selectedIndex = 0;
+  sel.addEventListener("change", () => {
+    const v = sel.value; if(!v) return;
+    if(v === "bd"){ const s = byId[id]; if(s && window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(s.n, s.id); return; }
+    sbSetSel([], null);
+    if(v === "un"){ sbMove(pid, ids, -1, null); return; }
+    const [k, n] = v.split(":"), to = Number(n), p2 = planOf(pid);
+    const first = k === "top" ? ((p2.days[to] && p2.days[to].scenes) || []).find((x) => ids.indexOf(x) < 0) || null : null;
+    sbMove(pid, ids, to, first);
+  });
+  sbMenuOpen(btn, sel);
+}
 // Visible strips in board order (for Shift-select ranges and drags)
 function sbOrder(box){ return Array.from(box.querySelectorAll(".sbRow:not(.sbHide)")).map((r) => r.dataset.sid); }
 function sbSetSel(ids, anchor){ SB.sel = ids.filter((x, i, a) => a.indexOf(x) === i); if(anchor !== undefined) SB.anchor = anchor; }
@@ -990,7 +1034,7 @@ function sbPrint(){
   const c = document.createElement("div"); c.id = "sbPrintCopy";
   const title = (S.lastScriptId && H().scriptTitle(S.lastScriptId)) || "Stripboard";
   c.innerHTML = `<h1>${esc(title)} · Stripboard</h1><div class="sbPrintDate">${esc(new Date().toLocaleDateString())}</div>` + src.outerHTML;
-  c.querySelectorAll("select, input, button.sbFold, button.unpin").forEach((x) => { if(x.classList.contains("sbSort")){ const l = x.closest("label"); (l || x).remove(); return; } if(x.tagName === "SELECT"){ const t = document.createElement("span"); t.textContent = x.options[x.selectedIndex] ? x.options[x.selectedIndex].text : ""; x.replaceWith(t); } else x.remove(); });
+  c.querySelectorAll(".sbAddF, button.sbMore, select, input, button.sbFold, button.unpin").forEach((x) => { if(x.classList.contains("sbSort")){ const l = x.closest("label"); (l || x).remove(); return; } if(x.tagName === "SELECT"){ const t = document.createElement("span"); t.textContent = x.options[x.selectedIndex] ? x.options[x.selectedIndex].text : ""; x.replaceWith(t); } else x.remove(); });
   document.body.appendChild(c); document.body.classList.add("sbPrint");
   const done = () => { document.body.classList.remove("sbPrint"); c.remove(); window.removeEventListener("afterprint", done); };
   window.addEventListener("afterprint", done);
@@ -1016,6 +1060,12 @@ function sbClick(e, pid, canEdit){
     if(k === "xedit"){ if(!canEdit) return true; SB.xform = { day: Number(a.dataset.day), id: a.dataset.id }; render(pid); return true; }
     if(k === "xcancel"){ SB.xform = null; render(pid); return true; }
     if(k === "xsave" || k === "xdel"){ if(canEdit) xSave(pid, k === "xdel"); return true; }
+    if(k === "more"){ if(canEdit) sbActMenu(pid, a); return true; }
+    if(k === "addsc"){ SB.addTo = SB.addTo === Number(a.dataset.day) ? null : Number(a.dataset.day); SB.xform = null; if(SB.fold[pid]) SB.fold[pid][a.dataset.day] = false; render(pid); return true; }
+    if(k === "addcancel"){ SB.addTo = null; render(pid); return true; }
+    if(k === "addgo"){ if(!canEdit) return true; const f = a.closest(".sbAddF"), ids = Array.from(f.querySelectorAll("[data-af]:checked")).map((x) => x.dataset.af);
+      if(!ids.length){ H().toast("Tick the scenes to add.", "err", 1600); return true; }
+      const i = Number(f.dataset.day); SB.addTo = null; sbMove(pid, ids, i, null); return true; }
     if(k === "openbd"){ try{ if(window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(Number(a.dataset.n), SB.sel[0] || null); }catch(_e){} return true; }
     return true;
   }
@@ -1029,6 +1079,7 @@ function sbClick(e, pid, canEdit){
 function sbChange(e, pid, canEdit){
   const t = e.target;
   if(t.dataset.mf) return true;   // the meal form saves on Save
+  if(t.dataset.af != null){ const f = t.closest(".sbAddF"), n = f.querySelectorAll("[data-af]:checked").length, l = f.querySelector(".sbAddN"); if(l) l.textContent = n + " ticked"; return true; }
   if(t.dataset.xf){ if(t.dataset.xf === "k"){ const m = t.closest(".sbXForm").querySelector('[data-xf="min"]'); if(m){ m.disabled = t.value === "note"; if(t.value === "note") m.value = 0; else if(!Number(m.value)) m.value = t.value === "move" ? 30 : 15; } } return true; }
   if(t.dataset.sbf){ const k = t.dataset.sbf; if(k === "bone"){ SB.bone = t.value; sbPrefs(); } else SB[k] = t.value; render(pid); return true; }
   if(!canEdit) return false;
@@ -1179,6 +1230,7 @@ function sbWire(box, pid, canEdit){
   box.ondblclick = (e) => { const row = e.target.closest(".sbRow"); if(!row) return; const s = S.lastBd && P.sceneMap(S.lastBd)[row.dataset.sid]; if(s && window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(s.n, s.id); };
   box.ondragstart = (e) => { if(e.target.closest && e.target.closest(".sbRow")) e.preventDefault(); };
   if(!canEdit){ box.onpointerdown = null; return; }
+  box.oncontextmenu = (e) => { const row = e.target.closest(".sbRow"); if(!row || e.target.closest("input, select, textarea")) return; const b = row.querySelector(".sbMore"); if(!b) return; e.preventDefault(); if(SBM.btn !== b) sbActMenu(pid, b); };
   box.onpointerdown = (e) => {
     const row = e.target.closest(".sbRow"); if(!row || e.button > 0 || e.target.closest("select, input, button, a, label, .sbPick")) return;
     const grip = !!e.target.closest(".sbGrip");
