@@ -151,6 +151,17 @@ let BASE = "";
     await expect(p, () => !!document.querySelector(".sbSec details[open] table"), "the Day Out of Days tab");
     await p.click('[data-sb=sec][data-v=strips]'); await p.waitForTimeout(200);
     await expect(p, () => !!document.querySelector(".sbBoard") && !document.querySelector("[data-a=pview], [data-sb=dense], .sbLegend"), "no view, density or legend toggles");
+    // dropdowns open downwards and still drive the plan
+    await p.click('.sbDayWrap[data-day="0"] .sbDayB label:nth-child(2) .sbPick'); await p.waitForTimeout(150);
+    await expect(p, () => { const m = document.querySelector(".sbMenu"), b = document.querySelector('.sbDayWrap[data-day="0"] .sbDayB label:nth-child(2) .sbPick'); return m && b && m.getBoundingClientRect().top >= b.getBoundingClientRect().bottom; }, "the Lunch list opening below its button");
+    await p.click('.sbMenu .sbOpt:has-text("12:00 pm")'); await p.waitForTimeout(500);
+    await expect(p, () => __CampHub.project().production.days[0].lunch === "12:00", "lunch set from the list");
+    // a break added by hand
+    await p.click('.sbDayWrap[data-day="0"] [data-sb=xnew]'); await p.waitForTimeout(200);
+    await p.fill('.sbXForm [data-xf=label]', "Camera reset"); await p.click('.sbXForm [data-sb=xsave]'); await p.waitForTimeout(500);
+    await expect(p, () => ((__CampHub.project().production.days[0].extras) || []).length === 1 && /Camera reset/.test(document.querySelector('.sbDayWrap[data-day="0"]').innerText), "the break on Day 1");
+    // every strip is the same height, with or without a description
+    await expect(p, () => new Set(Array.from(document.querySelectorAll(".sbRow")).map((r) => Math.round(r.getBoundingClientRect().height))).size === 1, "strips all one height");
     await p.hover(".sbTot .cap"); await p.waitForTimeout(150);
     await expect(p, () => { const t = document.getElementById("sbTip"); return t && t.classList.contains("show") && t.textContent.length > 5; }, "a tooltip on hover");
   });

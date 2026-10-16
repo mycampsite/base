@@ -116,7 +116,7 @@ function normalize(plan){
   if(s.times && typeof s.times === "object"){ const t = {}; Object.keys(TIME_DEFAULTS).forEach((k) => { const v = Number(s.times[k]); if(s.times[k] !== "" && s.times[k] != null && isFinite(v) && v >= 0 && v <= 1440) t[k] = Math.round(v); }); if(Object.keys(t).length) settings.times = t; }
   const w = cleanWhere(s.where); if(w) settings.where = w;
   const arr = (v) => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).sort((a, b) => a - b).map((k) => v[k]) : []);
-  let days = arr(plan.days).map((d) => { const o = { id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }; const w = cleanWhere(d && d.where); if(w) o.where = w; const hm = (v) => /^\d{2}:\d{2}$/.test(String(v || "")) ? String(v) : ""; if(hm(d && d.lunch)) o.lunch = d.lunch; if(hm(d && d.wrapAt)) o.wrapAt = d.wrapAt; return o; });
+  let days = arr(plan.days).map((d) => { const o = { id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }; const w = cleanWhere(d && d.where); if(w) o.where = w; const hm = (v) => /^\d{2}:\d{2}$/.test(String(v || "")) ? String(v) : ""; if(hm(d && d.lunch)) o.lunch = d.lunch; if(hm(d && d.wrapAt)) o.wrapAt = d.wrapAt; const x = cleanExtras(d && d.extras); if(x.length) o.extras = x; return o; });
   // the day count setting is the truth: pad with empty days. More stored days than the setting
   // (an older save) are kept and the count follows them, so no scheduled scene is ever lost.
   while(days.length < settings.days) days.push({ id: uid(), scenes: [], call: "", note: "", date: "" });
@@ -457,6 +457,17 @@ function castIds(s, cast){
   return ((s && s.cast) || []).map((n) => order.indexOf(n) + 1).filter((n) => n > 0).sort((a, b) => a - b);
 }
 
+// ---------- extra banners on a day: breaks, company moves and notes added by hand ----------
+// day.extras = [{ id, after: sceneId ("" = start of day), k: "break" | "move" | "note", min, label }]. A break or move adds its
+// minutes to the day; a note is just a line. One that sits after a scene no longer on the day goes to the end.
+const EXTRA_KINDS = ["break", "move", "note"];
+function cleanExtras(v){
+  const a = Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).sort((x, y) => x - y).map((k) => v[k]) : []);
+  return a.filter((x) => x && EXTRA_KINDS.indexOf(x.k) >= 0).slice(0, 40).map((x) => ({ id: String(x.id || uid()).slice(0, 40), after: String(x.after || "").slice(0, 80), k: x.k,
+    min: x.k === "note" ? 0 : clampInt(x.min, 0, 600, 30), label: String(x.label || "").replace(/\s+/g, " ").trim().slice(0, 60) }));
+}
+function extrasAfter(day, sceneId){ const ids = (day && day.scenes) || []; return ((day && day.extras) || []).filter((x) => sceneId === null ? (x.after && ids.indexOf(x.after) < 0) : x.after === sceneId); }
+
 // ---------- the day's timetable: call, shoot and wrap for each scene, plus the meal and company moves ----------
 // Worked out, never stored: change the call time, the order or a scene's Est. minutes and it follows.
 //   prep    minutes from crew call to the first shot (lighting, rehearsal)
@@ -479,9 +490,12 @@ function dayTimes(day, byId, settings){
   const sc = ((day && day.scenes) || []).map((id) => byId[id]).filter(Boolean);
   const rows = []; let t = call, est = 0, meal = null, prevLoc = "", lateMeal = false;
   const lunchAt = toMin(day && day.lunch);   // a lunch time set by hand: the meal goes in at the scene break nearest it
+  let handMove = false;   // a company move added by hand right before this scene replaces the automatic one
+  const extra = (x) => { rows.push({ type: "extra", id: x.id, k: x.k, label: x.label, min: x.min, start: toHM(t), end: toHM(t + x.min) }); t += x.min; if(x.k === "move") handMove = true; };
+  extrasAfter(day, "").forEach(extra);
   sc.forEach((s, i) => {
     const e = estOf(s), loc = String(s.loc || "");
-    if(i > 0 && T.move > 0 && loc && prevLoc && loc !== prevLoc){ rows.push({ type: "move", from: prevLoc, to: loc, start: toHM(t), end: toHM(t + T.move), min: T.move }); t += T.move; }
+    if(i > 0 && T.move > 0 && !handMove && loc && prevLoc && loc !== prevLoc){ rows.push({ type: "move", from: prevLoc, to: loc, start: toHM(t), end: toHM(t + T.move), min: T.move }); t += T.move; }
     const setup = i === 0 ? T.prep : T.turn;
     // the meal goes in before the scene that would run past the meal limit, once the day is close to it
     if(lunchAt != null && !meal && i > 0 && T.meal > 0 && (t >= lunchAt || (t + setup + e > lunchAt + 45 && t >= lunchAt - 60))){
@@ -492,8 +506,10 @@ function dayTimes(day, byId, settings){
     }
     rows.push({ type: "scene", id: s.id, n: s.n, call: toHM(t), shoot: toHM(t + setup), wrap: toHM(t + setup + e), est: e });
     t += setup + e; est += e; if(loc) prevLoc = loc;
+    handMove = false; extrasAfter(day, s.id).forEach(extra);
     if(lunchAt == null && !meal && T.meal > 0 && t >= call + T.mealBy && i < sc.length - 1){ lateMeal = t > call + T.mealBy; meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal, late: lateMeal }; rows.push(meal); t += T.meal; }
   });
+  extrasAfter(day, null).forEach(extra);
   const manualWrap = toMin(day && day.wrapAt), autoWrap = sc.length ? toHM(t) : "";
   const end = sc.length && manualWrap != null ? manualWrap : t;
   return { call: toHM(call), wrap: sc.length ? toHM(end) : "", autoWrap, wrapManual: sc.length && manualWrap != null, est, length: sc.length ? end - call : 0, rows, lateMeal };
@@ -616,6 +632,6 @@ function dayShots(day, shotMap){
 }
 
 const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
-  moveSceneIn, moveManyIn, sortDay, stripMatch, castIds, placeScenes, STATUSES, statusOf, setStatus, cleanWhere, whereOf, sunTimes, hmIn, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
+  EXTRA_KINDS, cleanExtras, moveSceneIn, moveManyIn, sortDay, stripMatch, castIds, placeScenes, STATUSES, statusOf, setStatus, cleanWhere, whereOf, sunTimes, hmIn, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);

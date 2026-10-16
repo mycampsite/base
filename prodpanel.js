@@ -656,9 +656,10 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbSelBar label{ display:inline-flex; align-items:center; gap:6px; }
 .sbSelBar select{ height:30px; border-radius:7px; border:1px solid var(--uiBorder); background:#171717; color:var(--uiText); font:inherit; font-size:12.5px; }
 /* one grid for the header and every strip, so the columns line up */
-.sbHead, .sbRow{ display:grid; grid-template-columns:16px 30px 34px minmax(0,1fr) 52px 54px 76px 62px; column-gap:10px; align-items:center; }
+.sbHead, .sbRow{ display:grid; grid-template-columns:16px 28px 34px minmax(0,1fr) 46px 48px 84px 64px; column-gap:12px; align-items:center; }
 .sbHead{ padding:0 18px 4px 14px; font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--uiMuted); }
-.sbHead > span:nth-child(n+5), .sbRow > span:nth-child(n+5){ text-align:right; }
+/* words line up on the left, numbers on the right (pages and times by their last digit) */
+.sbNo, .sbPg, .sbTm{ text-align:right; } .sbIE, .sbDN, .sbCast{ text-align:left; }
 .sbDayWrap{ background:#1d1d1d; border:1px solid var(--uiBorder); border-radius:12px; margin:0 0 10px; }
 .sbDayWrap.over{ border-color:rgba(255,139,131,.5); }
 .sbDayWrap.sbDrop{ border-color:rgba(127,182,255,.6); }
@@ -688,7 +689,7 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbFold{ border:0; background:none; color:var(--uiMuted); cursor:pointer; width:18px; font-size:12px; padding:0; }
 .sbRows{ padding:7px 7px 2px; display:flex; flex-direction:column; gap:6px; min-height:12px; }
 .sbDayWrap.folded .sbRows{ padding:0; min-height:0; }
-.sbRow{ position:relative; padding:6px 10px 6px 6px; border:1px solid rgba(255,255,255,.08); border-left:5px solid var(--sc, #ddd); border-radius:8px; background:color-mix(in srgb, var(--sc, #ddd) 9%, #202020); color:#e6e6e6; font-size:12px; line-height:1.35; cursor:grab; user-select:none; -webkit-user-select:none; touch-action:pan-y; }
+.sbRow{ position:relative; height:46px; box-sizing:border-box; padding:0 12px 0 6px; border:1px solid rgba(255,255,255,.08); border-left:5px solid var(--sc, #ddd); border-radius:8px; background:color-mix(in srgb, var(--sc, #ddd) 9%, #202020); color:#e6e6e6; font-size:12px; line-height:1.35; cursor:grab; user-select:none; -webkit-user-select:none; touch-action:pan-y; }
 .sbRow:hover{ border-color:rgba(255,255,255,.22); border-left-color:var(--sc, #ddd); }
 .sbRow:focus-visible{ outline:2px solid var(--focus, #7fb6ff); outline-offset:1px; }
 .sbRow > span{ min-width:0; }
@@ -697,14 +698,16 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbGrip.off{ visibility:hidden; }
 .sbNo{ font-weight:800; font-variant-numeric:tabular-nums; }
 .sbIE, .sbDN{ font-size:10.5px; font-weight:700; letter-spacing:.04em; color:#cfcfcf; }
-.sbMain{ display:flex; flex-direction:column; gap:2px; overflow:hidden; }
-.sbPlace{ font-weight:700; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sbSyn{ color:var(--uiMuted); font-size:11.5px; display:flex; flex-wrap:wrap; align-items:center; gap:3px 6px; }
-.sbSyn > span{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.sbPg{ font-variant-numeric:tabular-nums; } .sbPg small{ color:var(--uiMuted); margin-left:3px; font-size:10px; }
+/* every strip is the same height: the place on top, one line of description under it */
+.sbMain{ display:flex; flex-direction:column; justify-content:center; gap:1px; overflow:hidden; min-width:0; }
+.sbL1{ display:flex; align-items:center; gap:6px; min-width:0; }
+.sbPlace{ font-weight:700; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.sbSyn{ color:var(--uiMuted); font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sbSyn.none{ opacity:.45; font-style:italic; }
+.sbPg{ font-variant-numeric:tabular-nums; font-weight:600; }
 .sbCast{ font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sbTm{ color:var(--uiMuted); font-variant-numeric:tabular-nums; white-space:nowrap; }
-.sbTag, .sbStat{ font-style:normal; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:5px; background:rgba(255,255,255,.12); color:#fff; white-space:nowrap; cursor:help; }
+.sbTag, .sbStat{ flex:none; font-style:normal; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:5px; background:rgba(255,255,255,.12); color:#fff; white-space:nowrap; cursor:help; }
 .sbTag.rev{ background:rgba(241,199,107,.2); color:#f1c76b; } .sbTag.new{ background:rgba(143,227,166,.18); color:#8fe3a6; } .sbTag.warn{ background:rgba(255,139,131,.18); color:#ff8b83; }
 .sbStat.s-shot{ background:#2f9e44; } .sbStat.s-partshot{ background:#f59f00; color:#111; } .sbStat.s-pickup{ background:#1c7ed6; } .sbStat.s-moved{ background:#868e96; } .sbStat.s-omitted{ background:#e03131; }
 .sbRow.st-shot, .sbRow.st-omitted{ opacity:.55; } .sbRow.st-omitted .sbPlace{ text-decoration:line-through; }
@@ -714,6 +717,9 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbBoard.hiOn .sbRow.dim{ opacity:.3; }
 .sbBoard.hiOn .sbRow.hi{ box-shadow:0 0 0 2px #f1c76b; }
 .sbRow.sbHide, .sbRow.sbSrc{ display:none; }
+button.sbBan{ font-family:inherit; width:100%; cursor:pointer; color:var(--uiMuted); }
+button.sbBan:hover:not(:disabled){ border-color:rgba(255,255,255,.35); color:var(--uiText); }
+.sbBan.x-break{ background:rgba(127,182,255,.07); } .sbBan.x-move{ background:rgba(241,199,107,.06); } .sbBan.x-note{ background:rgba(255,255,255,.03); font-style:italic; }
 .sbBan{ font-size:10.5px; color:var(--uiMuted); padding:3px 8px; border-radius:6px; border:1px dashed rgba(255,255,255,.18); text-align:center; cursor:help; }
 .sbBan.meal{ background:rgba(127,182,255,.07); } .sbBan.move{ background:rgba(241,199,107,.06); } .sbBan.late{ color:#f1c76b; border-color:rgba(241,199,107,.45); }
 .sbEnd{ display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center; margin:4px 7px 7px; padding:5px 10px; border-radius:7px; background:rgba(0,0,0,.35); font-size:11px; color:var(--uiMuted); }
@@ -730,13 +736,37 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbFloatN{ position:absolute; right:-6px; top:-10px; background:#7fb6ff; color:#0b1a30; font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px; }
 body.sbDragging, body.sbDragging *{ cursor:grabbing !important; user-select:none !important; }
 .sbFiltNote{ margin:8px 0; font-size:12px; color:var(--uiMuted); display:flex; gap:8px; align-items:center; }
+.sbOff{ text-align:center; font-size:11px; color:var(--uiMuted); margin:-4px 0 6px; letter-spacing:.03em; }
+.sbXForm{ display:grid; grid-template-columns:repeat(4, auto); gap:8px 10px; align-items:end; padding:10px; border:1px solid rgba(127,182,255,.45); border-radius:8px; background:rgba(127,182,255,.06); font-size:12px; }
+.sbXForm label{ display:flex; flex-direction:column; gap:4px; color:var(--uiMuted); }
+.sbXForm label.wide{ grid-column:span 2; }
+.sbXForm input{ height:30px; border-radius:7px; border:1px solid var(--uiBorder); background:#171717; color:var(--uiText); font:inherit; font-size:12.5px; padding:0 8px; }
+.sbXForm input[type=number]{ width:80px; }
+.sbXBtns{ grid-column:1 / -1; display:flex; gap:8px; }
+.sbAddX{ font-size:12px; }
+/* the dropdown button (the real <select> stays hidden behind it) and its list, which always opens downwards */
+.sbNative{ position:absolute !important; opacity:0 !important; pointer-events:none !important; width:1px !important; height:1px !important; overflow:hidden; }
+.sbPick{ display:inline-flex; align-items:center; justify-content:space-between; gap:8px; height:28px; min-width:64px; max-width:220px; padding:0 8px 0 10px; border-radius:7px; border:1px solid var(--uiBorder); background:#171717; color:var(--uiText); font:inherit; font-size:12px; cursor:pointer; text-align:left; }
+.sbPick span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sbPick i{ font-style:normal; font-size:10px; color:var(--uiMuted); }
+.sbPick:hover:not(:disabled){ border-color:rgba(255,255,255,.3); }
+.sbPick[aria-expanded="true"]{ border-color:var(--focus, #7fb6ff); }
+.sbPick:disabled{ opacity:.55; cursor:default; }
+.sbTools .sbPick, .sbSelBar .sbPick, .sbXForm .sbPick, .setWrap .sbPick{ height:32px; }
+.sbPick.t{ min-width:86px; }
+.sbMenu{ position:fixed; z-index:10001; overflow-y:auto; padding:4px; border-radius:10px; background:#1d1e22; border:1px solid rgba(255,255,255,.18); box-shadow:0 14px 34px rgba(0,0,0,.55); font:12.5px/1.2 Inter, system-ui, sans-serif; color:var(--uiText, #f2f2f2); }
+.sbOpt{ padding:7px 10px; border-radius:6px; cursor:pointer; white-space:nowrap; }
+.sbOpt:hover, .sbOpt.hl{ background:rgba(255,255,255,.09); }
+.sbOpt.on{ background:rgba(127,182,255,.18); font-weight:600; }
+.sbOpt.dis{ opacity:.4; cursor:default; }
 #sbTip{ position:fixed; z-index:10000; max-width:320px; padding:7px 10px; border-radius:8px; background:#1d1e22; border:1px solid rgba(255,255,255,.2); box-shadow:0 8px 22px rgba(0,0,0,.5); color:#f2f0ec; font:12px/1.45 Inter, system-ui, sans-serif; white-space:pre-line; pointer-events:none; display:none; }
 #sbTip.show{ display:block; }
 #sbPrintCopy{ display:none; }
 @media (max-width:760px){
-  .sbHead, .sbRow{ grid-template-columns:14px 24px 30px minmax(0,1fr) 40px 44px; column-gap:7px; }
-  .sbHead .sbCast, .sbHead .sbTm, .sbRow .sbTm{ display:none; }
-  .sbRow .sbCast{ grid-column:4 / -1; grid-row:2; text-align:left; font-size:11px; color:var(--uiMuted); }
+  .sbHead, .sbRow{ grid-template-columns:14px 22px 30px minmax(0,1fr) 40px 40px; column-gap:7px; }
+  .sbHead .sbCast, .sbHead .sbTm, .sbRow .sbTm, .sbRow .sbCast{ display:none; }
+  .sbRow{ height:50px; }
+  .sbXForm{ grid-template-columns:1fr 1fr; } .sbXForm label.wide{ grid-column:1 / -1; }
   .sbDay{ grid-template-columns:1fr; } .sbDayR{ justify-content:flex-start; }
   .sbGrip{ font-size:15px; opacity:.8; }
   .sbTools .sbQ{ max-width:none; }
@@ -808,26 +838,30 @@ function sbView(c){
     const tags = (stat !== "Scheduled" ? `<em class="sbStat s-${stat.replace(/[^a-z]/gi, "").toLowerCase()}">${esc(stat)}</em>` : "")
       + (rv ? `<em class="sbTag rev"${tipAttr("Changed in the script since it was scheduled: " + revText(rv))}>Revised</em>` : "")
       + (isNew ? `<em class="sbTag new"${tipAttr("New in the script")}>New</em>` : "")
-      + (kidNight ? `<em class="sbTag warn"${tipAttr("Night scene with a cast member under 18: check work-hour limits, permit and chaperone")}>⚠ Minor at night</em>` : "")
-      + (nsh ? `<em class="sbTag"${tipAttr(nsh + " shot" + (nsh === 1 ? "" : "s") + " on the storyboard")}>${nsh} sh</em>` : "");
+      + (kidNight ? `<em class="sbTag warn"${tipAttr("Night scene with a cast member under 18: check work-hour limits, permit and chaperone")}>⚠ Minor</em>` : "");
     return `<div class="${cls}" role="row" tabindex="0" data-sid="${esc(id)}" data-day="${day}" style="--sc:${stripColor(s)}" aria-selected="${sel.has(id)}" aria-label="${esc("Scene " + s.n + ", " + s.heading)}">
       ${canEdit ? `<span class="sbGrip"${tipAttr("Drag to move")} aria-hidden="true">⋮⋮</span>` : `<span class="sbGrip off"></span>`}
       <span class="sbNo">${s.n}</span>
       <span class="sbIE">${esc(IE_SHORT(s.ie))}</span>
-      <span class="sbMain"><span class="sbPlace">${esc(placeOf(s))}</span>${s.syn || tags ? `<span class="sbSyn">${s.syn ? `<span>${esc(s.syn)}</span>` : ""}${tags}</span>` : ""}</span>
+      <span class="sbMain"><span class="sbL1"><span class="sbPlace">${esc(placeOf(s))}</span>${tags}</span><span class="sbSyn${s.syn ? "" : " none"}">${s.syn ? esc(s.syn) : "No description yet"}</span></span>
       <span class="sbDN">${esc(DN_SHORT[s.dn] || "")}</span>
-      <span class="sbPg">${P.fmtEighths(s.eighths)}<small>pg</small></span>
+      <span class="sbPg">${P.fmtEighths(s.eighths)}</span>
       <span class="sbCast"${tipAttr((s.cast || []).length ? (s.cast || []).map((nm) => (noOf[nm] ? noOf[nm] + ". " : "") + nm).join(", ") : "No cast")}>${ids.length ? ids.join(", ") : "—"}</span>
       <span class="sbTm"${tipAttr(tr ? "Shoots about " + fmtTime(tr.shoot) + ", " + fmtMins(tr.est) + " of shooting" : "About " + fmtMins(P.estOf(s)) + " to shoot")}>${tr ? esc(fmtTime(tr.shoot)) : fmtMins(P.estOf(s))}</span>
     </div>`;
   };
+  const DAYMS = 864e5, fmtShort = (iso) => { try{ return new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }); }catch(_e){ return iso; } };
+  const offBefore = (i) => { if(!i || !dates[i] || !dates[i - 1]) return ""; const gap = Math.round((Date.parse(dates[i]) - Date.parse(dates[i - 1])) / DAYMS) - 1; if(gap < 1) return "";
+    const a = new Date(Date.parse(dates[i - 1]) + DAYMS).toISOString().slice(0, 10), z = new Date(Date.parse(dates[i]) - DAYMS).toISOString().slice(0, 10);
+    return `<div class="sbOff">${gap === 1 ? "Day off · " + esc(fmtShort(a)) : gap + " days off · " + esc(fmtShort(a)) + " – " + esc(fmtShort(z))}</div>`; };
   const days = pl.days.map((d, i) => {
     const x = stats[i], tt = times[i], pct = Math.min(100, Math.round(x.eighths / st.maxEighths * 100)), folded = !!fold[i];
     const w = P.whereOf(pl, i), sun = sunFor(w, dates[i]), wx = weatherFor(w, dates[i]), dw = warns.filter((y) => y.day === i + 1), bad = dw.some((y) => y.level === "warn");
     const rows = tt.rows.map((r) => r.type === "scene" ? strip(r.id, r, i)
+      : r.type === "extra" ? (SB.xform && SB.xform.day === i && SB.xform.id === r.id ? xForm(i, d, r) : `<button type="button" class="sbBan x-${r.k}" data-sb="xedit" data-day="${i}" data-id="${esc(r.id)}"${canEdit ? "" : " disabled"}${tipAttr((r.k === "note" ? "Note" : r.k === "move" ? "Company move" : "Break") + " added by hand" + (r.min ? ": " + fmtTime(r.start) + " – " + fmtTime(r.end) : "") + (canEdit ? ". Click to change or remove" : ""))}>${r.k === "note" ? "Note · " : r.k === "move" ? "Company move · " : "Break · "}${esc(r.label || (r.k === "move" ? "Travel" : r.k === "break" ? "Break" : ""))}${r.min ? " · " + esc(fmtTime(r.start)) + " – " + esc(fmtTime(r.end)) : ""}</button>`)
       : r.type === "meal" ? `<div class="sbBan meal${r.late ? " late" : ""}"${tipAttr(r.late ? "More than six hours after call: a meal penalty may apply" : "Meal break")}>Meal · ${esc(fmtTime(r.start))} – ${esc(fmtTime(r.end))}</div>`
       : `<div class="sbBan move"${tipAttr("Company move: " + r.from + " → " + r.to)}>Company move to ${esc(r.to)} · ${r.min} min</div>`).join("");
-    return `<section class="sbDayWrap${x.over ? " over" : ""}${folded ? " folded" : ""}" data-day="${i}">
+    return offBefore(i) + `<section class="sbDayWrap${x.over ? " over" : ""}${folded ? " folded" : ""}" data-day="${i}">
       <div class="sbDay">
         <div class="sbDayL">
           <button type="button" class="sbFold" data-sb="fold" data-i="${i}" aria-expanded="${!folded}"${tipAttr(folded ? "Show this day's strips" : "Hide this day's strips")}>${folded ? "▸" : "▾"}</button>
@@ -844,12 +878,13 @@ function sbView(c){
           <label class="sbT">Call${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}</label>
           <label class="sbT"${tipAttr("Auto lets Camp place the lunch break")}>Lunch${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis)}</label>
           <label class="sbT"${tipAttr("Auto lets Camp work out the wrap")}>Wrap${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</label>
+          ${canEdit ? `<button type="button" class="btn sm sbAddX" data-sb="xnew" data-day="${i}"${tipAttr("Add a break, a company move or a note to this day")}>＋ Break / move</button>` : ""}
           ${canEdit && d.scenes.length > 1 ? `<label class="sbT">Sort<select class="sbSort" data-sbsort="${i}" aria-label="Sort Day ${i + 1}"><option value="">…</option><option value="loc">By location</option><option value="dn">Day → night</option><option value="n">Scene number</option></select></label>` : ""}
           ${needsRow(x.needs)}
         </div>
       </div>
-      <div class="sbRows" data-day="${i}">${folded ? "" : (d.scenes.length ? rows : `<div class="sbEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`)}</div>
-      <div class="sbEnd"><b>End of Day ${i + 1}</b><span>${dates[i] ? esc(fmtDate(dates[i])) + " · " : ""}${P.fmtEighths(x.eighths)} pgs · ${x.scenes} scene${x.scenes === 1 ? "" : "s"}${tt.wrap ? " · wrap " + (tt.wrapManual ? "" : "~") + esc(fmtTime(tt.wrap)) : ""}</span>${x.over ? `<span class="over">Over the page limit</span>` : ""}</div>
+      <div class="sbRows" data-day="${i}">${folded ? "" : (d.scenes.length || (d.extras || []).length ? rows : `<div class="sbEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`) + (SB.xform && SB.xform.day === i && !SB.xform.id ? xForm(i, d, null) : "")}</div>
+      <div class="sbEnd"><b>End of Day ${i + 1}</b><span>${dates[i] ? esc(fmtDate(dates[i])) + " · " : ""}${P.fmtEighths(x.eighths)} pg · ${x.scenes} scene${x.scenes === 1 ? "" : "s"}${tt.wrap ? " · wrap " + (tt.wrapManual ? "" : "~") + esc(fmtTime(tt.wrap)) : ""}</span>${x.over ? `<span class="over">Over the page limit</span>` : ""}</div>
     </section>`;
   }).join("");
   const L2 = { D: 0, M: 1, N: 2 }, boneSort = { n: (a, b) => byId[a].n - byId[b].n, loc: (a, b) => String(placeOf(byId[a])).localeCompare(String(placeOf(byId[b]))) || byId[a].n - byId[b].n,
@@ -874,10 +909,38 @@ function sbView(c){
       <button type="button" class="btn sm" data-sb="foldall">${Object.keys(fold).some((k) => fold[k]) ? "Unfold all" : "Fold all"}</button>
       <button type="button" class="btn sm" data-sb="print"${tipAttr("Print the stripboard, or save it as a PDF")}>Print</button>
     </div>`;
-  const colHead = `<div class="sbHead" aria-hidden="true"><span class="sbGrip"></span><span class="sbNo">Sc</span><span class="sbIE">I/E</span><span class="sbMain">Location · description</span><span class="sbDN">D/N</span><span class="sbPg">Pages</span><span class="sbCast">Cast</span><span class="sbTm">Time</span></div>`;
+  const colHead = `<div class="sbHead" aria-hidden="true"><span class="sbGrip"></span><span class="sbNo">Sc</span><span class="sbIE">I/E</span><span class="sbMain">Location · description</span><span class="sbDN">D/N</span><span class="sbPg">Pgs</span><span class="sbCast">Cast</span><span class="sbTm">Time</span></div>`;
   const filt = SB.q || SB.ie || SB.dn || SB.cast;
   return secTabs + tools + selBar + `<div class="sbBoard${SB.hi ? " hiOn" : ""}" role="grid" aria-label="Stripboard">${colHead}${days}${bone}</div>`
     + (filt ? `<div class="sbFiltNote">${hidden} strip${hidden === 1 ? "" : "s"} hidden by the filters. <button type="button" class="btn sm" data-sb="unfilter">Show all</button></div>` : "");
+}
+// The form for a break, company move or note added by hand (new, or editing one)
+function xForm(i, d, r){
+  const x = r ? ((d.extras || []).find((y) => y.id === r.id) || {}) : { k: "break", min: 15, label: "", after: d.scenes[d.scenes.length - 1] || "" };
+  const byId = S.lastBd ? P.sceneMap(S.lastBd) : {};
+  const where = [["", "Start of the day"]].concat(d.scenes.filter((id) => byId[id]).map((id) => [id, "After Sc " + byId[id].n + " · " + placeOf(byId[id])]));
+  return `<div class="sbXForm" data-day="${i}">
+    <label>Type<select data-xf="k"><option value="break"${x.k === "break" ? " selected" : ""}>Break</option><option value="move"${x.k === "move" ? " selected" : ""}>Company move</option><option value="note"${x.k === "note" ? " selected" : ""}>Note (no time)</option></select></label>
+    <label>Minutes<input type="number" min="0" max="600" step="5" data-xf="min" value="${x.k === "note" ? 0 : (x.min == null ? 15 : x.min)}"${x.k === "note" ? " disabled" : ""}></label>
+    <label class="wide">Label<input type="text" maxlength="60" data-xf="label" value="${esc(x.label || "")}" placeholder="${x.k === "move" ? "e.g. Travel to the farm" : x.k === "note" ? "e.g. Safety meeting" : "e.g. Camera reset"}"></label>
+    <label class="wide">Where<select data-xf="after">${where.map(([v, l]) => `<option value="${esc(v)}"${v === (x.after || "") ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+    <span class="sbXBtns">${r ? `<button type="button" class="btn sm danger" data-sb="xdel">Remove</button>` : ""}<span class="sbSp"></span><button type="button" class="btn sm" data-sb="xcancel">Cancel</button><button type="button" class="btn sm primary" data-sb="xsave">${r ? "Save" : "Add"}</button></span>
+  </div>`;
+}
+function xSave(pid, del){
+  const f = SB.xform; if(!f) return;
+  const box = document.querySelector('#ctl .sbXForm[data-day="' + f.day + '"]'), val = (k) => { const el = box && box.querySelector('[data-xf="' + k + '"]'); return el ? el.value : ""; };
+  const plan = planOf(pid), d = plan.days[f.day]; if(!d){ SB.xform = null; rerender(); return; }
+  let list = (d.extras || []).slice();
+  if(del) list = list.filter((y) => y.id !== f.id);
+  else{
+    const k = val("k"), item = { id: f.id || ("x" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)), k, min: k === "note" ? 0 : Math.max(0, Math.min(600, Math.round(Number(val("min")) || 0))), label: val("label").trim().slice(0, 60), after: val("after") };
+    if(k === "note" && !item.label){ H().toast("Give the note some words.", "err", 1800); return; }
+    const at = list.findIndex((y) => y.id === item.id); if(at >= 0) list[at] = item; else list.push(item);
+  }
+  d.extras = P.cleanExtras(list); if(!d.extras.length) delete d.extras;
+  SB.xform = null; save(pid, plan); rerender();
+  H().toast(del ? "Removed. Undo puts it back." : (f.id ? "Saved." : "Added to Day " + (f.day + 1) + "."), "ok", 1600);
 }
 // Visible strips in board order (for Shift-select ranges and drags)
 function sbOrder(box){ return Array.from(box.querySelectorAll(".sbRow:not(.sbHide)")).map((r) => r.dataset.sid); }
@@ -917,6 +980,10 @@ function sbClick(e, pid, canEdit){
     if(k === "clear"){ sbSetSel([], null); render(pid); return true; }
     if(k === "unfilter"){ SB.q = ""; SB.ie = ""; SB.dn = ""; SB.cast = ""; render(pid); return true; }
     if(k === "print"){ sbPrint(); return true; }
+    if(k === "xnew"){ SB.xform = { day: Number(a.dataset.day), id: "" }; if(SB.fold[pid]) SB.fold[pid][a.dataset.day] = false; render(pid); return true; }
+    if(k === "xedit"){ if(!canEdit) return true; SB.xform = { day: Number(a.dataset.day), id: a.dataset.id }; render(pid); return true; }
+    if(k === "xcancel"){ SB.xform = null; render(pid); return true; }
+    if(k === "xsave" || k === "xdel"){ if(canEdit) xSave(pid, k === "xdel"); return true; }
     if(k === "openbd"){ try{ if(window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(Number(a.dataset.n)); }catch(_e){} return true; }
     return true;
   }
@@ -929,6 +996,7 @@ function sbClick(e, pid, canEdit){
 }
 function sbChange(e, pid, canEdit){
   const t = e.target;
+  if(t.dataset.xf){ if(t.dataset.xf === "k"){ const m = t.closest(".sbXForm").querySelector('[data-xf="min"]'); if(m){ m.disabled = t.value === "note"; if(t.value === "note") m.value = 0; else if(!Number(m.value)) m.value = t.value === "move" ? 30 : 15; } } return true; }
   if(t.dataset.sbf){ const k = t.dataset.sbf; if(k === "bone"){ SB.bone = t.value; sbPrefs(); } else SB[k] = t.value; render(pid); return true; }
   if(!canEdit) return false;
   if(t.dataset.sbmove){ if(t.value === "") return true; const ord = sbOrder(document.getElementById("ctl")), ids = SB.sel.slice().sort((a, b) => { const i = ord.indexOf(a), j = ord.indexOf(b); return (i < 0 ? 1e9 : i) - (j < 0 ? 1e9 : j); }); sbSetSel([], null); sbMove(pid, ids, Number(t.value), null); return true; }
@@ -1011,7 +1079,64 @@ document.addEventListener("pointermove", (e) => {
 document.addEventListener("pointerup", () => { SBD.press = null; if(SBD.on){ SBD.justDropped = true; setTimeout(() => { SBD.justDropped = false; }, 0); sbDragEnd(false); } });
 document.addEventListener("pointercancel", () => { SBD.press = null; sbDragEnd(true); });
 document.addEventListener("keydown", (e) => { if(e.key === "Escape" && SBD.on){ e.preventDefault(); e.stopPropagation(); sbDragEnd(true); } }, true);
+/* ---------- dropdowns that always open downwards ----------
+   The page's <select>s stay (their value and change events drive everything); each gets a button that opens a list
+   below it. Near the bottom of the screen the panel scrolls up to make room instead of the list flipping upwards. */
+const SBM = { el: null, sel: null, btn: null };
+function sbMenuClose(){ if(SBM.el){ SBM.el.remove(); SBM.el = null; } if(SBM.btn) SBM.btn.setAttribute("aria-expanded", "false"); SBM.sel = null; SBM.btn = null; }
+function sbMenuOpen(btn, sel){
+  sbMenuClose();
+  const scroller = btn.closest(".ctlBody");
+  let r = btn.getBoundingClientRect(); const want = Math.min(300, sel.options.length * 30 + 10);
+  if(scroller && innerHeight - r.bottom < want + 12){ scroller.scrollTop += want + 12 - (innerHeight - r.bottom); r = btn.getBoundingClientRect(); }
+  const m = document.createElement("div"); m.className = "sbMenu"; m.setAttribute("role", "listbox");
+  m.innerHTML = Array.from(sel.options).map((o, k) => `<div class="sbOpt${o.selected ? " on" : ""}${o.disabled ? " dis" : ""}" role="option" data-k="${k}" aria-selected="${o.selected}">${esc(o.text)}</div>`).join("");
+  document.body.appendChild(m);
+  m.style.left = Math.min(r.left, innerWidth - Math.max(r.width, m.offsetWidth) - 8) + "px"; m.style.top = (r.bottom + 4) + "px"; m.style.minWidth = r.width + "px";
+  m.style.maxHeight = Math.max(140, Math.min(300, innerHeight - r.bottom - 12)) + "px";
+  let on = m.querySelector(".sbOpt.on");
+  // a time left on Auto: open the list around a sensible hour instead of midnight
+  if(sel.classList.contains("tSel") && sel.selectedIndex === 0 && sel.options[0].value === ""){ const near = sel.hasAttribute("data-wrapat") ? "18:00" : sel.hasAttribute("data-lunch") ? "12:00" : "07:00"; const k = Array.from(sel.options).findIndex((o) => o.value === near); if(k > 0) on = m.querySelectorAll(".sbOpt")[k]; }
+  if(on) m.scrollTop = on.offsetTop - m.clientHeight / 2 + on.offsetHeight / 2;
+  const tip = document.getElementById("sbTip"); if(tip) tip.classList.remove("show");
+  Object.assign(SBM, { el: m, sel, btn }); btn.setAttribute("aria-expanded", "true");
+  m.addEventListener("pointerdown", (e) => e.preventDefault());
+  m.addEventListener("click", (e) => { const o = e.target.closest(".sbOpt"); if(!o || o.classList.contains("dis")) return; sbMenuPick(Number(o.dataset.k)); });
+}
+function sbMenuPick(k){
+  const sel = SBM.sel, btn = SBM.btn; if(!sel) return;
+  sbMenuClose();
+  if(sel.selectedIndex !== k){ sel.selectedIndex = k; if(btn){ const t = btn.querySelector("span"); if(t) t.textContent = sel.options[k].text; } sel.dispatchEvent(new Event("change", { bubbles: true })); }
+  if(btn && document.body.contains(btn)) btn.focus();
+}
+function sbMenuKey(e){
+  if(!SBM.el) return false;
+  const opts = Array.from(SBM.el.querySelectorAll(".sbOpt")), cur = opts.findIndex((o) => o.classList.contains("hl")), base = cur >= 0 ? cur : opts.findIndex((o) => o.classList.contains("on"));
+  const go = (i) => { i = Math.max(0, Math.min(opts.length - 1, i)); opts.forEach((o) => o.classList.remove("hl")); opts[i].classList.add("hl"); opts[i].scrollIntoView({ block: "nearest" }); };
+  if(e.key === "ArrowDown"){ go(base + 1); return true; }
+  if(e.key === "ArrowUp"){ go(base - 1); return true; }
+  if(e.key === "Enter" || e.key === " "){ sbMenuPick(base < 0 ? 0 : base); return true; }
+  if(e.key === "Escape" || e.key === "Tab"){ const b = SBM.btn; sbMenuClose(); if(b && e.key === "Escape") b.focus(); return e.key === "Escape"; }
+  if(e.key.length === 1){ const k = opts.findIndex((o, i) => i > base && o.textContent.trim().toLowerCase().startsWith(e.key.toLowerCase())); const k2 = k >= 0 ? k : opts.findIndex((o) => o.textContent.trim().toLowerCase().startsWith(e.key.toLowerCase())); if(k2 >= 0) go(k2); return true; }
+  return false;
+}
+document.addEventListener("keydown", (e) => { if(sbMenuKey(e)){ e.preventDefault(); e.stopPropagation(); } }, true);
+document.addEventListener("pointerdown", (e) => { if(SBM.el && !SBM.el.contains(e.target) && !(SBM.btn && SBM.btn.contains(e.target))) sbMenuClose(); }, true);
+window.addEventListener("resize", sbMenuClose);
+document.addEventListener("scroll", (e) => { if(SBM.el && !SBM.el.contains(e.target)) sbMenuClose(); }, true);
+function sbEnhanceSelects(box){
+  box.querySelectorAll(".ctlBody.sbMode select").forEach((sel) => {
+    if(sel.dataset.enh) return; sel.dataset.enh = "1";
+    const b = document.createElement("button"); b.type = "button"; b.className = "sbPick" + (sel.classList.contains("tSel") ? " t" : ""); b.disabled = sel.disabled;
+    b.setAttribute("aria-haspopup", "listbox"); b.setAttribute("aria-expanded", "false"); if(sel.getAttribute("aria-label")) b.setAttribute("aria-label", sel.getAttribute("aria-label"));
+    b.innerHTML = `<span>${esc(sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : "")}</span><i aria-hidden="true">▾</i>`;
+    sel.classList.add("sbNative"); sel.tabIndex = -1; sel.after(b);
+    b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); if(SBM.btn === b) sbMenuClose(); else sbMenuOpen(b, sel); });
+    b.addEventListener("keydown", (e) => { if(!SBM.el && (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ")){ e.preventDefault(); e.stopPropagation(); sbMenuOpen(b, sel); } });
+  });
+}
 function sbWire(box, pid, canEdit){
+  sbMenuClose(); sbEnhanceSelects(box);
   const q = box.querySelector("[data-sbq]");
   if(q){ q.oninput = () => { SB.q = q.value; const f = { q: SB.q, ie: SB.ie, dn: SB.dn, cast: SB.cast }, by = S.lastBd ? P.sceneMap(S.lastBd) : {};
     box.querySelectorAll(".sbRow").forEach((r) => r.classList.toggle("sbHide", !P.stripMatch(by[r.dataset.sid], f))); };
@@ -1021,7 +1146,7 @@ function sbWire(box, pid, canEdit){
   box.ondragstart = (e) => { if(e.target.closest && e.target.closest(".sbRow")) e.preventDefault(); };
   if(!canEdit){ box.onpointerdown = null; return; }
   box.onpointerdown = (e) => {
-    const row = e.target.closest(".sbRow"); if(!row || e.button > 0 || e.target.closest("select, input, button, a, label")) return;
+    const row = e.target.closest(".sbRow"); if(!row || e.button > 0 || e.target.closest("select, input, button, a, label, .sbPick")) return;
     const grip = !!e.target.closest(".sbGrip");
     if(e.pointerType !== "mouse" && !grip) return;     // touch: only the grip picks up, so the page still scrolls
     if(e.pointerType === "mouse") e.preventDefault();  // no text selection

@@ -329,5 +329,17 @@ test("cast ID numbers come from the breakdown, else the cast order", () => {
   assert.deepStrictEqual(P.castIds({ cast: ["BEN", "ANA", "ZED"] }, [{ name: "ANA" }, { name: "BEN" }]), [1, 2]);
 });
 
+
+test("breaks, moves and notes added by hand go in the day's timetable", () => {
+  const byId = { a: { id: "a", n: 1, loc: "HOUSE", eighths: 8 }, b: { id: "b", n: 2, loc: "PARK", eighths: 8 } };
+  const day = { scenes: ["a", "b"], extras: [{ id: "x1", after: "a", k: "move", min: 45, label: "Drive to the park" }, { id: "x2", after: "", k: "note", label: "Safety talk" }, { id: "x3", after: "gone", k: "break", min: 15 }] };
+  const tt = P.dayTimes(day, byId, { call: "07:00" });
+  assert.deepStrictEqual(tt.rows.map((r) => r.type === "extra" ? r.k : r.type), ["note", "scene", "move", "scene", "break"]);   // the hand move replaces the automatic one; the orphan goes last
+  const plain = P.dayTimes({ scenes: ["a", "b"] }, byId, { call: "07:00" });
+  assert.ok(tt.rows.find((r) => r.type === "scene" && r.id === "b").shoot > plain.rows.find((r) => r.type === "scene" && r.id === "b").shoot);
+  const n = P.normalize({ days: [{ scenes: [], extras: [{ k: "break", min: 9999, label: "x".repeat(99) }, { k: "bogus" }] }] });
+  assert.strictEqual(n.days[0].extras.length, 1); assert.strictEqual(n.days[0].extras[0].min, 600); assert.strictEqual(n.days[0].extras[0].label.length, 60);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
