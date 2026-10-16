@@ -1205,6 +1205,8 @@ top:38px; left:0;
 }
 
 .sep{height:1px;background:var(--uiBorder); margin:6px}
+.menuGroup{ padding:6px 12px 3px; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--uiMuted); opacity:.85; user-select:none; pointer-events:none; }
+.dropdown > .menuGroup:first-child{ padding-top:4px; }
 
 .topTitle{
   justify-self:center;
@@ -2231,13 +2233,12 @@ html,body{ background: var(--uiBg) !important; }
       <div class="menu">
         <button class="menuBtn" data-menu="format" aria-expanded="false" type="button">Format</button>
         <div class="dropdown" id="menu-format" role="menu">
-          <button class="item itemToggle" id="mRevisions" role="menuitemcheckbox" aria-checked="false" type="button"><span class="label">Revisions…</span><span class="tick" aria-hidden="true"></span></button>
-          <div class="sep"></div>
+          <div class="menuGroup" aria-hidden="true">Text</div>
           <div class="submenuWrap">
             <button class="item submenuBtn" type="button" aria-haspopup="true" aria-expanded="false">
-              Text <span class="submenuArrow">›</span>
+              Style <span class="submenuArrow">›</span>
             </button>
-            <div class="submenu" role="menu" aria-label="Text">
+            <div class="submenu" role="menu" aria-label="Text style">
               <button class="item" id="mBold" type="button">Bold</button>
               <button class="item" id="mItalic" type="button">Italic</button>
               <button class="item" id="mUnderline" type="button">Underline</button>
@@ -2249,11 +2250,14 @@ html,body{ background: var(--uiBg) !important; }
             </div>
           </div>
 
+
+          <div class="sep"></div>
+          <div class="menuGroup" aria-hidden="true">Script layout</div>
           <div class="submenuWrap">
             <button class="item submenuBtn" type="button" aria-haspopup="true" aria-expanded="false">
-              Pages <span class="submenuArrow">›</span>
+              Scene Headings <span class="submenuArrow">›</span>
             </button>
-            <div class="submenu" role="menu" aria-label="Pages">
+            <div class="submenu" role="menu" aria-label="Scene headings">
               <button class="item itemToggle" id="mToggleSceneNumbers" role="menuitemcheckbox" aria-checked="false" type="button">
                 <span class="label">Scene Numbers</span>
                 <span class="tick" aria-hidden="true"></span>
@@ -2262,52 +2266,63 @@ html,body{ background: var(--uiBg) !important; }
                 <span class="label">Lock Scene Numbers</span>
                 <span class="tick" aria-hidden="true"></span>
               </button>
-<button class="item itemToggle" id="mToggleBoldSceneHeadings" role="menuitemcheckbox" aria-checked="false" type="button">
-  <span class="label">Bold Scene Headings</span>
-  <span class="tick" aria-hidden="true"></span>
-</button>
-<button class="item itemToggle" id="mToggleUnderlineSceneHeadings" role="menuitemcheckbox" aria-checked="false" type="button">
-  <span class="label">Underline Scene Headings</span>
-  <span class="tick" aria-hidden="true"></span>
-</button>
-<div class="sep"></div>
-<button class="item itemToggle" id="mToggleDraft" role="menuitemcheckbox" aria-checked="false" type="button">
-  <span class="label">Show Draft Name &amp; Date</span>
-  <span class="tick" aria-hidden="true"></span>
-</button>
-<button class="item" id="mEditDraft" type="button">Edit Draft Name &amp; Date…</button>
-<div class="sep"></div>
-<button class="item itemToggle" id="mToggleAutoContd" role="menuitemcheckbox" aria-checked="true" type="button">
-  <span class="label">Automatic (CONT'D)</span>
-  <span class="tick" aria-hidden="true">✓</span>
-</button>
-<div class="sep"></div>
-<button class="item itemToggle" id="mPageLetter" role="menuitemradio" aria-checked="false" type="button">
-  <span class="label">US Letter (industry standard)</span>
-  <span class="tick" aria-hidden="true"></span>
-</button>
-<button class="item itemToggle" id="mPageA4" role="menuitemradio" aria-checked="false" type="button">
-  <span class="label">A4</span>
-  <span class="tick" aria-hidden="true"></span>
-</button>
+              <button class="item itemToggle" id="mToggleBoldSceneHeadings" role="menuitemcheckbox" aria-checked="false" type="button">
+                <span class="label">Bold Scene Headings</span>
+                <span class="tick" aria-hidden="true"></span>
+              </button>
+              <button class="item itemToggle" id="mToggleUnderlineSceneHeadings" role="menuitemcheckbox" aria-checked="false" type="button">
+                <span class="label">Underline Scene Headings</span>
+                <span class="tick" aria-hidden="true"></span>
+              </button>
             </div>
           </div>
+          <div class="submenuWrap">
+            <button class="item submenuBtn" type="button" aria-haspopup="true" aria-expanded="false">
+              Page Setup <span class="submenuArrow">›</span>
+            </button>
+            <div class="submenu" role="menu" aria-label="Page setup">
+              <button class="item itemToggle" id="mPageLetter" role="menuitemradio" aria-checked="false" type="button">
+                <span class="label">US Letter (industry standard)</span>
+                <span class="tick" aria-hidden="true"></span>
+              </button>
+              <button class="item itemToggle" id="mPageA4" role="menuitemradio" aria-checked="false" type="button">
+                <span class="label">A4</span>
+                <span class="tick" aria-hidden="true"></span>
+              </button>
+              <div class="sep"></div>
+              <button class="item itemToggle" id="mToggleAutoContd" role="menuitemcheckbox" aria-checked="true" type="button">
+                <span class="label">Automatic (CONT'D)</span>
+                <span class="tick" aria-hidden="true">✓</span>
+              </button>
+              <div class="sep"></div>
+              <button class="item itemToggle" id="mToggleDraft" role="menuitemcheckbox" aria-checked="false" type="button">
+                <span class="label">Show Draft Name &amp; Date</span>
+                <span class="tick" aria-hidden="true"></span>
+              </button>
+              <button class="item" id="mEditDraft" type="button">Edit Draft Name &amp; Date…</button>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <div class="menuGroup" aria-hidden="true">Review</div>
+          <button class="item itemToggle" id="mRevisions" role="menuitemcheckbox" aria-checked="false" type="button"><span class="label">Revisions…</span><span class="tick" aria-hidden="true"></span></button>
         </div>
       </div>
 
-<div class="menu">
+      <div class="menu">
         <button class="menuBtn" data-menu="view" aria-expanded="false" type="button">View</button>
         <div class="dropdown" id="menu-view" role="menu">
-                    <button class="item" id="mToggleNotes" type="button">Script / Notes</button>
+          <div class="menuGroup" aria-hidden="true">Mode</div>
+          <button class="item" id="mToggleNotes" type="button">Script / Notes</button>
+          <button class="item" id="mTogglePanel" type="button">Presentation Mode</button>
           <div class="sep"></div>
-                    <button class="item" id="mTogglePanel" type="button">Presentation Mode</button>
-          <div class="sep"></div>
-          <button class="item itemToggle" id="mPhotocopy" role="menuitemcheckbox" aria-checked="false" type="button"><span class="label">Photocopy Look…</span><span class="tick" aria-hidden="true"></span></button>
+          <div class="menuGroup" aria-hidden="true">Appearance</div>
           <button class="item itemToggle" id="mToggleDark" role="menuitemcheckbox" aria-checked="false" type="button">
             <span class="label">Dark Mode</span>
             <span class="tick" aria-hidden="true"></span>
           </button>
+          <button class="item itemToggle" id="mPhotocopy" role="menuitemcheckbox" aria-checked="false" type="button"><span class="label">Photocopy Look…</span><span class="tick" aria-hidden="true"></span></button>
           <div class="sep"></div>
+          <div class="menuGroup" aria-hidden="true">Show in script</div>
           <button class="item itemToggle" id="mToggleComments" role="menuitemcheckbox" aria-checked="true" type="button">
             <span class="label">Show Comments</span>
             <span class="tick" aria-hidden="true">✓</span>
@@ -2321,9 +2336,9 @@ html,body{ background: var(--uiBg) !important; }
             <span class="tick" aria-hidden="true"></span>
           </button>
           <div class="sep"></div>
-          <button class="item" id="mShortcuts" type="button">Keyboard Shortcuts</button></div>
+          <button class="item" id="mShortcuts" type="button">Keyboard Shortcuts</button>
+        </div>
       </div>
-
 
       <div class="viewTabs" role="tablist" aria-label="Script or notes">
         <button type="button" role="tab" id="tabScript" class="on" aria-selected="true" title="Script (Ctrl/Cmd+\ to switch)">Script</button>
