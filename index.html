@@ -940,10 +940,10 @@ async function loadCamp() {
   renderBody();
 }
 async function unlockCamp() {
-  const v = await dialog({ title: "Enter your script password", text: "The password you use in the Script library (your own, or the team password). This device will remember it.", ok: "Unlock",
-    fields: [{ name: "pw", label: "Password", type: "password" }] });
+  // The script cloud only lets in whitelisted Google accounts: "not allowed" here means this account isn't on the list
+  const em = (auth.currentUser && auth.currentUser.email) || "This account";
+  const v = await dialog({ title: "Scripts are locked for this account", text: em + " isn’t on Camp’s list for scripts. Ask the person who runs Camp to add it, then try again.", ok: "Try again" });
   if (!v) return;
-  lsSet(KEY_KEY, v.pw);
   RIP.state = "idle"; loadCamp();
 }
 const scriptTitle = id => { const f = RIP.files && RIP.files[id]; return f ? ((f.tp && f.tp.title) || f.name || "Untitled script") : "Script"; };
@@ -1198,7 +1198,7 @@ function renderList(p) {
     wireList(pane); return;
   }
   if (RIP.state === "locked") {
-    pane.innerHTML = `<div class="emptyBox"><b>Unlock your scripts</b><p>This device needs your script password to show titles and page counts.</p><button class="btn primary" type="button" data-act="unlock">Enter password</button></div>`;
+    pane.innerHTML = `<div class="emptyBox"><b>Scripts are locked</b><p>Your Google account isn’t on Camp’s list for scripts yet.</p><button class="btn primary" type="button" data-act="unlock">Try again</button></div>`;
     wireList(pane); return;
   }
   if (!RIP.files && tab !== "scripts") {
@@ -1595,7 +1595,7 @@ function pickScript(p) {
     const draw = () => {
       seen = RIP.files; seenState = RIP.state;
       if (RIP.state === "locked") {
-        list.innerHTML = `<div class="sideEmpty">Your library is locked on this device. <button type="button" class="btn sm" data-unlock>Enter password</button></div>`;
+        list.innerHTML = `<div class="sideEmpty">Scripts are locked for this account. <button type="button" class="btn sm" data-unlock>Try again</button></div>`;
         list.querySelector("[data-unlock]").onclick = () => { done(null); unlockCamp(); };
         return;
       }
@@ -1687,7 +1687,7 @@ async function exportDoc(kind, fileId, retried) {
     throw new Error(err && err.name === "AbortError" ? "Google took too long. Try again: it may be half made, and trying again finishes it." : "Couldn't reach the script cloud.");
   } finally { clearTimeout(t); }
   if (res && res.auth === false) {
-    if (retried) throw new Error("Locked: enter your script password.");
+    if (retried) throw new Error("Your Google account isn’t on Camp’s list for scripts.");
     await unlockCamp();
     return exportDoc(kind, fileId, true);
   }
@@ -2153,7 +2153,7 @@ async function ripPost(body, rawAuth) {
   try {
     const r = await fetch(RIP.ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, cache: "no-store", signal: ctl.signal, body: JSON.stringify(Object.assign({ key: lsGet(KEY_KEY) || "", ...(await tokObj()) }, body)) });
     const res = await r.json();
-    if (res && res.auth === false && !rawAuth) throw new Error("Locked: enter your script password.");
+    if (res && res.auth === false && !rawAuth) throw new Error("Your Google account isn’t on Camp’s list for scripts.");
     return res;
   } catch (err) { throw new Error(err && err.message && !/fetch|abort/i.test(err.message) ? err.message : "Couldn't reach the script cloud."); }
   finally { clearTimeout(t); }
@@ -2185,7 +2185,7 @@ const draftBlobs = new Map(); // draftId -> blob URL
 async function draftUrl(id) {
   if (draftBlobs.has(id)) return draftBlobs.get(id);
   const res = await ripGet({ action: "draft", draftId: id }, 60000);
-  if (res && res.auth === false) throw new Error("Locked: enter your script password.");
+  if (res && res.auth === false) throw new Error("Your Google account isn’t on Camp’s list for scripts.");
   if (!res || res.ok !== true) throw new Error(String((res && res.error) || "Couldn't open the draft."));
   const bin = atob(res.dataB64), bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);

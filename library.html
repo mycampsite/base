@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="ui.css">
 <script src="ui.js" defer></script>
+<script src="signin.js" defer></script>
 <script src="idtoken.js"></script>
 <title>Library — Camp</title>
 <link rel="icon" type="image/png" href="favicon.png">
@@ -741,16 +742,18 @@ body.collab .navItem[data-view="unfiled"], body.collab .selBar, body.collab .sid
       try{ return await fn(); }
       catch(err){
         if(!(err instanceof AuthError)) throw err;
-        const ok = await askPassword(attempt > 0 || !!getKey());
-        if(!ok) throw new Error("Locked. Enter your password to see your scripts.");
+        const ok = await askPassword(attempt > 0);
+        if(!ok) throw new Error("Sign in with Google to see your scripts.");
       }
     }
-    throw new Error("Wrong password.");
+    throw new Error("This Google account isn't on Camp's list.");
   }
 
   // ---------------- Password modal ----------------
   let pwResolve = null;
   function askPassword(wasWrong){
+    // The cloud only lets in whitelisted Google accounts now: "not allowed" opens Google sign-in (idtoken.js)
+    if(window.campSignIn) return window.campSignIn(wasWrong);
     return new Promise((resolve) => {
       pwResolve = resolve;
       $("pwMsg").textContent = wasWrong ? "That password didn't work. Try again." : "";

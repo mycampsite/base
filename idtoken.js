@@ -59,5 +59,55 @@
     }catch(_e){ return cur; }
   };
   window.campIdTokenNow = () => cur;
+
+  // Google sign-in for the script cloud, shown when it says "not allowed" (it only lets in whitelisted Google accounts).
+  // refused = the cloud already turned down whoever is signed in. Resolves true once a Google account is signed in.
+  async function googleSignIn(auth){
+    const fb = window.firebase, first = auth.currentUser, anon = !!(first && first.isAnonymous);
+    const fin = async (go) => { try{ return await go(); }catch(e){ if(e && e.code === "auth/credential-already-in-use" && e.credential) return auth.signInWithCredential(e.credential); throw e; } };
+    const provider = new fb.auth.GoogleAuthProvider(); provider.setCustomParameters({ prompt:"select_account" });
+    const popup = () => fin(() => anon ? first.linkWithPopup(provider) : auth.signInWithPopup(provider));
+    const withToken = (tok) => { const cred = fb.auth.GoogleAuthProvider.credential(null, tok); return fin(() => anon ? first.linkWithCredential(cred) : auth.signInWithCredential(cred)); };
+    const key = auth.app && auth.app.options && auth.app.options.apiKey;
+    return window.CampSignIn && key ? window.CampSignIn.run(key, { popup, withToken }) : popup();
+  }
+  const escH = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  let asking = null;
+  window.campSignIn = function(refused){
+    if(asking) return asking;
+    asking = (async () => {
+      const auth = await within(start(), 8000);
+      if(!auth) return false;
+      const u = auth.currentUser, who = u && !u.isAnonymous ? (u.email || "This account") : "";
+      if(who) refused = true;   // their sign-in already went with the request, so the cloud turned this account down
+      return await new Promise((resolve) => {
+        const shade = document.createElement("div");
+        shade.style.cssText = "position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+        const btn = "height:38px;padding:0 14px;border-radius:10px;font:inherit;cursor:pointer;";
+        shade.innerHTML = `<div role="dialog" aria-label="Sign in" style="width:min(420px,100%);background:#1a1b1f;color:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.5);font:14px/1.45 system-ui,sans-serif">
+          <div style="font-size:17px;font-weight:600;margin-bottom:6px">${refused && who ? "This account can't open scripts" : "Sign in to Camp"}</div>
+          <div style="color:rgba(255,255,255,.65);font-size:13px">${refused && who ? `<b>${escH(who)}</b> isn't on Camp's list. Ask the person who runs Camp to add it, or use another Google account.` : "Sign in with your Google account to open your scripts."}</div>
+          <div data-msg style="min-height:18px;margin-top:10px;font-size:12.5px;color:#ff7b72"></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+            <button data-no type="button" style="${btn}border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:inherit">Cancel</button>
+            <button data-ok type="button" style="${btn}border:1px solid #ececf0;background:#ececf0;color:#111;font-weight:600">${refused && who ? "Use another account" : "Sign in with Google"}</button>
+          </div></div>`;
+        document.body.appendChild(shade);
+        const done = (ok) => { shade.remove(); resolve(ok); };
+        shade.querySelector("[data-no]").onclick = () => done(false);
+        shade.addEventListener("keydown", (e) => { e.stopPropagation(); if(e.key === "Escape") done(false); });
+        shade.querySelector("[data-ok]").onclick = async () => {
+          const msg = shade.querySelector("[data-msg]"); msg.textContent = "";
+          try{
+            await googleSignIn(auth);
+            const nu = auth.currentUser;
+            if(nu && !nu.isAnonymous){ cur = ""; await window.campIdToken(); done(true); }
+          }catch(e){ msg.textContent = e && e.code === "auth/popup-closed-by-user" ? "Sign-in was closed." : "Couldn't sign in: " + ((e && e.message) || "try again"); }
+        };
+        setTimeout(() => { try{ shade.querySelector("[data-ok]").focus(); }catch(_e){} }, 30);
+      });
+    })().finally(() => { asking = null; });
+    return asking;
+  };
   start(); window.campIdToken();
 })();

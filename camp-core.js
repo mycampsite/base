@@ -44,7 +44,12 @@
   }
 
   let __pwPromise = null;
+  // The cloud only lets in whitelisted Google accounts now: "not allowed" opens Google sign-in (idtoken.js)
   function askPassword(wasWrong){
+    if(window.campSignIn) return window.campSignIn(wasWrong);
+    return askPasswordOld_(wasWrong);
+  }
+  function askPasswordOld_(wasWrong){
     if(__pwPromise) return __pwPromise;
     __pwPromise = new Promise((resolve) => {
       const shade = document.createElement("div");
@@ -94,7 +99,7 @@
       if(j && j.auth === false){ await askPassword(tries > 0); key = getCloudKey(); continue; }
       return j;
     }
-    return { ok:false, error:"That password didn't work." };
+    return { ok:false, error:"Sign in with a Google account that's on Camp's list." };
   }
   // ms: POST timeout in ms (default 60000; treatment.html passes 90000)
   async function apiPost(action, body, ms){
@@ -106,7 +111,7 @@
       if(j && j.auth === false){ await askPassword(tries > 0); key = getCloudKey(); continue; }
       return j;
     }
-    return { ok:false, error:"That password didn't work." };
+    return { ok:false, error:"Sign in with a Google account that's on Camp's list." };
   }
 
   // Same logic as editor's auth.js. Reuses an existing Google session (no popup); otherwise

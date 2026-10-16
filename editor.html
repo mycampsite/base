@@ -10395,6 +10395,8 @@ $("#newBtn").addEventListener("click", async () => {
   // Password box: shown when Drive says the password is missing or wrong. Remembered on this device.
   let __pwPromise = null;
   function __askCloudPassword(wasWrong){
+    // The cloud only lets in whitelisted Google accounts now: "not allowed" opens Google sign-in (idtoken.js)
+    if(window.campSignIn) return window.campSignIn(wasWrong);
     if(__pwPromise) return __pwPromise;
     __pwPromise = new Promise((resolve) => {
       try{ bootLoading(false); }catch(_e){}
