@@ -103,8 +103,24 @@ function fromAbs(t, abs, base){
 const hostOf = (u) => { try{ return new URL(u).hostname.replace(/^www\./, ""); }catch(_e){ return u; } };
 const isVideo = (u) => /youtube\.com|youtu\.be|vimeo\.com|\.mp4($|\?)|\.mov($|\?)|\.webm($|\?)/i.test(u || "");
 
-// ---------- one item as SVG ----------
-function itemSvg(it, id){
+// ---------- one item as SVG (exp = for the PNG export: plain SVG text, no HTML) ----------
+let MCTX = null;
+function wrapText(text, px, maxW, weight){
+  MCTX = MCTX || document.createElement("canvas").getContext("2d");
+  MCTX.font = (weight || 500) + " " + px + "px Inter, system-ui, sans-serif";
+  const out = [];
+  String(text || "").split("\n").forEach((para) => {
+    const words = para.split(/(\s+)/); let line = "";
+    words.forEach((w) => { const t = line + w; if(MCTX.measureText(t).width > maxW && line.trim()){ out.push(line.trimEnd()); line = w.trimStart(); } else line = t; });
+    out.push(line);
+  });
+  return out;
+}
+function svgLines(text, x, y, px, maxW, fill, weight, maxH){
+  const lh = px * 1.25, lines = wrapText(text, px, maxW, weight).slice(0, Math.max(1, Math.floor((maxH || 1e6) / lh)));
+  return `<text x="${x}" y="${y + px}" font-family="Inter, system-ui, sans-serif" font-weight="${weight || 500}" font-size="${px}" fill="${fill}">${lines.map((l, i) => `<tspan x="${x}" dy="${i ? lh : 0}">${esc(l)}</tspan>`).join("")}</text>`;
+}
+function itemSvg(it, id, exp){
   const c = it.c || INKS[0], sw = it.sw || 2, w = Math.max(1, it.w || 1), h = Math.max(1, it.h || 1);
   const rot = it.r ? ` transform="rotate(${it.r} ${it.x + w/2} ${it.y + h/2})"` : "";
   let body = "";
@@ -119,6 +135,8 @@ function itemSvg(it, id){
       head = `<path d="M${bx} ${by} L${bx - L * Math.cos(ang - sp)} ${by - L * Math.sin(ang - sp)} L${bx - L * Math.cos(ang + sp)} ${by - L * Math.sin(ang + sp)} Z" fill="${c}"/>`; }
     body = `<path d="M${ax} ${ay} L${bx} ${by}" stroke="transparent" stroke-width="${Math.max(14, sw + 10)}"/><path d="M${ax} ${ay} L${bx} ${by}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>${head}`;
   }
+  else if(it.t === "text" && exp) body = svgLines(it.text, it.x, it.y, it.fs || 22, w, c, 500);
+  else if(it.t === "note" && exp) body = `<rect x="${it.x + 3}" y="${it.y + 4}" width="${w}" height="${h}" rx="3" fill="rgba(0,0,0,.35)"/><rect x="${it.x}" y="${it.y}" width="${w}" height="${h}" rx="3" fill="${it.c || NOTES[0]}"/>` + svgLines(it.text, it.x + 11, it.y + 10, it.fs || 16, w - 22, "#222", 500, h - 20);
   else if(it.t === "text") body = `<foreignObject x="${it.x}" y="${it.y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" class="lyTxt" style="color:${c};font-size:${it.fs || 22}px">${esc(it.text || "")}</div></foreignObject>`;
   else if(it.t === "note") body = `<rect x="${it.x + 3}" y="${it.y + 4}" width="${w}" height="${h}" rx="3" fill="rgba(0,0,0,.35)"/><rect x="${it.x}" y="${it.y}" width="${w}" height="${h}" rx="3" fill="${it.c || NOTES[0]}"/><foreignObject x="${it.x}" y="${it.y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" class="lyTxt note" style="font-size:${it.fs || 16}px">${esc(it.text || "")}</div></foreignObject>`;
   else if(it.t === "img") body = `<rect x="${it.x}" y="${it.y}" width="${w}" height="${h}" fill="#222"/><image href="${esc(it.src || "")}" x="${it.x}" y="${it.y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice"/><rect x="${it.x}" y="${it.y}" width="${w}" height="${h}" fill="none" stroke="rgba(255,255,255,.12)"/>`;
@@ -127,10 +145,10 @@ function itemSvg(it, id){
     body = `<rect x="${it.x}" y="${it.y}" width="${w}" height="${h}" rx="8" fill="#232323" stroke="#454545"/>
       <rect x="${it.x + 10}" y="${it.y + 10}" width="${h - 20}" height="${h - 20}" rx="6" fill="${v ? "#5a1f1f" : "#1f3346"}"/>
       <text x="${it.x + h / 2}" y="${it.y + h / 2 + 6}" text-anchor="middle" font-size="18" fill="#fff">${v ? "▶" : "↗"}</text>
-      <foreignObject x="${it.x + h}" y="${it.y + 6}" width="${Math.max(10, w - h - 8)}" height="${h - 12}"><div xmlns="http://www.w3.org/1999/xhtml" class="lyLink"><b>${esc(it.text || (v ? "Video" : hostOf(it.url)))}</b><span>${esc(hostOf(it.url || ""))}</span></div></foreignObject>`;
+      ${exp ? svgLines(it.text || (v ? "Video" : hostOf(it.url)), it.x + h + 8, it.y + h / 2 - 17, 13, w - h - 16, "#eee", 700, 18) + svgLines(hostOf(it.url || ""), it.x + h + 8, it.y + h / 2 + 2, 11, w - h - 16, "#999", 400, 16) : `<foreignObject x="${it.x + h}" y="${it.y + 6}" width="${Math.max(10, w - h - 8)}" height="${h - 12}"><div xmlns="http://www.w3.org/1999/xhtml" class="lyLink"><b>${esc(it.text || (v ? "Video" : hostOf(it.url)))}</b><span>${esc(hostOf(it.url || ""))}</span></div></foreignObject>`}`;
   }
   else if(it.t === "kit") body = `<g transform="translate(${it.x} ${it.y})">${kitFront(it.k, w, h)}<rect width="${w}" height="${h}" fill="transparent"/>${kitBody(it.k, w, h, c)}</g>`;
-  const lbl = it.t === "kit" && it.lbl ? `<text class="lyLbl" x="${it.x + w/2}" y="${it.y + h + 16}" text-anchor="middle">${esc(it.lbl)}</text>` : "";
+  const lbl = it.t === "kit" && it.lbl ? `<text class="lyLbl" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="12" fill="#ddd" stroke="#151515" stroke-width="3" paint-order="stroke" x="${it.x + w/2}" y="${it.y + h + 16}" text-anchor="middle">${esc(it.lbl)}</text>` : "";
   return `<g class="lyIt" data-id="${esc(id)}"><g${rot}>${body}</g>${lbl}</g>`;
 }
 const DEFS = `<defs><radialGradient id="lyBeam" cx="50%" cy="100%" r="100%"><stop offset="0" stop-color="#ffd27a" stop-opacity=".38"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient>
@@ -323,6 +341,7 @@ const IC = {
   undo:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/></svg>`,
   redo:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h4"/></svg>`,
   grid:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>`,
+  dl:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>`,
   fit:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>`
 };
 const TOOLS = [["select", "Select (V)"], ["hand", "Pan (H, or hold Space)"], ["pen", "Pen (P)"], ["rect", "Rectangle (R)"], ["ellipse", "Ellipse (O)"], ["line", "Line (L)"], ["arrow", "Arrow (A)"], ["text", "Text (T)"], ["note", "Sticky note (N)"]];
@@ -392,7 +411,7 @@ function drawBar(){
       <div class="lyGrp" style="padding:2px 6px;gap:5px">${ink.map((c) => `<button type="button" class="lySw${c === cur ? " on" : ""}" data-ink="${c}" style="background:${c}" aria-label="Colour ${c}"></button>`).join("")}</div>
       <div class="lyGrp">${WIDTHS.map((w) => `<button type="button" class="lyWd${S.sw === w ? " on" : ""}" data-sw="${w}" aria-label="Line ${w}"><i style="height:${w}px"></i></button>`).join("")}</div>
       <div class="lyGrp"><button type="button" class="lyBtn" data-ly="undo" title="Undo (Ctrl+Z)"${S.undo.length ? "" : " disabled"}>${IC.undo}</button><button type="button" class="lyBtn" data-ly="redo" title="Redo (Ctrl+Shift+Z)"${S.redo.length ? "" : " disabled"}>${IC.redo}</button></div>` : "")
-    + `<span class="lySp"></span><div class="lyGrp">${edit ? `<button type="button" class="lyBtn${S.snap ? " on" : ""}" data-ly="snap" title="Snap to grid">${IC.grid}</button>` : ""}<button type="button" class="lyBtn" data-ly="zout" title="Zoom out">−</button><span class="lyZoom"></span><button type="button" class="lyBtn" data-ly="zin" title="Zoom in">＋</button><button type="button" class="lyBtn" data-ly="fit" title="Fit everything">${IC.fit}</button></div>`;
+    + `<span class="lySp"></span><div class="lyGrp">${edit ? `<button type="button" class="lyBtn${S.snap ? " on" : ""}" data-ly="snap" title="Snap to grid">${IC.grid}</button>` : ""}<button type="button" class="lyBtn" data-ly="zout" title="Zoom out">−</button><span class="lyZoom"></span><button type="button" class="lyBtn" data-ly="zin" title="Zoom in">＋</button><button type="button" class="lyBtn" data-ly="fit" title="Fit everything">${IC.fit}</button></div><div class="lyGrp"><button type="button" class="lyBtn" data-ly="png" title="Save as PNG (the selection, or everything)">${IC.dl}PNG</button></div>`;
   if(!lid) EL.bar.querySelectorAll("button").forEach((b) => { b.disabled = true; });
   EL.kit.hidden = !(S.kitOpen && edit && lid);
   if(!EL.kit.hidden && !EL.kit.dataset.built){
@@ -536,6 +555,7 @@ function wire(){
     else if(a === "zin") zoomAt(1.25);
     else if(a === "zout") zoomAt(0.8);
     else if(a === "fit") fitAll();
+    else if(a === "png") exportPng();
     else if(a === "del") delSel();
     else if(a === "dup") dupSel();
     else if(a === "front" || a === "back") restack(a === "front");
@@ -712,6 +732,27 @@ function up(e){
   }
 }
 function cancelLive(){ EL.over.removeAttribute("transform"); const t = EL.over.querySelector("path:not([data-h])"); draw(true); void t; }
+
+// ---------- save as PNG (the whole layout, or just the selection) ----------
+async function exportPng(){
+  const L = layoutsOf(S.pid)[curLid()], items = curItems(), ids = S.sel.length ? S.sel : Object.keys(items), b = bboxOf(items, ids);
+  if(!b){ H().toast("Nothing to save yet.", "err", 1800); return; }
+  // room for light spill and labels around the pieces
+  const pad = 40 + (ids.some((k) => items[k] && items[k].t === "kit") ? 140 : 0), X = b.x - pad, Y = b.y - pad, W = b.w + pad * 2, Hh = b.h + pad * 2;
+  const scale = Math.min(3, Math.max(1, 4000 / Math.max(W, Hh))), cw = Math.round(W * scale), ch = Math.round(Hh * scale);
+  const keep = new Set(ids);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cw}" height="${ch}" viewBox="${X} ${Y} ${W} ${Hh}">${DEFS}<rect x="${X}" y="${Y}" width="${W}" height="${Hh}" fill="#151515"/>${sortItems(items).filter((k) => keep.has(k)).map((k) => itemSvg(items[k], k, true)).join("")}</svg>`;
+  const url = URL.createObjectURL(new Blob([svg], { type:"image/svg+xml" }));
+  try{
+    const im = new Image(); await new Promise((ok, no) => { im.onload = ok; im.onerror = no; im.src = url; });
+    const c = document.createElement("canvas"); c.width = cw; c.height = ch; c.getContext("2d").drawImage(im, 0, 0, cw, ch);
+    const blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = ((L && L.name) || "Layout").replace(/[\\/:*?"<>|]+/g, "-") + ".png";
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    H().toast(S.sel.length ? "Saved the selection as a PNG." : "Saved as a PNG.", "ok", 1800);
+  }catch(_e){ H().toast("Couldn't make the picture. A linked image may be blocking it.", "err", 3500); }
+  finally{ URL.revokeObjectURL(url); }
+}
 
 // ---------- selection actions ----------
 function delSel(){ if(!S.sel.length) return; const ch = {}; S.sel.forEach((id) => { ch[id] = null; }); S.sel = []; commit(ch); }
