@@ -377,6 +377,23 @@ async function loadShots(id, force){
   rerender();
 }
 
+// Shot times: a scene with shots in the shot list takes its time from them (shottime.js); an Est. typed on the breakdown
+// sheet still wins, and a scene with no shots keeps the breakdown's own Est. ⚠ This feeds every day's times, Sync and the
+// call sheets. Worked out each time from the breakdown and the shot list, never stored.
+function withShotTimes(bd, shotMap, plan){
+  const T = window.CampShotTime; if(!T || !bd || !Array.isArray(bd.scenes)) return bd;
+  const kids = {}; (bd.cast || []).forEach((c) => { if(c && c.minor) kids[c.name] = 1; });
+  const cfg = T.config(plan && plan.settings && plan.settings.shotTimes);
+  const scenes = bd.scenes.map((s) => {
+    const shots = (s.id && shotMap && shotMap[s.id]) || [];
+    const sc = { id: s.id, ie: s.ie, dn: s.dn, eighths: s.eighths, cast: s.cast || [], est: s.est, estAuto: s.estAuto !== false,
+      tags: T.sceneTags({ els: s.catEls || {}, bg: s.bg, minors: (s.cast || []).some((nm) => kids[nm]), env: s.env }) };
+    const r = T.sceneMinutes(sc, shots, cfg), res = r.shots || (shots.length ? T.sceneShots(sc, shots, cfg) : null);
+    return Object.assign({}, s, { estBd: s.est, est: r.min || s.est, estSrc: r.src, shotN: shots.length, shotRes: res });
+  });
+  return Object.assign({}, bd, { scenes });
+}
+
 /* ---------- saving (whole plan; the team sees it live) ---------- */
 let saveT = 0, pending = null;
 // Undo / redo for the plan (this device's own changes). Quick runs of edits (typing a time) count as one.
@@ -471,11 +488,12 @@ function draw(pid){
   const aopts = P.analyzeOpts(plan), akey = JSON.stringify(aopts);
   if(sc.doc && sc.akey !== akey){ sc.bd = B.analyze(sc.doc, aopts); sc.akey = akey; }
   // the Breakdown tab's element sheets shape each scene's cast and needs (see CampElements.enrich)
-  const bd = window.CampBdPanel && window.CampBdPanel.enriched ? window.CampBdPanel.enriched(pid, scriptId, p, sc.doc, sc.bd, sc.modified, aopts) : sc.bd;
-  const byId = P.sceneMap(bd); S.lastBd = bd; S.lastBdPid = pid;
+  const bdE = window.CampBdPanel && window.CampBdPanel.enriched ? window.CampBdPanel.enriched(pid, scriptId, p, sc.doc, sc.bd, sc.modified, aopts) : sc.bd;
   S.lastScriptId = scriptId;
   if(!S.shots[scriptId]) loadShots(scriptId);
   const shotMap = (S.shots[scriptId] && S.shots[scriptId].map) || {};
+  const bd = withShotTimes(bdE, shotMap, plan);   // scenes with shots take their time from them
+  const byId = P.sceneMap(bd); S.lastBd = bd; S.lastBdPid = pid;
 
   // No plan yet: one click starts it from the script
   if(!raw){
@@ -611,15 +629,16 @@ function draw(pid){
 
   // Shot list by shoot day: the storyboard's shots, in the order the scenes are shot
   const shSt = S.shots[scriptId] || {};
+  const shotMinOf = (id, k) => { const r = byId[id] && byId[id].shotRes, t = r && r.shots[k]; return t ? `<span title="${esc(t.complexity + " · setup " + t.setup + " + shooting " + t.shoot + " min (" + t.takes + " takes)")}">${t.min}</span>` : ""; };
   const shotRows = pl.days.map((d, i) => {
     const ds = P.dayShots(d, shotMap); if(!ds.scenes.length) return "";
-    return `<tr><td class="shotDay" colspan="7">Day ${i + 1}<span>${esc(fmtDate(dates[i]) || "no date")} · ${ds.total} shot${ds.total === 1 ? "" : "s"}</span></td></tr>` +
-      ds.scenes.map((x) => x.shots.length ? x.shots.map((sh) => `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td>${esc(sh.shot)}</td><td>${esc(sh.size)}</td><td>${esc(sh.angle)}</td><td>${esc(sh.move)}</td><td class="desc">${esc(sh.desc)}</td><td class="st${sh.status === "Shot" ? " shot" : sh.status === "Needs reshoot" ? " reshoot" : ""}">${esc(sh.status || "Not shot")}</td></tr>`).join("")
-        : `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td colspan="6" class="desc" style="color:var(--uiMuted)">No shots on the storyboard yet</td></tr>`).join("");
+    return `<tr><td class="shotDay" colspan="8">Day ${i + 1}<span>${esc(fmtDate(dates[i]) || "no date")} · ${ds.total} shot${ds.total === 1 ? "" : "s"}</span></td></tr>` +
+      ds.scenes.map((x) => x.shots.length ? x.shots.map((sh, k) => `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td>${esc(sh.shot)}</td><td>${esc(sh.size)}</td><td>${esc(sh.angle)}</td><td>${esc(sh.move)}</td><td class="desc">${esc(sh.desc)}</td><td>${shotMinOf(x.id, k)}</td><td class="st${sh.status === "Shot" ? " shot" : sh.status === "Needs reshoot" ? " reshoot" : ""}">${esc(sh.status || "Not shot")}</td></tr>`).join("")
+        : `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td colspan="7" class="desc" style="color:var(--uiMuted)">No shots on the storyboard yet</td></tr>`).join("");
   }).join("");
   const nShots = Object.keys(shotMap).reduce((a, k) => a + shotMap[k].length, 0);
   const shots = `<details class="dood fx" data-sec="shots"${lsGet(SHOTS_KEY) === "1" ? " open" : ""}><summary>Shot list by day · ${shSt.state === "loading" && !shotsOn ? "loading…" : nShots + " shot" + (nShots === 1 ? "" : "s")}${shSt.state === "error" ? " · couldn't refresh" : ""}</summary>
-    ${shotsOn ? `<div class="doodWrap"><table><tr><th>Sc</th><th>Shot</th><th>Size</th><th>Angle</th><th>Move</th><th>Description</th><th>Status</th></tr>${shotRows}</table></div>`
+    ${shotsOn ? `<div class="doodWrap"><table><tr><th>Sc</th><th>Shot</th><th>Size</th><th>Angle</th><th>Move</th><th>Description</th><th title="Estimated minutes: setup and shooting, rounded up to 10">Est.</th><th>Status</th></tr>${shotRows}</table></div>`
       : `<div class="shotNone">${shSt.state === "error" ? esc(shSt.err) : shSt.state === "loading" ? "Reading the storyboard…" : "No shots yet. Add them on the Storyboard tab and they appear here under their shoot day."}</div>`}
   </details>`;
 
@@ -709,7 +728,7 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbCast{ font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sbTm{ color:var(--uiMuted); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .sbTag, .sbStat{ flex:none; font-style:normal; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:5px; background:rgba(255,255,255,.12); color:#fff; white-space:nowrap; cursor:help; }
-.sbTag.rev{ background:rgba(241,199,107,.2); color:#f1c76b; } .sbTag.new{ background:rgba(143,227,166,.18); color:#8fe3a6; } .sbTag.warn{ background:rgba(255,139,131,.18); color:#ff8b83; }
+.sbTag.rev{ background:rgba(241,199,107,.2); color:#f1c76b; } .sbTag.sh{ background:rgba(127,182,255,.16); color:#a9cbff; text-transform:none; } .sbTag.new{ background:rgba(143,227,166,.18); color:#8fe3a6; } .sbTag.warn{ background:rgba(255,139,131,.18); color:#ff8b83; }
 .sbStat.s-shot{ background:#2f9e44; } .sbStat.s-partshot{ background:#f59f00; color:#111; } .sbStat.s-pickup{ background:#1c7ed6; } .sbStat.s-moved{ background:#868e96; } .sbStat.s-omitted{ background:#e03131; }
 .sbRow.st-shot, .sbRow.st-omitted{ opacity:.55; } .sbRow.st-omitted .sbPlace{ text-decoration:line-through; }
 .sbRow.sel{ background:color-mix(in srgb, var(--sc, #ddd) 24%, #262626); border-color:rgba(255,255,255,.4); border-left-color:var(--sc, #ddd); box-shadow:inset 0 0 0 1px rgba(255,255,255,.4); }
@@ -856,6 +875,7 @@ function sbView(c){
     const tags = (stat !== "Scheduled" ? `<em class="sbStat s-${stat.replace(/[^a-z]/gi, "").toLowerCase()}">${esc(stat)}</em>` : "")
       + (rv ? `<em class="sbTag rev"${tipAttr("Changed in the script since it was scheduled: " + revText(rv))}>Revised</em>` : "")
       + (isNew ? `<em class="sbTag new"${tipAttr("New in the script")}>New</em>` : "")
+      + (s.estSrc === "shots" ? `<em class="sbTag sh"${tipAttr("Time from the shot list: " + s.shotN + " shot" + (s.shotN === 1 ? "" : "s") + (s.shotRes && s.shotRes.prep ? " plus " + s.shotRes.prep + " min prep" : "") + " = " + fmtMins(s.est) + (s.estBd ? ". The breakdown's estimate was " + fmtMins(s.estBd) : ""))}>${s.shotN} shot${s.shotN === 1 ? "" : "s"}</em>` : "")
       + (kidNight ? `<em class="sbTag warn"${tipAttr("Night scene with a cast member under 18: check work-hour limits, permit and chaperone")}>⚠ Minor</em>` : "");
     return `<div class="${cls}" role="row" tabindex="0" data-sid="${esc(id)}" data-day="${day}" style="--sc:${stripColor(s)}" aria-selected="${sel.has(id)}" aria-label="${esc("Scene " + s.n + ", " + s.heading + ". Double-click for its breakdown sheet")}">
       ${canEdit ? `<span class="sbGrip"${tipAttr("Drag to move")} aria-hidden="true">⋮⋮</span>` : `<span class="sbGrip off"></span>`}
@@ -865,7 +885,7 @@ function sbView(c){
       <span class="sbDN">${esc(DN_SHORT[s.dn] || "")}</span>
       <span class="sbPg">${P.fmtEighths(s.eighths)}</span>
       <span class="sbCast"${tipAttr((s.cast || []).length ? (s.cast || []).map((nm) => (noOf[nm] ? noOf[nm] + ". " : "") + nm).join(", ") : "No cast")}>${ids.length ? ids.join(", ") : "—"}</span>
-      <span class="sbTm"${tipAttr(tr ? "Shoots about " + fmtTime(tr.shoot) + ", " + fmtMins(tr.est) + " of shooting" : "About " + fmtMins(P.estOf(s)) + " to shoot")}>${tr ? esc(fmtTime(tr.shoot)) : fmtMins(P.estOf(s))}</span>
+      <span class="sbTm"${tipAttr((tr ? "Shoots about " + fmtTime(tr.shoot) + ", " + fmtMins(tr.est) + " of shooting" : "About " + fmtMins(P.estOf(s)) + " to shoot") + (s.estSrc === "shots" ? " (from " + s.shotN + " shot" + (s.shotN === 1 ? "" : "s") + ")" : s.estSrc === "manual" ? " (Est. typed on the breakdown sheet)" : " (breakdown estimate)"))}>${tr ? esc(fmtTime(tr.shoot)) : fmtMins(P.estOf(s))}</span>
       ${canEdit ? `<button type="button" class="sbMore" data-sb="more" data-sid="${esc(id)}" data-day="${day}" aria-haspopup="listbox" aria-expanded="false" aria-label="Move or unschedule Sc ${s.n}">⋯</button>` : ""}
     </div>`;
   };
@@ -1658,7 +1678,11 @@ async function planBd(pid){
   const sc = S.scripts[scriptId]; if(!sc || !sc.doc) return null;
   const aopts = P.analyzeOpts(plan), akey = JSON.stringify(aopts);
   if(sc.akey !== akey){ sc.bd = B.analyze(sc.doc, aopts); sc.akey = akey; }
-  return window.CampBdPanel && window.CampBdPanel.enriched ? window.CampBdPanel.enriched(pid, scriptId, p, sc.doc, sc.bd, sc.modified, aopts) : sc.bd;
+  const bdE = window.CampBdPanel && window.CampBdPanel.enriched ? window.CampBdPanel.enriched(pid, scriptId, p, sc.doc, sc.bd, sc.modified, aopts) : sc.bd;
+  // Sync sends the same times the stripboard shows: wait (a few seconds at most) for the shot list
+  if(!S.shots[scriptId]) loadShots(scriptId);
+  for(let i = 0; i < 32 && S.shots[scriptId] && S.shots[scriptId].state === "loading"; i++) await new Promise((r) => setTimeout(r, 250));
+  return withShotTimes(bdE, (S.shots[scriptId] && S.shots[scriptId].map) || {}, plan);
 }
 // Each day's timetable plus everything the Schedule sheet lays out, for Sync. Waits (a few seconds at most) for forecasts.
 async function timetable(pid){

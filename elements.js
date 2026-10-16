@@ -842,7 +842,7 @@ function enrich(bd, model, store, opts) {
     // the sheet's own numbers travel with the scene: the plan's timetable uses Est. minutes; story day, BG count and notes go to the schedule
     let bgN = 0; (els.background || []).forEach(function (k) { bgN += (m.qty && m.qty[k]) || 0; });
     return Object.assign({}, s, { cast: cast, ocast: s.cast || [], flags: flags, needs: needs, specials: specials,
-      est: m.est, storyDay: m.day, syn: m.syn, note: m.note, dir: m.dir, bgN: bgN, castNo: (els.cast || []).map(function (k) { return model.elements[k].no; }).filter(Boolean).sort(function (a, b) { return a - b; }) });
+      est: m.est, estAuto: m.estAuto, catEls: els, env: Array.isArray(m.env) ? m.env.slice() : [], storyDay: m.day, syn: m.syn, note: m.note, dir: m.dir, bgN: bgN, castNo: (els.cast || []).map(function (k) { return model.elements[k].no; }).filter(Boolean).sort(function (a, b) { return a - b; }) });
   });
   return Object.assign({}, bd, { scenes: scenes, fromElements: true });
 }
