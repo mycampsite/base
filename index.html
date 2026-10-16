@@ -556,7 +556,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 // The person's sign-in token goes with every script-cloud request so the cloud can check the whitelist (same names as idtoken.js)
 let __campTok = "";
-window.campIdToken = async () => { try { const u = auth.currentUser; if (!u || u.isAnonymous) return ""; const t = await u.getIdToken(); if (t) __campTok = t; return __campTok; } catch (_e) { return __campTok; } };
+// Wait (up to 5s) for Firebase to finish restoring the saved sign-in: the script list starts loading before it has
+window.campIdToken = async () => { try { try { await Promise.race([auth.authStateReady(), new Promise(r => setTimeout(r, 5000))]); } catch (_e) {} const u = auth.currentUser; if (!u || u.isAnonymous) return ""; const t = await u.getIdToken(); if (t) __campTok = t; return __campTok; } catch (_e) { return __campTok; } };
 window.campIdTokenNow = () => __campTok;
 const tokObj = async () => { const t = await window.campIdToken(); return t ? { idToken: t } : {}; };
 const db = getDatabase(app);
@@ -968,6 +969,7 @@ function toolHref(page, fileId, pid) {
 // ---------- auth ----------
 onAuthStateChanged(auth, async user => {
   authReadyResolve(user);
+  if (user && !user.isAnonymous && RIP.state === "locked") { RIP.state = "idle"; loadCamp(); }   // the list was refused before sign-in finished: try again now
   $("gateLoading").classList.add("hidden");
   if (!user) {
     try { localStorage.removeItem(SESSION_KEY); } catch (_e) {}
