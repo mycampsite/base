@@ -495,10 +495,10 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 </script>
 
 <script src="breakdown.js" defer></script>
-<script src="production.js?v=3" defer></script>
+<script src="production.js?v=4" defer></script>
 <script src="elements.js?v=3" defer></script>
-<script src="prodpanel.js?v=5" defer></script>
-<script src="bdpanel.js?v=12" defer></script>
+<script src="prodpanel.js?v=6" defer></script>
+<script src="bdpanel.js?v=13" defer></script>
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=2" defer></script>
 <script type="module">
@@ -1210,6 +1210,8 @@ function wireList(pane) {
 }
 // A strip on the Stripboard opens that scene's sheet on the Breakdown tab
 window.addEventListener("camp:open-breakdown", () => { current.tab = "breakdown"; current.key = "@bd"; rememberKey("@bd"); saveLast(true); renderBody(); });
+// The Breakdown's "Show on Stripboard": the Schedule tab's Stripboard with that scene selected and in view
+window.addEventListener("camp:open-strip", e => { current.tab = "schedule"; current.key = "@plan"; rememberKey("@plan"); saveLast(true); renderBody(); try { if (window.CampProdPanel && window.CampProdPanel.focusScene) window.CampProdPanel.focusScene(current.pid, e.detail && e.detail.id); } catch (err) { console.error(err); } });
 document.querySelectorAll(".mtab").forEach(t => t.addEventListener("click", () => { current.tab = t.dataset.tab; if (isProdTab(current.tab)) pickKey(); saveLast(true); renderBody(); }));
 
 // Tabs show the kind of sheet, not the film's title ("Film - Budget" -> "Budget"; the crew sheet is the Directory)

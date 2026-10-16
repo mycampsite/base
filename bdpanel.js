@@ -178,6 +178,7 @@ const css = `
 #bdctl .shText.pulse{ animation:bdTxtPulse 1.2s ease-out; }
 @keyframes bdTxtPulse{ 0%{ box-shadow:0 0 0 3px rgba(127,182,255,.8); } 100%{ box-shadow:0 0 0 0 rgba(127,182,255,0); } }
 #bdctl .hiChip{ border:1px solid rgba(127,182,255,.5); background:rgba(127,182,255,.14); color:#cfe0ff; border-radius:999px; padding:2px 10px; font:inherit; font-size:11.5px; cursor:pointer; }
+#bdctl .shBar .toStrip.back{ border-color:rgba(127,182,255,.6); color:#cfe0ff; }
 #bdReset .bdResetBox{ width:min(480px,100%); }
 #bdReset .fl{ font-size:12.5px; color:rgba(255,255,255,.62); margin-bottom:4px; }
 #bdReset .bdRScope{ border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:4px; }
@@ -676,6 +677,7 @@ function sheetsView(b, can){
   const bar = `<div class="shBar">
       <button class="btn sm" type="button" data-a="pick" data-n="${pv}" aria-label="Previous scene" title="Previous scene (K)"${pv ? "" : " disabled"}>←</button>${jump}<button class="btn sm" type="button" data-a="pick" data-n="${nx}" aria-label="Next scene" title="Next scene (J)"${nx ? "" : " disabled"}>→</button>
       <span class="pos">${s.n} / ${b.scenes.length}</span>
+      ${s.id && !S.lock ? `<button class="btn sm toStrip${S.fromStrip === s.id ? " back" : ""}" type="button" data-a="tostrip" data-sid="${esc(s.id)}" title="Show this scene on the Stripboard (selected, so you can move it)">${S.fromStrip === s.id ? "← Back to Stripboard" : "Show on Stripboard"}</button>` : ""}
       <span class="sp"></span>
       <label class="tgl"><input type="checkbox" id="bdShowText"${S.showText ? " checked" : ""}> Scene text</label>
       <label class="tgl"><input type="checkbox" id="bdShowEmpty"${S.showEmpty ? " checked" : ""}> Show empty categories</label>
@@ -1102,6 +1104,7 @@ function wire(box, pid){
     if(k === "opentext"){ showInText(a.dataset.sk, Number(a.dataset.n) || 0, a.dataset.k); return; }
     if((k === "pick" || k === "goto") && !Number(a.dataset.n)) return;
     if(k === "clearhi"){ S.hiEl = null; rerender(); return; }
+    if(k === "tostrip"){ const id = a.dataset.sid; S.fromStrip = null; try{ window.dispatchEvent(new CustomEvent("camp:open-strip", { detail: { id } })); }catch(_e){} return; }
     if(k === "pick" || k === "goto"){ S.hiEl = null; const was = S.view; S.qQuote = ""; S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; if(S.lock){ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); return; } rerender(); if(was !== S.view) navStep(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
     if(k === "csv"){ const m = model(); if(m) download(((hub.scriptTitle(sid) || "breakdown") + " - breakdown.csv").replace(/[\\/:*?"<>|]/g, "-"), E.csv(m)); return; }
@@ -1305,6 +1308,6 @@ function navStep(){ try { window.dispatchEvent(new CustomEvent("camp:bd-nav")); 
 function getView(){ return S.view === "strips" ? "sheets" : S.view; }
 function setView(v){ if(!["sheets", "elements", "reports"].includes(v) || v === getView()) return; S.view = v; lsSet(VIEW_KEY, v); S.edit = null; S.adding = null; rerender(); }
 // The Stripboard's "Breakdown sheet" button: open one scene's sheet on the Breakdown tab
-function openScene(n){ if(!Number(n)) return; S.sel = Number(n); S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; S.edit = null; try{ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); }catch(_e){} }
+function openScene(n, fromId){ if(!Number(n)) return; S.fromStrip = fromId || null; S.sel = Number(n); S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; S.edit = null; try{ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); }catch(_e){} }
 window.CampBdPanel = { enriched, payload, render: (pid) => { S.pid = pid; if(S.on) render(pid); }, setMode, getView, setView, openScene, reloadScript: (id) => loadScript(id, true) };
 })();

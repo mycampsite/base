@@ -171,6 +171,19 @@ let BASE = "";
     await expect(p, () => ((__CampHub.project().production.days[0].extras) || []).length === 1 && /Camera reset/.test(document.querySelector('.sbDayWrap[data-day="0"]').innerText), "the break on Day 1");
     // every strip is the same height, with or without a description
     await expect(p, () => new Set(Array.from(document.querySelectorAll(".sbRow")).map((r) => Math.round(r.getBoundingClientRect().height))).size === 1, "strips all one height");
+    // the meal: change its length, take it off the day, put it back
+    await p.evaluate(() => { const pr = __CampHub.project().production, ids = doc.lines.filter((l) => l.type === "scene").map((l) => l.id); pr.days[0].scenes = ids.slice(0, 3); pr.days[0].extras = []; delete pr.days[0].lunch; pr.settings.times = { mealBy: 30 }; CampProdPanel.render("p1"); });
+    await p.waitForTimeout(500);
+    await p.click('.sbDayWrap[data-day="0"] [data-sb=meal]'); await p.waitForTimeout(200);
+    await p.fill('.sbXForm.meal [data-mf=min]', "45"); await p.click('.sbXForm.meal [data-sb=mealsave]'); await p.waitForTimeout(500);
+    await expect(p, () => __CampHub.project().production.days[0].mealMin === 45, "a 45-minute meal");
+    await p.click('.sbDayWrap[data-day="0"] [data-sb=meal]'); await p.waitForTimeout(200); await p.click('.sbXForm.meal [data-sb=mealdel]'); await p.waitForTimeout(500);
+    await expect(p, () => __CampHub.project().production.days[0].noMeal === true && !!document.querySelector('[data-sb=mealback]'), "no meal on Day 1, with a way to put it back");
+    await p.click('[data-sb=mealback]'); await p.waitForTimeout(500);
+    await expect(p, () => !__CampHub.project().production.days[0].noMeal && !!document.querySelector('.sbDayWrap[data-day="0"] [data-sb=meal]'), "the meal back");
+    // from the Breakdown: show a scene on the Stripboard, selected
+    await p.evaluate(() => CampProdPanel.focusScene("p1", doc.lines.filter((l) => l.type === "scene")[1].id)); await p.waitForTimeout(400);
+    await expect(p, () => { const r = document.querySelector(".sbRow.sel"); return r && r.dataset.sid === doc.lines.filter((l) => l.type === "scene")[1].id; }, "the scene selected on the Stripboard");
     await p.hover(".sbTot .cap"); await p.waitForTimeout(150);
     await expect(p, () => { const t = document.getElementById("sbTip"); return t && t.classList.contains("show") && t.textContent.length > 5; }, "a tooltip on hover");
   });

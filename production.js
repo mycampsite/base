@@ -116,7 +116,10 @@ function normalize(plan){
   if(s.times && typeof s.times === "object"){ const t = {}; Object.keys(TIME_DEFAULTS).forEach((k) => { const v = Number(s.times[k]); if(s.times[k] !== "" && s.times[k] != null && isFinite(v) && v >= 0 && v <= 1440) t[k] = Math.round(v); }); if(Object.keys(t).length) settings.times = t; }
   const w = cleanWhere(s.where); if(w) settings.where = w;
   const arr = (v) => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).sort((a, b) => a - b).map((k) => v[k]) : []);
-  let days = arr(plan.days).map((d) => { const o = { id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }; const w = cleanWhere(d && d.where); if(w) o.where = w; const hm = (v) => /^\d{2}:\d{2}$/.test(String(v || "")) ? String(v) : ""; if(hm(d && d.lunch)) o.lunch = d.lunch; if(hm(d && d.wrapAt)) o.wrapAt = d.wrapAt; const x = cleanExtras(d && d.extras); if(x.length) o.extras = x; return o; });
+  let days = arr(plan.days).map((d) => { const o = { id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }; const w = cleanWhere(d && d.where); if(w) o.where = w; const hm = (v) => /^\d{2}:\d{2}$/.test(String(v || "")) ? String(v) : ""; if(hm(d && d.lunch)) o.lunch = d.lunch; if(hm(d && d.wrapAt)) o.wrapAt = d.wrapAt; const x = cleanExtras(d && d.extras); if(x.length) o.extras = x;
+    // the day's meal: its own length, or none at all
+    if(d && d.noMeal === true) o.noMeal = true; else if(d && d.mealMin != null && d.mealMin !== "" && isFinite(Number(d.mealMin))) o.mealMin = clampInt(d.mealMin, 5, 240, 30);
+    return o; });
   // the day count setting is the truth: pad with empty days. More stored days than the setting
   // (an older save) are kept and the count follows them, so no scheduled scene is ever lost.
   while(days.length < settings.days) days.push({ id: uid(), scenes: [], call: "", note: "", date: "" });
@@ -491,6 +494,8 @@ function dayTimes(day, byId, settings){
   const rows = []; let t = call, est = 0, meal = null, prevLoc = "", lateMeal = false;
   const lunchAt = toMin(day && day.lunch);   // a lunch time set by hand: the meal goes in at the scene break nearest it
   let handMove = false;   // a company move added by hand right before this scene replaces the automatic one
+  // this day's meal length (its own, the shoot's, or none)
+  T.meal = day && day.noMeal ? 0 : (day && day.mealMin > 0 ? day.mealMin : T.meal);
   const extra = (x) => { rows.push({ type: "extra", id: x.id, k: x.k, label: x.label, min: x.min, start: toHM(t), end: toHM(t + x.min) }); t += x.min; if(x.k === "move") handMove = true; };
   extrasAfter(day, "").forEach(extra);
   sc.forEach((s, i) => {

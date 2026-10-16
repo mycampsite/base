@@ -743,6 +743,8 @@ body.sbDragging, body.sbDragging *{ cursor:grabbing !important; user-select:none
 .sbXForm input{ height:30px; border-radius:7px; border:1px solid var(--uiBorder); background:#171717; color:var(--uiText); font:inherit; font-size:12.5px; padding:0 8px; }
 .sbXForm input[type=number]{ width:80px; }
 .sbXBtns{ grid-column:1 / -1; display:flex; gap:8px; }
+.sbXHint{ grid-column:span 2; color:var(--uiMuted); font-size:11px; align-self:center; }
+.sbBan.meal.off{ background:none; border-style:dotted; opacity:.75; }
 .sbAddX{ font-size:12px; }
 /* the dropdown button (the real <select> stays hidden behind it) and its list, which always opens downwards */
 .sbNative{ position:absolute !important; opacity:0 !important; pointer-events:none !important; width:1px !important; height:1px !important; overflow:hidden; }
@@ -839,7 +841,7 @@ function sbView(c){
       + (rv ? `<em class="sbTag rev"${tipAttr("Changed in the script since it was scheduled: " + revText(rv))}>Revised</em>` : "")
       + (isNew ? `<em class="sbTag new"${tipAttr("New in the script")}>New</em>` : "")
       + (kidNight ? `<em class="sbTag warn"${tipAttr("Night scene with a cast member under 18: check work-hour limits, permit and chaperone")}>⚠ Minor</em>` : "");
-    return `<div class="${cls}" role="row" tabindex="0" data-sid="${esc(id)}" data-day="${day}" style="--sc:${stripColor(s)}" aria-selected="${sel.has(id)}" aria-label="${esc("Scene " + s.n + ", " + s.heading)}">
+    return `<div class="${cls}" role="row" tabindex="0" data-sid="${esc(id)}" data-day="${day}" style="--sc:${stripColor(s)}" aria-selected="${sel.has(id)}" aria-label="${esc("Scene " + s.n + ", " + s.heading + ". Double-click for its breakdown sheet")}">
       ${canEdit ? `<span class="sbGrip"${tipAttr("Drag to move")} aria-hidden="true">⋮⋮</span>` : `<span class="sbGrip off"></span>`}
       <span class="sbNo">${s.n}</span>
       <span class="sbIE">${esc(IE_SHORT(s.ie))}</span>
@@ -859,7 +861,7 @@ function sbView(c){
     const w = P.whereOf(pl, i), sun = sunFor(w, dates[i]), wx = weatherFor(w, dates[i]), dw = warns.filter((y) => y.day === i + 1), bad = dw.some((y) => y.level === "warn");
     const rows = tt.rows.map((r) => r.type === "scene" ? strip(r.id, r, i)
       : r.type === "extra" ? (SB.xform && SB.xform.day === i && SB.xform.id === r.id ? xForm(i, d, r) : `<button type="button" class="sbBan x-${r.k}" data-sb="xedit" data-day="${i}" data-id="${esc(r.id)}"${canEdit ? "" : " disabled"}${tipAttr((r.k === "note" ? "Note" : r.k === "move" ? "Company move" : "Break") + " added by hand" + (r.min ? ": " + fmtTime(r.start) + " – " + fmtTime(r.end) : "") + (canEdit ? ". Click to change or remove" : ""))}>${r.k === "note" ? "Note · " : r.k === "move" ? "Company move · " : "Break · "}${esc(r.label || (r.k === "move" ? "Travel" : r.k === "break" ? "Break" : ""))}${r.min ? " · " + esc(fmtTime(r.start)) + " – " + esc(fmtTime(r.end)) : ""}</button>`)
-      : r.type === "meal" ? `<div class="sbBan meal${r.late ? " late" : ""}"${tipAttr(r.late ? "More than six hours after call: a meal penalty may apply" : "Meal break")}>Meal · ${esc(fmtTime(r.start))} – ${esc(fmtTime(r.end))}</div>`
+      : r.type === "meal" ? (SB.mform === i ? mealForm(i, d, r, st) : `<button type="button" class="sbBan meal${r.late ? " late" : ""}" data-sb="meal" data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr((r.late ? "More than six hours after call: a meal penalty may apply. " : "") + (d.lunch ? "Meal set to " + fmtTime(d.lunch) : "Placed automatically") + (canEdit ? ". Click to change its time or length, or remove it" : ""))}>Meal · ${esc(fmtTime(r.start))} – ${esc(fmtTime(r.end))}${d.lunch ? "" : " · auto"}</button>`)
       : `<div class="sbBan move"${tipAttr("Company move: " + r.from + " → " + r.to)}>Company move to ${esc(r.to)} · ${r.min} min</div>`).join("");
     return offBefore(i) + `<section class="sbDayWrap${x.over ? " over" : ""}${folded ? " folded" : ""}" data-day="${i}">
       <div class="sbDay">
@@ -876,14 +878,14 @@ function sbView(c){
         </div>
         <div class="sbDayB">
           <label class="sbT">Call${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}</label>
-          <label class="sbT"${tipAttr("Auto lets Camp place the lunch break")}>Lunch${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis)}</label>
+          <label class="sbT"${tipAttr("Auto lets Camp place the meal break. No meal takes it off this day")}>Lunch${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis).replace('<option value=""', '<option value="none"' + (d.noMeal ? " selected" : "") + '>No meal</option><option value=""').replace(d.noMeal ? '<option value="" selected>' : '\u0000', '<option value="">')}</label>
           <label class="sbT"${tipAttr("Auto lets Camp work out the wrap")}>Wrap${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</label>
           ${canEdit ? `<button type="button" class="btn sm sbAddX" data-sb="xnew" data-day="${i}"${tipAttr("Add a break, a company move or a note to this day")}>＋ Break / move</button>` : ""}
           ${canEdit && d.scenes.length > 1 ? `<label class="sbT">Sort<select class="sbSort" data-sbsort="${i}" aria-label="Sort Day ${i + 1}"><option value="">…</option><option value="loc">By location</option><option value="dn">Day → night</option><option value="n">Scene number</option></select></label>` : ""}
           ${needsRow(x.needs)}
         </div>
       </div>
-      <div class="sbRows" data-day="${i}">${folded ? "" : (d.scenes.length || (d.extras || []).length ? rows : `<div class="sbEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`) + (SB.xform && SB.xform.day === i && !SB.xform.id ? xForm(i, d, null) : "")}</div>
+      <div class="sbRows" data-day="${i}">${!folded && d.noMeal && d.scenes.length ? `<button type="button" class="sbBan meal off" data-sb="mealback" data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr("This day has no meal break. Click to put it back")}>No meal break · put it back</button>` : ""}${folded ? "" : (d.scenes.length || (d.extras || []).length ? rows : `<div class="sbEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`) + (SB.xform && SB.xform.day === i && !SB.xform.id ? xForm(i, d, null) : "")}</div>
       <div class="sbEnd"><b>End of Day ${i + 1}</b><span>${dates[i] ? esc(fmtDate(dates[i])) + " · " : ""}${P.fmtEighths(x.eighths)} pg · ${x.scenes} scene${x.scenes === 1 ? "" : "s"}${tt.wrap ? " · wrap " + (tt.wrapManual ? "" : "~") + esc(fmtTime(tt.wrap)) : ""}</span>${x.over ? `<span class="over">Over the page limit</span>` : ""}</div>
     </section>`;
   }).join("");
@@ -913,6 +915,31 @@ function sbView(c){
   const filt = SB.q || SB.ie || SB.dn || SB.cast;
   return secTabs + tools + selBar + `<div class="sbBoard${SB.hi ? " hiOn" : ""}" role="grid" aria-label="Stripboard">${colHead}${days}${bone}</div>`
     + (filt ? `<div class="sbFiltNote">${hidden} strip${hidden === 1 ? "" : "s"} hidden by the filters. <button type="button" class="btn sm" data-sb="unfilter">Show all</button></div>` : "");
+}
+// The meal's own form: when (Auto or a time), how long, or no meal at all this day
+function mealForm(i, d, r, st){
+  const T = P.timeSettings(st), len = d.mealMin > 0 ? d.mealMin : T.meal;
+  return `<div class="sbXForm meal" data-day="${i}">
+    <label>Starts${autoTimeSelect(d.lunch || "", 'data-mf="at"', "")}</label>
+    <label>Minutes<input type="number" min="5" max="240" step="5" data-mf="min" value="${len}"></label>
+    <span class="sbXHint">Auto places it before the scene that would run past ${Math.round(T.mealBy / 60 * 10) / 10} hours from call. Length ${T.meal} min unless set here.</span>
+    <span class="sbXBtns"><button type="button" class="btn sm danger" data-sb="mealdel">No meal this day</button><span class="sbSp"></span><button type="button" class="btn sm" data-sb="mealcancel">Cancel</button><button type="button" class="btn sm primary" data-sb="mealsave">Save</button></span>
+  </div>`;
+}
+function mealSave(pid, mode){
+  const i = SB.mform; if(i == null) return;
+  const box = document.querySelector('#ctl .sbXForm.meal[data-day="' + i + '"]'), val = (k) => { const el = box && box.querySelector('[data-mf="' + k + '"]'); return el ? el.value : ""; };
+  const plan = planOf(pid), d = plan.days[i]; SB.mform = null; if(!d){ rerender(); return; }
+  if(mode === "del"){ d.noMeal = true; delete d.lunch; delete d.mealMin; }
+  else if(mode === "back"){ delete d.noMeal; }
+  else{
+    delete d.noMeal;
+    const at = val("at"); if(at) d.lunch = at; else delete d.lunch;
+    const T = P.timeSettings(plan.settings), m = Math.round(Number(val("min")) || 0);
+    if(m && m !== T.meal) d.mealMin = Math.max(5, Math.min(240, m)); else delete d.mealMin;
+  }
+  save(pid, plan); rerender();
+  H().toast(mode === "del" ? "Day " + (i + 1) + " has no meal break now. Undo puts it back." : mode === "back" ? "Meal break back on Day " + (i + 1) + "." : "Meal updated.", "ok", 1800);
 }
 // The form for a break, company move or note added by hand (new, or editing one)
 function xForm(i, d, r){
@@ -980,11 +1007,15 @@ function sbClick(e, pid, canEdit){
     if(k === "clear"){ sbSetSel([], null); render(pid); return true; }
     if(k === "unfilter"){ SB.q = ""; SB.ie = ""; SB.dn = ""; SB.cast = ""; render(pid); return true; }
     if(k === "print"){ sbPrint(); return true; }
+    if(k === "meal"){ if(!canEdit) return true; SB.mform = Number(a.dataset.day); SB.xform = null; render(pid); return true; }
+    if(k === "mealcancel"){ SB.mform = null; render(pid); return true; }
+    if(k === "mealsave" || k === "mealdel"){ if(canEdit) mealSave(pid, k === "mealdel" ? "del" : "save"); return true; }
+    if(k === "mealback"){ if(canEdit){ SB.mform = Number(a.dataset.day); mealSave(pid, "back"); } return true; }
     if(k === "xnew"){ SB.xform = { day: Number(a.dataset.day), id: "" }; if(SB.fold[pid]) SB.fold[pid][a.dataset.day] = false; render(pid); return true; }
     if(k === "xedit"){ if(!canEdit) return true; SB.xform = { day: Number(a.dataset.day), id: a.dataset.id }; render(pid); return true; }
     if(k === "xcancel"){ SB.xform = null; render(pid); return true; }
     if(k === "xsave" || k === "xdel"){ if(canEdit) xSave(pid, k === "xdel"); return true; }
-    if(k === "openbd"){ try{ if(window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(Number(a.dataset.n)); }catch(_e){} return true; }
+    if(k === "openbd"){ try{ if(window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(Number(a.dataset.n), SB.sel[0] || null); }catch(_e){} return true; }
     return true;
   }
   const row = e.target.closest(".sbRow");
@@ -996,6 +1027,7 @@ function sbClick(e, pid, canEdit){
 }
 function sbChange(e, pid, canEdit){
   const t = e.target;
+  if(t.dataset.mf) return true;   // the meal form saves on Save
   if(t.dataset.xf){ if(t.dataset.xf === "k"){ const m = t.closest(".sbXForm").querySelector('[data-xf="min"]'); if(m){ m.disabled = t.value === "note"; if(t.value === "note") m.value = 0; else if(!Number(m.value)) m.value = t.value === "move" ? 30 : 15; } } return true; }
   if(t.dataset.sbf){ const k = t.dataset.sbf; if(k === "bone"){ SB.bone = t.value; sbPrefs(); } else SB[k] = t.value; render(pid); return true; }
   if(!canEdit) return false;
@@ -1137,12 +1169,13 @@ function sbEnhanceSelects(box){
 }
 function sbWire(box, pid, canEdit){
   sbMenuClose(); sbEnhanceSelects(box);
+  if(SB.focus){ const el = box.querySelector('.sbRow[data-sid="' + CSS.escape(SB.focus) + '"]'); if(el){ SB.focus = null; setTimeout(() => { el.scrollIntoView({ block: "center" }); el.focus({ preventScroll: true }); }, 30); } }
   const q = box.querySelector("[data-sbq]");
   if(q){ q.oninput = () => { SB.q = q.value; const f = { q: SB.q, ie: SB.ie, dn: SB.dn, cast: SB.cast }, by = S.lastBd ? P.sceneMap(S.lastBd) : {};
     box.querySelectorAll(".sbRow").forEach((r) => r.classList.toggle("sbHide", !P.stripMatch(by[r.dataset.sid], f))); };
     q.onkeydown = (e) => { e.stopPropagation(); if(e.key === "Escape"){ q.value = ""; q.oninput(); } };
     q.onblur = () => { if(SB.q !== (q.dataset.was || "")) rerender(); }; q.dataset.was = SB.q; }
-  box.ondblclick = (e) => { const row = e.target.closest(".sbRow"); if(!row) return; const s = S.lastBd && P.sceneMap(S.lastBd)[row.dataset.sid]; if(s && window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(s.n); };
+  box.ondblclick = (e) => { const row = e.target.closest(".sbRow"); if(!row) return; const s = S.lastBd && P.sceneMap(S.lastBd)[row.dataset.sid]; if(s && window.CampBdPanel && window.CampBdPanel.openScene) window.CampBdPanel.openScene(s.n, s.id); };
   box.ondragstart = (e) => { if(e.target.closest && e.target.closest(".sbRow")) e.preventDefault(); };
   if(!canEdit){ box.onpointerdown = null; return; }
   box.onpointerdown = (e) => {
@@ -1393,7 +1426,7 @@ function wire(box, pid, ctx){
       return;
     }
     if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }
-    if(t.dataset.lunch != null){ update((plan) => { const d = plan.days[Number(t.dataset.lunch)]; if(d){ if(t.value) d.lunch = t.value; else delete d.lunch; } }); return; }
+    if(t.dataset.lunch != null){ update((plan) => { const d = plan.days[Number(t.dataset.lunch)]; if(d){ if(t.value === "none"){ d.noMeal = true; delete d.lunch; } else { delete d.noMeal; if(t.value) d.lunch = t.value; else delete d.lunch; } } }); return; }
     if(t.dataset.wrapat != null){ update((plan) => { const d = plan.days[Number(t.dataset.wrapat)]; if(d){ if(t.value) d.wrapAt = t.value; else delete d.wrapAt; } }); return; }
     if(t.dataset.call != null){ update((plan) => { const d = plan.days[Number(t.dataset.call)]; if(d) d.call = t.value === plan.settings.call ? "" : t.value; }); return; }
     if(t.dataset.status != null){ const id = t.dataset.status, v = t.value; update((plan) => { P.setStatus(plan, id, v); }); H().toast("Sc " + ((ctx.bd && P.sceneMap(ctx.bd)[id] || {}).n || "") + ": " + v, "ok", 1400); return; }
@@ -1553,5 +1586,14 @@ async function timetable(pid){
     });
   }catch(_e){ return null; }
 }
-window.CampProdPanel = { syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, timetable, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
+function focusScene(pid, id){
+  if(!id) return;
+  const plan = planOf(pid), di = plan.days.findIndex((d) => d.scenes.indexOf(id) >= 0);
+  SB.sec = "strips"; SB.q = ""; SB.ie = ""; SB.dn = ""; SB.cast = "";
+  if(di >= 0 && SB.fold[pid]) SB.fold[pid][di] = false;
+  SB.pid = pid; SB.sel = [id]; SB.anchor = id; SB.focus = id; SB.landed = [id];
+  clearTimeout(focusScene.t); focusScene.t = setTimeout(() => { SB.landed = []; rerender(); }, 1400);
+  rerender();
+}
+window.CampProdPanel = { focusScene, syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, timetable, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
 })();

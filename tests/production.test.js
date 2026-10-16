@@ -341,5 +341,16 @@ test("breaks, moves and notes added by hand go in the day's timetable", () => {
   assert.strictEqual(n.days[0].extras.length, 1); assert.strictEqual(n.days[0].extras[0].min, 600); assert.strictEqual(n.days[0].extras[0].label.length, 60);
 });
 
+
+test("a day's meal can be moved, made longer or removed", () => {
+  const byId = {}; const ids = []; for(let i = 1; i <= 8; i++){ byId["s" + i] = { id: "s" + i, n: i, loc: "HOUSE", eighths: 8 }; ids.push("s" + i); }
+  const meals = (d) => P.dayTimes(Object.assign({ scenes: ids }, d), byId, { call: "07:00" }).rows.filter((r) => r.type === "meal");
+  assert.strictEqual(meals({}).length, 1);
+  assert.strictEqual(meals({ noMeal: true }).length, 0);
+  assert.strictEqual(meals({ mealMin: 60 })[0].min, 60);
+  const n = P.normalize({ days: [{ scenes: [], noMeal: true }, { scenes: [], mealMin: 999 }, { scenes: [] }] });
+  assert.strictEqual(n.days[0].noMeal, true); assert.strictEqual(n.days[1].mealMin, 240); assert.strictEqual(n.days[2].mealMin, undefined);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
