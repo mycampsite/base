@@ -152,6 +152,8 @@ const css = `
 ::highlight(bdpick){ background:rgba(127,182,255,.45); color:inherit; }
 #bdctl .stBody mark{ background:color-mix(in srgb, var(--cc) 30%, transparent); color:inherit; border-radius:3px; padding:0 1px; box-shadow:inset 0 -2px 0 var(--cc); }
 #bdctl .stBody mark{ cursor:help; }
+#bdctl .stBody mark.flash{ animation:bdFlash 2s ease-out; }
+@keyframes bdFlash{ 0%,30%{ outline:2px solid var(--cc); outline-offset:2px; background:color-mix(in srgb, var(--cc) 70%, transparent); } 100%{ outline-color:transparent; } }
 #bdctl .stBody mark.multi{ outline:1px dashed color-mix(in srgb, var(--cc) 70%, transparent); outline-offset:1px; }
 #bdctl .stBody mark.multi::after{ content:attr(data-n); font-size:9px; font-weight:700; vertical-align:super; line-height:0; margin-left:1px; padding:0 3px; border-radius:6px; background:#2a2a2a; color:#ececf0; }
 #bdctl .qRemPick{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:6px 0 2px; font-size:12px; color:var(--uiMuted,#9a9aa0); }
@@ -521,6 +523,7 @@ function render(pid){
   const on = l2 && l2.querySelector(".bdSc.on");
   if(on){ const a = on.offsetTop - l2.offsetTop, z = a + on.offsetHeight; if(a < l2.scrollTop) l2.scrollTop = a - 6; else if(z > l2.scrollTop + l2.clientHeight) l2.scrollTop = z - l2.clientHeight + 6; }
   pickPaint();
+  focusMention(box);
 }
 function head(chips, acts){ return `<div class="bdTop"><span class="bdTitle hid">${S.lock === "strips" ? "Stripboard" : "Breakdown"}</span><div class="bdChips">${chips || ""}</div>${acts || ""}</div>`; }
 
@@ -616,7 +619,7 @@ function sheetsView(b, can){
       const e = b.elements[k], tip = (e.auto ? "Found in the script: " + e.why.join(", ") : "Added by hand") + (e.scenes.length > 1 ? " · in scenes " + e.scenes.join(", ") : "");
       return `<tr class="${e.manual && !e.auto ? "man" : ""}" title="${esc(tip)}">
         <td class="c-no">${isCast && e.no ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}</td>
-        <td class="c-nm"><b data-a="edit" data-k="${esc(k)}">${esc(e.name)}</b><button type="button" class="goText" data-a="opentext" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in the script" title="Show in the script: opens the script at the first mention in this scene">↗</button></td>
+        <td class="c-nm"><b data-a="edit" data-k="${esc(k)}">${esc(e.name)}</b><button type="button" class="goText" data-a="opentext" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in the scene text" title="Show in the scene text">↗</button></td>
         <td class="c-q">${s.qty && s.qty[k] ? s.qty[k] : isCast ? "" : "1"}</td>
         <td class="c-nt">${e.note ? esc(e.note) : `<span class="mu">—</span>`}</td>
         <td class="c-sc" title="${e.scenes.length} scene${e.scenes.length === 1 ? "" : "s"}">${e.scenes.length > 1 ? e.scenes.length : ""}</td>
@@ -736,7 +739,7 @@ function sceneText(b, s){
       nds.forEach((nd) => { const c = E.CAT[nd.c]; if(cols.indexOf(c.color) < 0) cols.push(c.color); });
       const shadow = cols.map((c, i) => i ? `0 ${3 * i}px 0 ${c}` : `inset 0 -2px 0 ${c}`).join(",");   // the first underline stays put; each extra colour adds one below it
       const tags = JSON.stringify(nds.map((nd) => [E.CAT[nd.c].color, nd.name, E.CAT[nd.c].label]));
-      h += esc(txt.slice(at, p.a)) + `<mark class="${nds.length > 1 ? "multi" : ""}" style="--cc:${cols[0]};box-shadow:${shadow}" data-tags="${esc(tags)}"${nds.length > 1 ? ` data-n="${nds.length}"` : ""} aria-label="${esc(nds.map((nd) => nd.name + ", " + E.CAT[nd.c].label).join("; "))}">${esc(txt.slice(p.a, p.z))}</mark>`; at = p.z;
+      h += esc(txt.slice(at, p.a)) + `<mark class="${nds.length > 1 ? "multi" : ""}" style="--cc:${cols[0]};box-shadow:${shadow}" data-tags="${esc(tags)}" data-keys="${esc(JSON.stringify(nds.map((nd) => nd.k)))}"${nds.length > 1 ? ` data-n="${nds.length}"` : ""} aria-label="${esc(nds.map((nd) => nd.name + ", " + E.CAT[nd.c].label).join("; "))}">${esc(txt.slice(p.a, p.z))}</mark>`; at = p.z;
     });
     return h + esc(txt.slice(at));
   };
@@ -751,20 +754,30 @@ function sceneText(b, s){
   const can = H().canEdit(H().project(S.pid));
   return `<div class="shText" aria-label="Scene text"><div class="stHd"><span>Scene text</span>${can ? `<small>Select words to add them below</small>` : ""}</div><div class="stBody">${html}</div></div>`;
 }
-// Open the script itself at an element's first mention in a scene: the editor scrolls to that line and selects the words.
-// Falls back to the scene heading when the words can't be found (an element tagged by hand without any quote).
-function openInScript(sk, n, k){
-  const m = S.model, sc = m && m.scenes.find((x) => (sk ? x.key === sk : x.n === n)); if(!sc || !S.sid) return;
-  const doc = S.scripts[S.sid] && S.scripts[S.sid].doc, lines = sceneLines(doc, sc), needles = ((sc.hits && sc.hits[k]) || []).filter(Boolean);
-  let target = null;
-  for(const l of lines){
-    const texts = l.type === "dual" && l.dual ? [l.dual.left && runsText(l.dual.left.characterRuns), l.dual.left && runsText(l.dual.left.dialogueRuns), l.dual.right && runsText(l.dual.right.characterRuns), l.dual.right && runsText(l.dual.right.dialogueRuns)] : [runsText(l.runs)];
-    let best = null;
-    texts.forEach((t) => { if(!t) return; needles.forEach((q) => { const f = findAll(t, q)[0]; if(f && (!best || f[0] < best.a)) best = { a: f[0], hl: t.slice(f[0], f[1]) }; }); });
-    if(best){ target = { id: l.id, hl: best.hl }; break; }
-  }
-  const id = (target && target.id) || sc.id || (lines[0] && lines[0].id) || "";
-  try{ H().openScript(S.sid, id, target ? target.hl : ""); }catch(err){ console.error(err); H().toast("Couldn't open the script.", "err"); }
+// Show an element in the breakdown's own Scene text: open that scene's sheet (with Scene text on), scroll to the
+// element's first underlined mention and flash it. Hand-tagged elements with no words in the text just bring up the scene.
+function showInText(sk, n, k){
+  const m = S.model, sc = m && m.scenes.find((x) => (sk ? x.key === sk : x.n === n)); if(!sc) return;
+  const was = S.view;
+  S.sel = sc.n; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; S.edit = null; S.qQuote = "";
+  if(!S.showText){ S.showText = true; lsSet("Camp_BD_TEXT_V1", "1"); }
+  S.focusEl = { n: sc.n, k, name: (m.elements[k] && m.elements[k].name) || "" };
+  rerender();
+  if(was !== S.view) navStep();
+}
+function focusMention(box){
+  const f = S.focusEl; if(!f || f.n !== S.sel) return;
+  S.focusEl = null;
+  const marks = Array.from(box.querySelectorAll(".stBody mark[data-keys]"));
+  const hit = marks.find((mk) => { try{ return JSON.parse(mk.dataset.keys || "[]").indexOf(f.k) >= 0; }catch(_e){ return false; } });
+  const txt = box.querySelector(".shText");
+  if(!hit){ if(txt) txt.scrollIntoView({ block: "nearest" }); H().toast((f.name || "That element") + " has no underlined words in this scene's text (it was tagged by hand).", "ok", 2600); return; }
+  const body = hit.closest(".stBody");
+  if(txt) txt.scrollIntoView({ block: "nearest" });
+  if(body && body.scrollHeight > body.clientHeight + 2){ const r = hit.getBoundingClientRect(), br = body.getBoundingClientRect(); body.scrollTop += (r.top - br.top) - body.clientHeight / 2 + r.height / 2; }
+  else hit.scrollIntoView({ block: "center" });
+  hit.classList.remove("flash"); void hit.offsetWidth; hit.classList.add("flash");
+  setTimeout(() => hit.classList.remove("flash"), 2200);
 }
 function hubTitle(){ try{ return H().scriptTitle(S.sid) || ""; }catch(_e){ return ""; } }
 // Small line icons for each category (24px grid, drawn with currentColor)
@@ -820,7 +833,7 @@ function elementsView(b, can){
         <button class="btn sm" type="button" data-a="edcancel">Cancel</button></div></td></tr>` : "";
     return `${grp}<tr class="er${S.edit === k ? " on" : ""}" style="--cc:${c.color}"><td>${e.no && e.cat === "cast" ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}<b>${esc(e.name)}</b>${can ? `<button type="button" class="star${e.hero ? " on" : ""}" data-a="hero" data-k="${esc(k)}" data-on="${e.hero ? 0 : 1}" aria-pressed="${e.hero}" aria-label="${e.hero ? "Remove hero from " : "Make "}${esc(e.name)}${e.hero ? "" : " a hero"}" title="${e.hero ? "Hero: plan doubles and continuity. Click to turn off" : "Make this a hero"}" style="margin-left:6px">${e.hero ? "★" : "☆"}</button>` : e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.hero && !e.heroSet ? `<span class="tag" title="Found automatically: written in CAPS or handled in several scenes">auto</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
       ${grouped ? "" : `<td><span class="cpill">${esc(c.short)}</span></td>`}
-      <td><div class="scBtns">${e.scenes.map((n) => `<span class="scGo"><button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${n}'s sheet">${n}</button><button type="button" class="goText" data-a="opentext" data-n="${n}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in the script, scene ${n}" title="Show in the script: scene ${n}">↗</button></span>`).join("")}</div></td>
+      <td><div class="scBtns">${e.scenes.map((n) => `<span class="scGo"><button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${n}'s sheet">${n}</button><button type="button" class="goText" data-a="opentext" data-n="${n}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in scene ${n}'s text" title="Show in scene ${n}'s text">↗</button></span>`).join("")}</div></td>
       <td class="num">${E.fmtEighths(e.eighths)}</td>
       <td class="act">${can ? `<button class="edBtn" type="button" data-a="edit" data-k="${esc(k)}" aria-label="Edit ${esc(e.name)}" title="Rename, recategorise, merge or ignore">Edit</button>` : ""}</td></tr>${form}`;
   }).join("");
@@ -911,7 +924,7 @@ function wire(box, pid){
     const k = a.dataset.a;
     if(k === "view"){ const was = S.view; S.view = a.dataset.v; lsSet(VIEW_KEY, S.view); S.edit = null; S.adding = null; rerender(); if(was !== S.view) navStep(); return; }
     if(k === "scf"){ S.scF = a.dataset.v; rerender(); return; }
-    if(k === "opentext"){ openInScript(a.dataset.sk, Number(a.dataset.n) || 0, a.dataset.k); return; }
+    if(k === "opentext"){ showInText(a.dataset.sk, Number(a.dataset.n) || 0, a.dataset.k); return; }
     if((k === "pick" || k === "goto") && !Number(a.dataset.n)) return;
     if(k === "pick" || k === "goto"){ const was = S.view; S.qQuote = ""; S.sel = Number(a.dataset.n) || 1; S.view = "sheets"; lsSet(VIEW_KEY, S.view); S.adding = null; if(S.lock){ window.dispatchEvent(new CustomEvent("camp:open-breakdown")); return; } rerender(); if(was !== S.view) navStep(); return; }
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
