@@ -154,7 +154,6 @@ const css = `
 #bdctl .stBody .dualRow .t-character{ margin-left:6ch; } #bdctl .stBody .dualRow .t-dialogue{ margin-left:0; }
 ::highlight(bdpick){ background:rgba(127,182,255,.45); color:inherit; }
 #bdctl .stBody mark{ background:color-mix(in srgb, var(--cc) 30%, transparent); color:inherit; border-radius:3px; padding:0 1px; box-shadow:inset 0 -2px 0 var(--cc); }
-#bdctl .stBody mark{ cursor:help; }
 #bdctl .stBody mark.flash{ animation:bdFlash 2s ease-out; }
 @keyframes bdFlash{ 0%,30%{ outline:2px solid var(--cc); outline-offset:2px; background:color-mix(in srgb, var(--cc) 70%, transparent); } 100%{ outline-color:transparent; } }
 #bdctl .stBody mark.multi{ outline:1px dashed color-mix(in srgb, var(--cc) 70%, transparent); outline-offset:1px; }

@@ -725,7 +725,7 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbTot .cap{ width:60px; height:5px; border-radius:3px; background:rgba(255,255,255,.12); overflow:hidden; display:inline-block; }
 .sbTot .cap i{ display:block; height:100%; background:#8fe3b0; }
 .sbDayWrap.over .sbTot .cap i{ background:#ff8b83; }
-.sbDW{ padding:2px 8px; border-radius:999px; background:rgba(255,255,255,.08); cursor:help; font-weight:600; }
+.sbDW{ padding:2px 8px; border-radius:999px; background:rgba(255,255,255,.08); font-weight:600; }
 .sbDW.warn{ background:rgba(241,199,107,.15); color:#f1c76b; }
 .sbDay .place{ border:1px solid var(--uiBorder); background:none; color:var(--uiText); font:inherit; font-size:12px; border-radius:6px; padding:2px 8px; cursor:pointer; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sbDay .place:not(.own){ color:var(--uiMuted); }
@@ -756,7 +756,7 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbPg{ font-variant-numeric:tabular-nums; font-weight:600; }
 .sbCast{ font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sbTm{ color:var(--uiMuted); font-variant-numeric:tabular-nums; white-space:nowrap; }
-.sbTag, .sbStat{ flex:none; font-style:normal; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:5px; background:rgba(255,255,255,.12); color:#fff; white-space:nowrap; cursor:help; }
+.sbTag, .sbStat{ flex:none; font-style:normal; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:5px; background:rgba(255,255,255,.12); color:#fff; white-space:nowrap; }
 .sbTag.rev{ background:rgba(241,199,107,.2); color:#f1c76b; } .sbTag.sh{ background:rgba(127,182,255,.16); color:#a9cbff; text-transform:none; } .sbTag.new{ background:rgba(143,227,166,.18); color:#8fe3a6; } .sbTag.warn{ background:rgba(255,139,131,.18); color:#ff8b83; }
 .sbStat.s-shot{ background:#2f9e44; } .sbStat.s-partshot{ background:#f59f00; color:#111; } .sbStat.s-pickup{ background:#1c7ed6; } .sbStat.s-moved{ background:#868e96; } .sbStat.s-omitted{ background:#e03131; }
 .sbRow.st-shot, .sbRow.st-omitted{ opacity:.55; } .sbRow.st-omitted .sbPlace{ text-decoration:line-through; }
@@ -769,7 +769,7 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 button.sbBan{ font-family:inherit; width:100%; cursor:pointer; color:var(--uiMuted); }
 button.sbBan:hover:not(:disabled){ border-color:rgba(255,255,255,.35); color:var(--uiText); }
 .sbBan.x-break{ background:rgba(127,182,255,.07); } .sbBan.x-move{ background:rgba(241,199,107,.06); } .sbBan.x-note{ background:rgba(255,255,255,.03); font-style:italic; }
-.sbBan{ font-size:10.5px; color:var(--uiMuted); padding:3px 8px; border-radius:6px; border:1px dashed rgba(255,255,255,.18); text-align:center; cursor:help; }
+.sbBan{ font-size:10.5px; color:var(--uiMuted); padding:3px 8px; border-radius:6px; border:1px dashed rgba(255,255,255,.18); text-align:center; }
 .sbBan.meal{ background:rgba(127,182,255,.07); } .sbBan.move{ background:rgba(241,199,107,.06); } .sbBan.late{ color:#f1c76b; border-color:rgba(241,199,107,.45); }
 .sbEnd{ display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center; margin:4px 7px 7px; padding:5px 10px; border-radius:7px; background:rgba(0,0,0,.35); font-size:11px; color:var(--uiMuted); }
 .sbEnd b{ color:var(--uiText); text-transform:uppercase; letter-spacing:.06em; font-size:10.5px; }
@@ -1054,9 +1054,8 @@ function sbActMenu(pid, btn){
   const ord = sbOrder(document.getElementById("ctl")), ids = SB.sel.length > 1 && SB.sel.indexOf(id) >= 0 ? ord.filter((x) => SB.sel.indexOf(x) >= 0) : [id];
   const dates = P.planDates(plan), what = ids.length > 1 ? ids.length + " scenes" : "Sc " + (byId[id] ? byId[id].n : "");
   const opts = [["", what, true], ["bd", "Open breakdown sheet", ids.length > 1]];
-  if(day >= 0){ opts.push(["un", "Unschedule"]); opts.push(["top:" + day, "Top of Day " + (day + 1)]); }
+  if(day >= 0) opts.push(["un", "Unschedule"]);
   plan.days.forEach((d, k) => { if(k !== day) opts.push(["end:" + k, "→ Day " + (k + 1) + (dates[k] ? " · " + fmtDate(dates[k]) : "")]); });
-  if(day >= 0) opts.push(["end:" + day, "Bottom of Day " + (day + 1)]);
   const sel = document.createElement("select");
   sel.innerHTML = opts.map(([v, l, off]) => `<option value="${esc(v)}"${off ? " disabled" : ""}>${esc(l)}</option>`).join("");
   sel.selectedIndex = 0;
