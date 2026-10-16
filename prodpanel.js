@@ -477,6 +477,14 @@ function needsRow(needs){
   const chips = needCats().filter((c) => (needs[c] || []).length).map((c) => `<i style="--c:${E.CAT[c].color}" title="${esc(E.CAT[c].label + ": " + needs[c].join(", "))}">${esc(E.CAT[c].short)} ${needs[c].length}</i>`);
   return chips.length ? `<div class="colNeeds">${chips.join("")}</div>` : "";
 }
+// The stripboard's day header: one "Elements" chip that opens the category chips
+function needsChip(needs){
+  const E = window.CampElements; if(!E || !needs) return "";
+  const cats = needCats().filter((c) => (needs[c] || []).length); if(!cats.length) return "";
+  const n = cats.reduce((a, c) => a + needs[c].length, 0);
+  return `<details class="sbNeeds"><summary><span class="dots">${cats.slice(0, 6).map((c) => `<i style="--c:${E.CAT[c].color}"></i>`).join("")}</span>${n} element${n === 1 ? "" : "s"}<b>▾</b></summary>${needsRow(needs)}</details>`;
+}
+const PIN = `<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M8 1.5a4.5 4.5 0 0 0-4.5 4.5c0 3.2 4.5 8.5 4.5 8.5s4.5-5.3 4.5-8.5A4.5 4.5 0 0 0 8 1.5zm0 6.3A1.8 1.8 0 1 1 8 4.2a1.8 1.8 0 0 1 0 3.6z"/></svg>`;
 // One dot per category a scene needs, on its strip
 function needDots(needs){
   const E = window.CampElements; if(!E || !needs) return "";
@@ -715,7 +723,27 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbDayWrap.folded .sbDay{ border-bottom:0; }
 .sbDayL, .sbDayR, .sbDayB{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; min-width:0; }
 .sbDayR{ justify-content:flex-end; }
-.sbDayB{ grid-column:1 / -1; }
+.sbDayB{ grid-column:1 / -1; padding-left:40px; }
+.sbDayL, .sbDayR{ min-height:30px; }
+.sbTimes{ display:inline-flex; align-items:center; height:30px; border:1px solid var(--uiBorder); border-radius:8px; background:#171717; }
+.sbTimes .sbT{ height:100%; padding:0 2px 0 10px; gap:2px; }
+.sbTimes .sbT + .sbT{ border-left:1px solid var(--uiBorder); }
+.sbTimes .sbPick, .sbTimes .sbPick.t{ border:0; background:none; min-width:0; height:26px; padding:0 6px; gap:5px; }
+.sbDayB .sbAddX, .sbDayB .sbT .sbPick{ height:30px; }
+.sbNeeds{ position:relative; margin-left:auto; }
+.sbNeeds summary{ list-style:none; display:inline-flex; align-items:center; gap:7px; height:30px; padding:0 10px; border:1px solid var(--uiBorder); border-radius:8px; cursor:pointer; color:var(--uiText); user-select:none; }
+.sbNeeds summary::-webkit-details-marker{ display:none; }
+.sbNeeds summary:hover{ border-color:rgba(255,255,255,.3); }
+.sbNeeds summary b{ font-size:10px; color:var(--uiMuted); font-weight:400; }
+.sbNeeds .dots{ display:inline-flex; }
+.sbNeeds .dots i{ width:8px; height:8px; border-radius:50%; background:var(--c); border:1.5px solid #1d1d1d; margin-left:-3px; }
+.sbNeeds .dots i:first-child{ margin-left:0; }
+.sbNeeds[open] summary{ border-color:var(--focus, #7fb6ff); }
+.sbNeeds .colNeeds{ position:absolute; right:0; top:calc(100% + 6px); z-index:30; width:max-content; max-width:340px; justify-content:flex-end; gap:5px; padding:8px; background:#232323; border:1px solid var(--uiBorder); border-radius:9px; box-shadow:0 10px 26px rgba(0,0,0,.45); }
+.sbDay .place{ display:inline-flex; align-items:center; gap:5px; height:26px; }
+.sbDay .place.empty{ width:26px; padding:0; justify-content:center; }
+.sbDay .place svg{ flex:none; opacity:.8; }
+.sbDay .place span{ overflow:hidden; text-overflow:ellipsis; }
 .sbDay .sbDn{ font-size:13.5px; }
 .sbDay .dtPick{ position:relative; display:inline-flex; align-items:center; padding:2px 8px; border-radius:6px; border:1px solid var(--uiBorder); cursor:pointer; color:var(--uiText); }
 .sbDay .dtPick.pinned{ border-color:rgba(241,199,107,.6); }
@@ -781,7 +809,8 @@ button.sbBan:hover:not(:disabled){ border-color:rgba(255,255,255,.35); color:var
 .sbGap{ border:2px dashed rgba(127,182,255,.8); border-radius:8px; background:rgba(127,182,255,.1); color:#a9cbff; font-size:11.5px; font-weight:600; display:flex; align-items:center; justify-content:center; }
 .sbFloat{ position:fixed; z-index:9999; pointer-events:none; }
 .sbFloat .sbRow{ cursor:grabbing; box-shadow:0 14px 34px rgba(0,0,0,.55); border-color:rgba(255,255,255,.35); transform:scale(1.01); outline:none; }
-.sbFloat .sbRow + .sbRow{ display:none; }
+.sbFloat .sbRow + .sbRow{ margin-top:4px; }
+.sbFloatMore{ margin-top:4px; padding:4px 10px; border-radius:7px; background:#26272b; color:var(--uiMuted); font-size:11px; box-shadow:0 14px 34px rgba(0,0,0,.55); }
 .sbFloatN{ position:absolute; right:-6px; top:-10px; background:#7fb6ff; color:#0b1a30; font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px; }
 body.sbDragging, body.sbDragging *{ cursor:grabbing !important; user-select:none !important; }
 .sbFiltNote{ margin:8px 0; font-size:12px; color:var(--uiMuted); display:flex; gap:8px; align-items:center; }
@@ -848,7 +877,7 @@ button.sbBan[data-bk]:hover .sbBGrip{ opacity:.9; }
   #sbPrintCopy .sbIE, #sbPrintCopy .sbDN{ color:#000; }
   #sbPrintCopy .sbEnd{ background:#eee !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   #sbPrintCopy .sbEnd b{ color:#000; }
-  #sbPrintCopy .sbGrip, #sbPrintCopy .sbDW, #sbPrintCopy .colNeeds{ display:none; }
+  #sbPrintCopy .sbGrip, #sbPrintCopy .sbDW, #sbPrintCopy .colNeeds, #sbPrintCopy .sbNeeds, #sbPrintCopy .place.empty{ display:none; }
 }
 `; document.head.appendChild(st2); }
 // One tooltip for anything with data-tip on the plan (instant, multi-line; titles were slow and got lost on redraws)
@@ -936,25 +965,25 @@ function sbView(c){
           <button type="button" class="sbFold" data-sb="fold" data-i="${i}" aria-expanded="${!folded}"${tipAttr(folded ? "Show this day's strips" : "Hide this day's strips")}>${folded ? "▸" : "▾"}</button>
           <b class="sbDn">Day ${i + 1}</b>
           <label class="dtPick${d.date ? " pinned" : ""}"${tipAttr(d.date ? "Set to this date. Click to change it" : "Choose this day's date. The days after it follow on")}><span>${esc(fmtDate(dates[i]) || "Set date")}</span><input type="date" value="${esc(dates[i] || "")}" data-date="${i}"${dis}></label>${d.date && canEdit ? `<button type="button" class="unpin" data-a="unpin" data-day="${i}"${tipAttr("Unpin: follow on from the day before")}>✕</button>` : ""}
+          <button type="button" class="place${d.where ? " own" : ""}${w ? "" : " empty"}" data-a="dwhere" data-i="${i}"${dis} aria-label="${esc(w ? "Location: " + (w.name || w.label) : "Add location")}"${tipAttr(w ? (w.label || w.name) + (d.where ? " (this day)" : " (the shoot's location)") + ". Click to change" : "Add this day's location for sunrise, sunset and weather")}>${PIN}${w ? `<span>${esc(w.name || w.label)}</span>` : ""}</button>
+          ${sun ? `<span class="sbSun"${tipAttr("Sunrise – sunset")}>☀ ${esc(fmtTime(sun.rise))} – ${esc(fmtTime(sun.set))}</span>` : ""}${wx ? `<span class="sbWx">${esc(wx)}</span>` : ""}
+        </div>
+        <div class="sbDayR">
           <span class="sbTot"><span class="cap"${tipAttr(P.fmtEighths(x.eighths) + " of " + P.fmtEighths(st.maxEighths) + " pages (the daily limit in Settings)")}><i style="width:${pct}%"></i></span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg · ${x.scenes} sc · ${x.cast.length} cast</span>
           ${dw.length ? `<span class="sbDW${bad ? " warn" : ""}"${tipAttr(dw.map((y) => "• " + y.text).join("\n"))} tabindex="0">${bad ? "⚠" : "ⓘ"} ${dw.length} ${bad ? "to check" : "note" + (dw.length === 1 ? "" : "s")}</span>` : ""}
         </div>
-        <div class="sbDayR">
-          <button type="button" class="place${d.where ? " own" : ""}" data-a="dwhere" data-i="${i}"${dis}${tipAttr(w ? (w.label || w.name) + (d.where ? " (this day)" : " (the shoot's location)") + ". Click to change" : "Set this day's location for sunrise, sunset and weather")}>${esc(w ? (w.name || w.label) : "Add location")}</button>
-          ${sun ? `<span class="sbSun"${tipAttr("Sunrise – sunset")}>☀ ${esc(fmtTime(sun.rise))} – ${esc(fmtTime(sun.set))}</span>` : ""}${wx ? `<span class="sbWx">${esc(wx)}</span>` : ""}
-        </div>
         <div class="sbDayB">
-          <label class="sbT">Call${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}</label>
+          <span class="sbTimes"><label class="sbT">Call${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}</label>
           <label class="sbT"${tipAttr("Auto lets Camp place the meal break. No meal takes it off this day")}>Lunch${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis).replace('<option value=""', '<option value="none"' + (d.noMeal ? " selected" : "") + '>No meal</option><option value=""').replace(d.noMeal ? '<option value="" selected>' : '\u0000', '<option value="">')}</label>
-          <label class="sbT"${tipAttr("Auto lets Camp work out the wrap")}>Wrap${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</label>
+          <label class="sbT"${tipAttr("Auto lets Camp work out the wrap")}>Wrap${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</label></span>
           ${canEdit && rec.unscheduled.length ? `<button type="button" class="btn sm sbAddX" data-sb="addsc" data-day="${i}"${tipAttr("Pick unscheduled scenes to add to the end of this day")}>＋ Add scenes</button>` : ""}
           ${canEdit ? `<button type="button" class="btn sm sbAddX" data-sb="xnew" data-day="${i}"${tipAttr("Add a break, a company move or a note to this day")}>＋ Break / move</button>` : ""}
           ${canEdit && d.scenes.length > 1 ? `<label class="sbT">Sort<select class="sbSort" data-sbsort="${i}" aria-label="Sort Day ${i + 1}"><option value="">…</option><option value="loc">By location</option><option value="dn">Day → night</option><option value="n">Scene number</option></select></label>` : ""}
-          ${needsRow(x.needs)}
+          ${needsChip(x.needs)}
         </div>
       </div>
       <div class="sbRows" data-day="${i}">${SB.addTo === i && canEdit ? addForm(i, rec.unscheduled, byId) : ""}${!folded && d.noMeal && d.scenes.length ? `<button type="button" class="sbBan meal off" data-sb="mealback" data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr("This day has no meal break. Click to put it back")}>No meal break · put it back</button>` : ""}${folded ? "" : (d.scenes.length || (d.extras || []).length ? rows : `<div class="sbEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`) + (SB.xform && SB.xform.day === i && !SB.xform.id ? xForm(i, d, null) : "")}</div>
-      <div class="sbEnd"><b>End of Day ${i + 1}</b><span>${dates[i] ? esc(fmtDate(dates[i])) + " · " : ""}${P.fmtEighths(x.eighths)} pg · ${x.scenes} scene${x.scenes === 1 ? "" : "s"}${tt.wrap ? " · wrap " + (tt.wrapManual ? "" : "~") + esc(fmtTime(tt.wrap)) : ""}</span>${x.over ? `<span class="over">Over the page limit</span>` : ""}</div>
+      <div class="sbEnd"><b>End of Day ${i + 1}</b>${tt.wrap ? `<span>Wrap ${tt.wrapManual ? "" : "~"}${esc(fmtTime(tt.wrap))}</span>` : ""}${x.over ? `<span class="over">Over the page limit</span>` : ""}</div>
     </section>`;
   }).join("");
   const L2 = { D: 0, M: 1, N: 2 }, boneSort = { n: (a, b) => byId[a].n - byId[b].n, loc: (a, b) => String(placeOf(byId[a])).localeCompare(String(placeOf(byId[b]))) || byId[a].n - byId[b].n,
@@ -1155,14 +1184,18 @@ function sbDragStart(box, pid, row, e){
   const board = box.querySelector(".sbBoard"), scroller = box.querySelector(".ctlBody") || document.scrollingElement;
   const br = board.getBoundingClientRect(), rr = row.getBoundingClientRect();
   const float = document.createElement("div"); float.className = "sbFloat"; float.style.left = rr.left + "px"; float.style.width = rr.width + "px";   // exactly over the strip: it only moves up and down
-  float.innerHTML = row.outerHTML + (ids.length > 1 ? `<span class="sbFloatN">${ids.length} scenes</span>` : "");
+  const SHOW = 6, rowsHtml = ban || ids.length < 2 ? row.outerHTML : ids.slice(0, SHOW).map((x) => { const el = box.querySelector('.sbRow[data-sid="' + CSS.escape(x) + '"]'); return el ? el.outerHTML : ""; }).join("");
+  float.innerHTML = rowsHtml + (ids.length > SHOW ? `<div class="sbFloatMore">+ ${ids.length - SHOW} more</div>` : "") + (ids.length > 1 ? `<span class="sbFloatN">${ids.length} scenes</span>` : "");
   document.body.appendChild(float);
+  // keep the strip you grabbed under the pointer, wherever it sits in the stack
+  const held = ids.length > 1 ? float.querySelector('.sbRow[data-sid="' + CSS.escape(id) + '"]') : null;
+  const lift = held ? held.getBoundingClientRect().top - float.getBoundingClientRect().top : 0;
   const gap = document.createElement("div"); gap.className = "sbGap"; gap.style.height = Math.max(34, rr.height) + "px";
   if(ids.length > 1) gap.textContent = ids.length + " scenes";
   if(ban) gap.style.height = "26px";
   const srcs = ban ? [row] : ids.map((x) => box.querySelector('.sbRow[data-sid="' + CSS.escape(x) + '"]')).filter(Boolean);
   row.after(gap); srcs.forEach((el) => el.classList.add("sbSrc"));
-  Object.assign(SBD, { on: true, pid, box, ids, ban, float, gap, srcs, scroller, dy: e.clientY - rr.top, y: e.clientY, raf: 0 });
+  Object.assign(SBD, { on: true, pid, box, ids, ban, float, gap, srcs, scroller, dy: e.clientY - rr.top + lift, y: e.clientY, raf: 0 });
   S.drag = id || "ban";   // the panel doesn't redraw under a drag
   document.body.classList.add("sbDragging");
   sbDragMove(e.clientY);
