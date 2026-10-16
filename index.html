@@ -76,6 +76,10 @@
   .brand img{ height:34px; width:auto; display:block; }
   .topTitle{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-weight:700; font-size:13px; letter-spacing:.24em; opacity:.92; white-space:nowrap; text-transform:uppercase; pointer-events:none; }
   #jump{ margin-left:auto; }
+  .acct{ flex-basis:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--uiMuted); padding:4px 2px 0; }
+  .acct span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .acct button{ border:0; background:none; color:var(--uiMuted); cursor:pointer; font:inherit; text-decoration:underline; padding:0; }
+  #calBtn.on{ background:rgba(255,255,255,.1); }
   .userChip{ display:flex; align-items:center; gap:8px; padding:3px 3px 3px 10px; border:1px solid var(--uiBorder); border-radius:14px; font-size:12.5px; color:var(--uiMuted); max-width:280px; }
   .userChip span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #menuToggle{ display:inline-flex; }
@@ -364,7 +368,7 @@
        scrolling box under a tall fixed header. The section tabs stay pinned at the top. */
     .main{ overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
     .main #projectView{ flex:none !important; min-height:auto !important; }
-    .main #listPane, .main #boardPane, .main #layoutsPane, .main #calPane, .main #prodPane, .main #boardPane .bdBody{ flex:none; min-height:auto; overflow:visible; }
+    .main #listPane, .main #boardPane, .main #layoutsPane, .main #prodPane, .main #boardPane .bdBody{ flex:none; min-height:auto; overflow:visible; }
     .main #prodPane #ctl, .main #prodPane #bdctl{ flex:none; min-height:auto; }
     .main #prodPane .bdBody{ flex:none; min-height:auto; overflow:visible; }
     .main #prodPane .ctlBody{ flex:none; min-height:auto; overflow:visible; }
@@ -401,7 +405,7 @@
   <a class="brand" href="index.html" title="Camp hub" aria-label="Camp hub"><img src="camp-logo.png" alt="Camp"></a>
   <div class="topTitle" id="topTitle">Hub</div>
   <button id="jump" class="iconBtn" type="button" aria-label="Jump to a project or script" title="Jump to a project or script (Ctrl+K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
-  <div class="userChip"><span id="who"></span><button id="signOut" class="btn sm" type="button">Sign out</button></div>
+  <button id="calBtn" class="iconBtn" type="button" aria-label="Calendar" title="Calendar: dates, events and meeting notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>
 </header>
 
 <div id="app" class="hidden">
@@ -416,6 +420,7 @@
     <div class="sideFoot">
       <button id="newProject" class="btn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New project</button>
       <a class="btn" href="library.html" title="All scripts, including ones not in a project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Script library</a>
+      <div class="acct"><span id="who"></span><button id="signOut" type="button">Sign out</button></div>
     </div>
   </aside>
 
@@ -437,14 +442,12 @@
         <button class="mtab" type="button" role="tab" data-tab="schedule" title="Shoot days, scene order, Day Out of Days and call sheets"><svg></svg>Schedule</button>
         <button class="mtab" type="button" role="tab" data-tab="docs" title="Budget, Schedule, Shot List and Directory Sheets"><svg></svg>Docs<span class="n" id="nSheets"></span></button>
         <button class="mtab" type="button" role="tab" data-tab="layouts" title="Sketches, floor plans, lighting plans and reference boards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h7v11M10 14h11"/></svg>Layouts</button>
-        <button class="mtab" type="button" role="tab" data-tab="calendar" title="Shoot days, meetings, recces and meeting minutes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendar</button>
         <button class="mtab" type="button" role="tab" data-tab="board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="9" r="3"/><path d="M2.5 20a5.5 5.5 0 0 1 11 0"/></svg>Board</button>
       </div>
 
       <div id="listPane"></div>
 
       <div id="layoutsPane" class="hidden"></div>
-      <div id="calPane" class="hidden"></div>
 
       <div id="boardPane" class="hidden"></div>
 
@@ -508,7 +511,7 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=2" defer></script>
 <script src="layouts.js?v=2" defer></script>
-<script src="calendar.js?v=1" defer></script>
+<script src="calendar.js?v=2" defer></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -533,7 +536,7 @@ const ERRORS = {
   INTERNAL: "Something went wrong on the server. Try again."
 };
 const NEW_ACTIONS = ["renameProject", "archiveProject", "setProjectStatus", "unlinkScript", "clearRoomData", "deleteProject"];
-const TABS = ["scripts", "treatment", "storyboard", "breakdown", "schedule", "docs", "layouts", "calendar", "board"];
+const TABS = ["scripts", "treatment", "storyboard", "breakdown", "schedule", "docs", "layouts", "board"];
 // Breakdown, Schedule and Docs share the one production pane; each shows its own part of it
 const PROD_TABS = ["breakdown", "schedule", "docs"];
 const isProdTab = t => PROD_TABS.includes(t);
@@ -989,6 +992,7 @@ $("signIn").onclick = async () => {
   }
   catch (e) { if (!/popup-closed|cancelled/i.test(String(e.code || e.message))) toast("Sign-in failed: " + (e.message || e)); }
 };
+$("calBtn").onclick = () => { try { window.CampCalendar && window.CampCalendar.toggle(current.pid); } catch (e) { console.error(e); } };
 $("signOut").onclick = async () => { try { await Promise.race([presLeave(), new Promise(r => setTimeout(r, 1500))]); } catch (_e) {} PRES.pid = null; [SESSION_KEY, PROJ_CACHE, FILES_CACHE, SHEETS_CACHE, DRAFTS_CACHE].forEach(k => { try { localStorage.removeItem(k); } catch (_e) {} }); signOut(auth); };
 
 function teardown() {
@@ -1151,17 +1155,16 @@ function renderBody() {
   void ns; void sh;   // the main tabs no longer show counts
   document.querySelectorAll(".mtab").forEach(t => { const on = t.dataset.tab === current.tab; t.classList.toggle("on", on); t.setAttribute("aria-selected", on ? "true" : "false"); });
 
-  const prod = isProdTab(current.tab), board = current.tab === "board", lay = current.tab === "layouts", cal = current.tab === "calendar";
-  $("listPane").classList.toggle("hidden", prod || board || lay || cal);
+  const prod = isProdTab(current.tab), board = current.tab === "board", lay = current.tab === "layouts";
+  $("listPane").classList.toggle("hidden", prod || board || lay);
   $("prodPane").classList.toggle("hidden", !prod);
   $("boardPane").classList.toggle("hidden", !board);
   $("layoutsPane").classList.toggle("hidden", !lay);
-  $("calPane").classList.toggle("hidden", !cal);
   if (prod) { pickKey(); $("prodPane").dataset.tab = current.tab; renderTabs(); showFrame(); try { window.CampProdPanel && window.CampProdPanel.render(current.pid); } catch (e) { console.error(e); } }
   else if (board) { try { window.CampBoard && window.CampBoard.render && window.CampBoard.render(current.pid); } catch (e) { console.error(e); } }
   else if (lay) { try { window.CampLayouts && window.CampLayouts.render(current.pid); } catch (e) { console.error(e); } }
-  else if (cal) { try { window.CampCalendar && window.CampCalendar.render(current.pid); } catch (e) { console.error(e); } }
   else renderList(p);
+  try { window.CampCalendar && window.CampCalendar.refresh(current.pid); } catch (_e) {}
 }
 
 const TOOL = {
