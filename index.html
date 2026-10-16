@@ -364,7 +364,7 @@
        scrolling box under a tall fixed header. The section tabs stay pinned at the top. */
     .main{ overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
     .main #projectView{ flex:none !important; min-height:auto !important; }
-    .main #listPane, .main #boardPane, .main #prodPane, .main #boardPane .bdBody{ flex:none; min-height:auto; overflow:visible; }
+    .main #listPane, .main #boardPane, .main #layoutsPane, .main #prodPane, .main #boardPane .bdBody{ flex:none; min-height:auto; overflow:visible; }
     .main #prodPane #ctl, .main #prodPane #bdctl{ flex:none; min-height:auto; }
     .main #prodPane .bdBody{ flex:none; min-height:auto; overflow:visible; }
     .main #prodPane .ctlBody{ flex:none; min-height:auto; overflow:visible; }
@@ -436,10 +436,13 @@
         <button class="mtab" type="button" role="tab" data-tab="breakdown" title="Every scene's cast, props, wardrobe and more"><svg></svg>Breakdown</button>
         <button class="mtab" type="button" role="tab" data-tab="schedule" title="Shoot days, scene order, Day Out of Days and call sheets"><svg></svg>Schedule</button>
         <button class="mtab" type="button" role="tab" data-tab="docs" title="Budget, Schedule, Shot List and Directory Sheets"><svg></svg>Docs<span class="n" id="nSheets"></span></button>
+        <button class="mtab" type="button" role="tab" data-tab="layouts" title="Sketches, floor plans, lighting plans and reference boards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h7v11M10 14h11"/></svg>Layouts</button>
         <button class="mtab" type="button" role="tab" data-tab="board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="9" r="3"/><path d="M2.5 20a5.5 5.5 0 0 1 11 0"/></svg>Board</button>
       </div>
 
       <div id="listPane"></div>
+
+      <div id="layoutsPane" class="hidden"></div>
 
       <div id="boardPane" class="hidden"></div>
 
@@ -502,6 +505,7 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="bdpanel.js?v=16" defer></script>
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=2" defer></script>
+<script src="layouts.js?v=1" defer></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -526,7 +530,7 @@ const ERRORS = {
   INTERNAL: "Something went wrong on the server. Try again."
 };
 const NEW_ACTIONS = ["renameProject", "archiveProject", "setProjectStatus", "unlinkScript", "clearRoomData", "deleteProject"];
-const TABS = ["scripts", "treatment", "storyboard", "breakdown", "schedule", "docs", "board"];
+const TABS = ["scripts", "treatment", "storyboard", "breakdown", "schedule", "docs", "layouts", "board"];
 // Breakdown, Schedule and Docs share the one production pane; each shows its own part of it
 const PROD_TABS = ["breakdown", "schedule", "docs"];
 const isProdTab = t => PROD_TABS.includes(t);
@@ -1144,12 +1148,14 @@ function renderBody() {
   void ns; void sh;   // the main tabs no longer show counts
   document.querySelectorAll(".mtab").forEach(t => { const on = t.dataset.tab === current.tab; t.classList.toggle("on", on); t.setAttribute("aria-selected", on ? "true" : "false"); });
 
-  const prod = isProdTab(current.tab), board = current.tab === "board";
-  $("listPane").classList.toggle("hidden", prod || board);
+  const prod = isProdTab(current.tab), board = current.tab === "board", lay = current.tab === "layouts";
+  $("listPane").classList.toggle("hidden", prod || board || lay);
   $("prodPane").classList.toggle("hidden", !prod);
   $("boardPane").classList.toggle("hidden", !board);
+  $("layoutsPane").classList.toggle("hidden", !lay);
   if (prod) { pickKey(); $("prodPane").dataset.tab = current.tab; renderTabs(); showFrame(); try { window.CampProdPanel && window.CampProdPanel.render(current.pid); } catch (e) { console.error(e); } }
   else if (board) { try { window.CampBoard && window.CampBoard.render && window.CampBoard.render(current.pid); } catch (e) { console.error(e); } }
+  else if (lay) { try { window.CampLayouts && window.CampLayouts.render(current.pid); } catch (e) { console.error(e); } }
   else renderList(p);
 }
 
@@ -2058,6 +2064,10 @@ window.__CampHub = {
   // The breakdown (bdpanel.js): only the entries that changed, so teammates editing at once don't overwrite each other.
   // ⚠ needs the breakdown rule (projects/$pid/breakdown).
   writeBreakdown: (pid, sid, paths) => update(ref(db, "projects/" + pid + "/breakdown/" + sid), paths),
+  // Layouts (layouts.js): each item is its own entry, so people drawing at once don't overwrite each other.
+  // ⚠ needs the layouts rule (projects/$pid/layouts).
+  writeLayouts: (pid, paths) => update(ref(db, "projects/" + pid + "/layouts"), paths),
+  me: () => (me && me.email) || "",
   toast: (m, kind, ms) => toast(m, kind, ms),
   confirm: (title, text, ok, danger) => confirmDlg(title, text, ok, !!danger),
   prompt: (title, label, value) => dialog({ title, fields: [{ name: "v", label, value: value || "" }], ok: "OK" }).then(v => v ? String(v.v || "").trim() : ""),

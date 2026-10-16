@@ -195,6 +195,29 @@ let BASE = "";
     await p.hover(".sbTot .cap"); await p.waitForTimeout(150);
     await expect(p, () => { const t = document.getElementById("sbTip"); return t && t.classList.contains("show") && t.textContent.length > 5; }, "a tooltip on hover");
   });
+  await page(browser, "layouts: new board, draw, kit piece, move, undo, note", "/tests/fixtures/layouts.html", async (p) => {
+    await p.click("[data-ly=new]"); await p.waitForTimeout(300);
+    await expect(p, () => Object.keys(__CampHub.project().layouts).length === 1 && !!document.querySelector(".lyCard.on"), "a new layout, selected");
+    const box = await (await p.$(".lySvg")).boundingBox(), cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+    await p.click("[data-tool=rect]"); await p.mouse.move(cx - 100, cy - 60); await p.mouse.down(); await p.mouse.move(cx - 20, cy - 10, { steps: 5 }); await p.mouse.up(); await p.waitForTimeout(200);
+    const items = () => { const L = Object.values(__CampHub.project().layouts)[0]; return Object.values((L && L.items) || {}); };
+    await expect(p, () => { const L = Object.values(__CampHub.project().layouts)[0]; return Object.values(L.items || {}).some((i) => i.t === "rect" && i.w > 50); }, "a rectangle drawn");
+    await p.click("[data-ly=kit]"); await p.click("[data-kit=fresnel]"); await p.waitForTimeout(200);
+    await expect(p, () => { const L = Object.values(__CampHub.project().layouts)[0]; return Object.values(L.items || {}).some((i) => i.t === "kit" && i.k === "fresnel"); }, "a fresnel added from the kit");
+    // move the selected fresnel by dragging it
+    const before = await p.evaluate(() => { const L = Object.values(__CampHub.project().layouts)[0]; const f = Object.values(L.items).find((i) => i.k === "fresnel"); return [f.x, f.y]; });
+    const g = await (await p.$('.lyItemsG .lyIt:last-child')).boundingBox();
+    await p.mouse.move(g.x + g.width / 2, g.y + g.height - 6); await p.mouse.down(); await p.mouse.move(g.x + g.width / 2 + 80, g.y + g.height - 6 + 40, { steps: 6 }); await p.mouse.up(); await p.waitForTimeout(200);
+    const after = await p.evaluate(() => { const L = Object.values(__CampHub.project().layouts)[0]; const f = Object.values(L.items).find((i) => i.k === "fresnel"); return [f.x, f.y]; });
+    if(!(after[0] > before[0] + 40)) throw new Error("fresnel didn't move: " + before + " -> " + after);
+    await p.click("[data-ly=undo]"); await p.waitForTimeout(200);
+    const back = await p.evaluate(() => { const L = Object.values(__CampHub.project().layouts)[0]; const f = Object.values(L.items).find((i) => i.k === "fresnel"); return [f.x, f.y]; });
+    if(Math.abs(back[0] - before[0]) > 1) throw new Error("undo didn't put it back");
+    await p.click("[data-tool=note]"); await p.mouse.click(cx + 150, cy + 80); await p.waitForTimeout(150);
+    await p.keyboard.type("Key light from window"); await p.keyboard.press("Escape"); await p.waitForTimeout(200);
+    await expect(p, () => { const L = Object.values(__CampHub.project().layouts)[0]; return Object.values(L.items).some((i) => i.t === "note" && /Key light/.test(i.text)); }, "a sticky note with text");
+    void items;
+  });
   await page(browser, "breakdown: category picker with colours, highlighted jump to the scene text, icons", "/tests/fixtures/bd.html", async (p) => {
     await p.evaluate(() => { localStorage.clear(); CampBdPanel.setMode(true); CampBdPanel.render("p1"); });
     await p.waitForTimeout(700); await p.evaluate(() => CampBdPanel.render("p1")); await p.waitForTimeout(300);

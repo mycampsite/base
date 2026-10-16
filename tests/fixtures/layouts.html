@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><style>:root{--uiBorder:#333;--uiText:#eee;--uiMuted:#999}body{background:#111;color:#eee;margin:0;font:13px sans-serif}#layoutsPane{display:flex;height:700px}</style></head><body><div id="layoutsPane"></div>
+<!-- Test page for tests/pages.smoke.js: the Layouts tab with a fake hub that keeps the database in memory -->
+<script>
+const proj={id:"p1",name:"P",layouts:{}};
+function put(root,path,v){const ps=path.split("/");let o=root;for(let i=0;i<ps.length-1;i++){if(!o[ps[i]]||typeof o[ps[i]]!=="object")o[ps[i]]={};o=o[ps[i]];}const k=ps[ps.length-1];if(v==null)delete o[k];else o[k]=JSON.parse(JSON.stringify(v));}
+window.__CampHub={project:()=>proj,canEdit:()=>true,isOwner:()=>true,me:()=>"t@x",
+ writeLayouts:async(pid,paths)=>{const next=JSON.parse(JSON.stringify(proj.layouts||{}));Object.keys(paths).forEach(k=>put(next,k,paths[k]));proj.layouts=next;setTimeout(()=>CampLayouts.render("p1"),0);},
+ toast(){},prompt:async(t,l,v)=>v||"https://youtu.be/abc",confirm:async()=>true};
+</script>
+<script src="../../layouts.js"></script>
+<script>CampLayouts.render("p1");</script>
+</body></html>
