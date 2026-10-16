@@ -717,7 +717,7 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 @keyframes sbLand{ 0%{ box-shadow:0 0 0 2px #fff, 0 0 18px rgba(255,255,255,.4); } 100%{ box-shadow:none; } }
 .sbBoard.hiOn .sbRow.dim{ opacity:.3; }
 .sbBoard.hiOn .sbRow.hi{ box-shadow:0 0 0 2px #f1c76b; }
-.sbRow.sbHide, .sbRow.sbSrc{ display:none; }
+.sbRow.sbHide, .sbRow.sbSrc, .sbBan.sbSrc{ display:none; }
 button.sbBan{ font-family:inherit; width:100%; cursor:pointer; color:var(--uiMuted); }
 button.sbBan:hover:not(:disabled){ border-color:rgba(255,255,255,.35); color:var(--uiText); }
 .sbBan.x-break{ background:rgba(127,182,255,.07); } .sbBan.x-move{ background:rgba(241,199,107,.06); } .sbBan.x-note{ background:rgba(255,255,255,.03); font-style:italic; }
@@ -745,6 +745,10 @@ body.sbDragging, body.sbDragging *{ cursor:grabbing !important; user-select:none
 .sbXForm input[type=number]{ width:80px; }
 .sbXBtns{ grid-column:1 / -1; display:flex; gap:8px; }
 .sbXHint{ grid-column:span 2; color:var(--uiMuted); font-size:11px; align-self:center; }
+button.sbBan[data-bk]{ cursor:grab; position:relative; }
+.sbBGrip{ position:absolute; left:6px; top:50%; transform:translateY(-50%); font-size:10px; }
+button.sbBan[data-bk]:hover .sbBGrip{ opacity:.9; }
+.sbFloat .sbBan{ background:#26272b; border-style:solid; box-shadow:0 14px 34px rgba(0,0,0,.55); }
 .sbBan.meal.off{ background:none; border-style:dotted; opacity:.75; }
 .sbAddX{ font-size:12px; }
 /* the ⋯ menu on each strip (also right-click) */
@@ -824,6 +828,7 @@ function placeOf(s){
   return h.trim() || s.set || s.loc || "";
 }
 const openDetails = (h) => String(h || "").replace(/<details([^>]*)>/, (m, a) => "<details" + a.replace(/\sopen\b/g, "") + " open>");
+const BGRIP = `<span class="sbGrip sbBGrip" aria-hidden="true">⋮⋮</span>`;
 const tipAttr = (t) => t ? ` data-tip="${esc(t)}" aria-label="${esc(t)}"` : "";
 function sbView(c){
   const { pid, pl, bd, byId, st, dates, stats, times, warns, shotMap, canEdit, rec, revOf, n, dood, shots, flagSec, castSec, locSec } = c;
@@ -872,8 +877,9 @@ function sbView(c){
     const x = stats[i], tt = times[i], pct = Math.min(100, Math.round(x.eighths / st.maxEighths * 100)), folded = !!fold[i];
     const w = P.whereOf(pl, i), sun = sunFor(w, dates[i]), wx = weatherFor(w, dates[i]), dw = warns.filter((y) => y.day === i + 1), bad = dw.some((y) => y.level === "warn");
     const rows = tt.rows.map((r) => r.type === "scene" ? strip(r.id, r, i)
-      : r.type === "extra" ? (SB.xform && SB.xform.day === i && SB.xform.id === r.id ? xForm(i, d, r) : `<button type="button" class="sbBan x-${r.k}" data-sb="xedit" data-day="${i}" data-id="${esc(r.id)}"${canEdit ? "" : " disabled"}${tipAttr((r.k === "note" ? "Note" : r.k === "move" ? "Company move" : "Break") + " added by hand" + (r.min ? ": " + fmtTime(r.start) + " – " + fmtTime(r.end) : "") + (canEdit ? ". Click to change or remove" : ""))}>${r.k === "note" ? "Note · " : r.k === "move" ? "Company move · " : "Break · "}${esc(r.label || (r.k === "move" ? "Travel" : r.k === "break" ? "Break" : ""))}${r.min ? " · " + esc(fmtTime(r.start)) + " – " + esc(fmtTime(r.end)) : ""}</button>`)
-      : r.type === "meal" ? (SB.mform === i ? mealForm(i, d, r, st) : `<button type="button" class="sbBan meal${r.late ? " late" : ""}" data-sb="meal" data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr((r.late ? "More than six hours after call: a meal penalty may apply. " : "") + (d.lunch ? "Meal set to " + fmtTime(d.lunch) : "Placed automatically") + (canEdit ? ". Click to change its time or length, or remove it" : ""))}>Meal · ${esc(fmtTime(r.start))} – ${esc(fmtTime(r.end))}${d.lunch ? "" : " · auto"}</button>`)
+      : r.type === "extra" ? (SB.xform && SB.xform.day === i && SB.xform.id === r.id ? xForm(i, d, r) : `<button type="button" class="sbBan x-${r.k}" data-sb="xedit"${canEdit ? ` data-bk="x"` : ""} data-day="${i}" data-id="${esc(r.id)}"${canEdit ? "" : " disabled"}${tipAttr((r.k === "note" ? "Note" : r.k === "move" ? "Company move" : "Break") + " added by hand" + (r.min ? ": " + fmtTime(r.start) + " – " + fmtTime(r.end) : "") + (canEdit ? ". Click to change or remove, drag to move" : ""))}>${canEdit ? BGRIP : ""}${r.k === "note" ? "Note · " : r.k === "move" ? "Company move · " : "Break · "}${esc(r.label || (r.k === "move" ? "Travel" : r.k === "break" ? "Break" : ""))}${r.min ? " · " + esc(fmtTime(r.start)) + " – " + esc(fmtTime(r.end)) : ""}</button>`)
+      : r.type === "meal" ? (SB.mform === i ? mealForm(i, d, r, st) : `<button type="button" class="sbBan meal${r.late ? " late" : ""}" data-sb="meal"${canEdit ? ` data-bk="meal"` : ""} data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr((r.late ? "More than six hours after call: a meal penalty may apply. " : "") + (r.pinned ? "Meal pinned after Sc " + (byId[d.mealAfter] ? byId[d.mealAfter].n : "") : d.lunch ? "Meal set to " + fmtTime(d.lunch) : "Placed automatically") + (canEdit ? ". Click to change its time or length, or remove it. Drag to put it after another scene" : ""))}>${canEdit ? BGRIP : ""}Meal · ${esc(fmtTime(r.start))} – ${esc(fmtTime(r.end))}${r.pinned ? " · after Sc " + (byId[d.mealAfter] ? byId[d.mealAfter].n : "") : d.lunch ? "" : " · auto"}</button>`)
+      : canEdit ? `<button type="button" class="sbBan move" data-bk="amove" data-day="${i}" data-before="${esc(r.before || "")}" data-to="${esc(r.to)}"${tipAttr("Company move: " + r.from + " → " + r.to + ". Added automatically; drag to move it")}>${BGRIP}Company move to ${esc(r.to)} · ${r.min} min</button>`
       : `<div class="sbBan move"${tipAttr("Company move: " + r.from + " → " + r.to)}>Company move to ${esc(r.to)} · ${r.min} min</div>`).join("");
     return offBefore(i) + `<section class="sbDayWrap${x.over ? " over" : ""}${folded ? " folded" : ""}" data-day="${i}">
       <div class="sbDay">
@@ -936,23 +942,25 @@ function mealForm(i, d, r, st){
     <label>Starts${autoTimeSelect(d.lunch || "", 'data-mf="at"', "")}</label>
     <label>Minutes<input type="number" min="5" max="240" step="5" data-mf="min" value="${len}"></label>
     <span class="sbXHint">Auto places it before the scene that would run past ${Math.round(T.mealBy / 60 * 10) / 10} hours from call. Length ${T.meal} min unless set here.</span>
-    <span class="sbXBtns"><button type="button" class="btn sm danger" data-sb="mealdel">No meal this day</button><span class="sbSp"></span><button type="button" class="btn sm" data-sb="mealcancel">Cancel</button><button type="button" class="btn sm primary" data-sb="mealsave">Save</button></span>
+    ${d.mealAfter ? `<span class="sbXHint">Pinned after a scene (dragged there). Choosing a start time replaces the pin.</span>` : ""}
+    <span class="sbXBtns"><button type="button" class="btn sm danger" data-sb="mealdel">No meal this day</button>${d.mealAfter ? `<button type="button" class="btn sm" data-sb="mealunpin">Back to auto</button>` : ""}<span class="sbSp"></span><button type="button" class="btn sm" data-sb="mealcancel">Cancel</button><button type="button" class="btn sm primary" data-sb="mealsave">Save</button></span>
   </div>`;
 }
 function mealSave(pid, mode){
   const i = SB.mform; if(i == null) return;
   const box = document.querySelector('#ctl .sbXForm.meal[data-day="' + i + '"]'), val = (k) => { const el = box && box.querySelector('[data-mf="' + k + '"]'); return el ? el.value : ""; };
   const plan = planOf(pid), d = plan.days[i]; SB.mform = null; if(!d){ rerender(); return; }
-  if(mode === "del"){ d.noMeal = true; delete d.lunch; delete d.mealMin; }
+  if(mode === "del"){ d.noMeal = true; delete d.lunch; delete d.mealMin; delete d.mealAfter; }
+  else if(mode === "unpin"){ delete d.mealAfter; delete d.lunch; }
   else if(mode === "back"){ delete d.noMeal; }
   else{
     delete d.noMeal;
-    const at = val("at"); if(at) d.lunch = at; else delete d.lunch;
+    const at = val("at"); if(at){ d.lunch = at; delete d.mealAfter; } else delete d.lunch;
     const T = P.timeSettings(plan.settings), m = Math.round(Number(val("min")) || 0);
     if(m && m !== T.meal) d.mealMin = Math.max(5, Math.min(240, m)); else delete d.mealMin;
   }
   save(pid, plan); rerender();
-  H().toast(mode === "del" ? "Day " + (i + 1) + " has no meal break now. Undo puts it back." : mode === "back" ? "Meal break back on Day " + (i + 1) + "." : "Meal updated.", "ok", 1800);
+  H().toast(mode === "del" ? "Day " + (i + 1) + " has no meal break now. Undo puts it back." : mode === "back" ? "Meal break back on Day " + (i + 1) + "." : mode === "unpin" ? "Meal placed automatically again." : "Meal updated.", "ok", 1800);
 }
 // The form for a break, company move or note added by hand (new, or editing one)
 function xForm(i, d, r){
@@ -972,7 +980,7 @@ function xSave(pid, del){
   const box = document.querySelector('#ctl .sbXForm[data-day="' + f.day + '"]'), val = (k) => { const el = box && box.querySelector('[data-xf="' + k + '"]'); return el ? el.value : ""; };
   const plan = planOf(pid), d = plan.days[f.day]; if(!d){ SB.xform = null; rerender(); return; }
   let list = (d.extras || []).slice();
-  if(del) list = list.filter((y) => y.id !== f.id);
+  if(del){ const gone = list.find((y) => y.id === f.id); list = list.filter((y) => y.id !== f.id); if(gone && gone.k === "move") delete d.noMove; }   // automatic moves come back
   else{
     const k = val("k"), item = { id: f.id || ("x" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)), k, min: k === "note" ? 0 : Math.max(0, Math.min(600, Math.round(Number(val("min")) || 0))), label: val("label").trim().slice(0, 60), after: val("after") };
     if(k === "note" && !item.label){ H().toast("Give the note some words.", "err", 1800); return; }
@@ -1054,7 +1062,7 @@ function sbClick(e, pid, canEdit){
     if(k === "print"){ sbPrint(); return true; }
     if(k === "meal"){ if(!canEdit) return true; SB.mform = Number(a.dataset.day); SB.xform = null; render(pid); return true; }
     if(k === "mealcancel"){ SB.mform = null; render(pid); return true; }
-    if(k === "mealsave" || k === "mealdel"){ if(canEdit) mealSave(pid, k === "mealdel" ? "del" : "save"); return true; }
+    if(k === "mealsave" || k === "mealdel" || k === "mealunpin"){ if(canEdit) mealSave(pid, k === "mealdel" ? "del" : k === "mealunpin" ? "unpin" : "save"); return true; }
     if(k === "mealback"){ if(canEdit){ SB.mform = Number(a.dataset.day); mealSave(pid, "back"); } return true; }
     if(k === "xnew"){ SB.xform = { day: Number(a.dataset.day), id: "" }; if(SB.fold[pid]) SB.fold[pid][a.dataset.day] = false; render(pid); return true; }
     if(k === "xedit"){ if(!canEdit) return true; SB.xform = { day: Number(a.dataset.day), id: a.dataset.id }; render(pid); return true; }
@@ -1093,8 +1101,9 @@ function sbChange(e, pid, canEdit){
    Esc cancels. Alt+↑ / Alt+↓ moves the focused strip one place with the keyboard. */
 const SBD = { on: false, justDropped: false };
 function sbDragStart(box, pid, row, e){
+  const ban = row.classList.contains("sbBan") ? { k: row.dataset.bk, day: Number(row.dataset.day), id: row.dataset.id || "", before: row.dataset.before || "", to: row.dataset.to || "" } : null;
   const ord = sbOrder(box), id = row.dataset.sid;
-  const ids = SB.sel.indexOf(id) >= 0 ? ord.filter((x) => SB.sel.indexOf(x) >= 0) : [id];
+  const ids = ban ? [] : SB.sel.indexOf(id) >= 0 ? ord.filter((x) => SB.sel.indexOf(x) >= 0) : [id];
   const board = box.querySelector(".sbBoard"), scroller = box.querySelector(".ctlBody") || document.scrollingElement;
   const br = board.getBoundingClientRect(), rr = row.getBoundingClientRect();
   const float = document.createElement("div"); float.className = "sbFloat"; float.style.left = rr.left + "px"; float.style.width = rr.width + "px";   // exactly over the strip: it only moves up and down
@@ -1102,10 +1111,11 @@ function sbDragStart(box, pid, row, e){
   document.body.appendChild(float);
   const gap = document.createElement("div"); gap.className = "sbGap"; gap.style.height = Math.max(34, rr.height) + "px";
   if(ids.length > 1) gap.textContent = ids.length + " scenes";
-  const srcs = ids.map((x) => box.querySelector('.sbRow[data-sid="' + CSS.escape(x) + '"]')).filter(Boolean);
+  if(ban) gap.style.height = "26px";
+  const srcs = ban ? [row] : ids.map((x) => box.querySelector('.sbRow[data-sid="' + CSS.escape(x) + '"]')).filter(Boolean);
   row.after(gap); srcs.forEach((el) => el.classList.add("sbSrc"));
-  Object.assign(SBD, { on: true, pid, box, ids, float, gap, srcs, scroller, dy: e.clientY - rr.top, y: e.clientY, raf: 0 });
-  S.drag = id;   // the panel doesn't redraw under a drag
+  Object.assign(SBD, { on: true, pid, box, ids, ban, float, gap, srcs, scroller, dy: e.clientY - rr.top, y: e.clientY, raf: 0 });
+  S.drag = id || "ban";   // the panel doesn't redraw under a drag
   document.body.classList.add("sbDragging");
   sbDragMove(e.clientY);
   const tick = () => { if(!SBD.on) return; const r = SBD.scroller.getBoundingClientRect ? SBD.scroller.getBoundingClientRect() : { top: 0, bottom: innerHeight }; const top = Math.max(0, r.top), bot = Math.min(innerHeight, r.bottom);
@@ -1138,14 +1148,42 @@ function sbDragMove(y){
 function sbDragEnd(cancel){
   if(!SBD.on) return;
   cancelAnimationFrame(SBD.raf);
-  const { pid, ids, gap, float } = SBD;
+  const { pid, ids, gap, float, ban } = SBD;
   const list = gap.parentNode, day = list ? Number(list.dataset.day) : NaN;
+  let prev = gap.previousElementSibling; while(prev && !(prev.classList.contains("sbRow") && !prev.classList.contains("sbSrc"))) prev = prev.previousElementSibling;
+  const after = prev ? prev.dataset.sid : "";
   let next = gap.nextElementSibling; while(next && !(next.classList.contains("sbRow") && !next.classList.contains("sbSrc"))) next = next.nextElementSibling;
   float.remove(); gap.remove();
   SBD.on = false; S.drag = null; document.body.classList.remove("sbDragging");
-  SBD.box.querySelectorAll(".sbSrc").forEach((x) => x.classList.remove("sbSrc")); SBD.box.querySelectorAll(".sbDrop").forEach((x) => x.classList.remove("sbDrop"));
+  SBD.box.querySelectorAll(".sbSrc").forEach((x) => x.classList.remove("sbSrc")); SBD.box.querySelectorAll(".sbDrop").forEach((x) => x.classList.remove("sbDrop")); SBD.ban = null;
   if(cancel || !isFinite(day)){ rerender(); return; }
+  if(ban){ sbBanDrop(pid, ban, day, after); return; }
   sbMove(pid, ids, day, next ? next.dataset.sid : null);
+}
+// A break, move, note or the meal dropped in a new place. `after` = the scene it now follows ("" = start of the day).
+// ⚠ Writes the shared plan; the times follow (the timetable is worked out from the plan and sent with Sync).
+function sbBanDrop(pid, ban, day, after){
+  const plan = planOf(pid), byId = S.lastBd ? P.sceneMap(S.lastBd) : {}, nOf = (id) => byId[id] ? byId[id].n : "";
+  const no = (msg) => { H().toast(msg, "err", 2200); rerender(); };
+  if(day < 0 || !plan.days[day]) return no("Breaks, moves and meals stay on a shoot day.");
+  const d = plan.days[day];
+  if(ban.k === "meal" || ban.k === "amove"){
+    if(day !== ban.day) return no((ban.k === "meal" ? "The meal" : "This company move") + " belongs to Day " + (ban.day + 1) + ". Drag it within that day.");
+    if(!after) return no((ban.k === "meal" ? "The meal" : "A company move") + " goes after a scene, not before the first one.");
+  }
+  if(ban.k === "meal"){ d.mealAfter = after; delete d.lunch; delete d.noMeal; }
+  else if(ban.k === "amove"){
+    // the automatic move becomes one placed by hand, and the automatic one at that location change is switched off
+    const T = P.timeSettings(plan.settings);
+    if(ban.before) d.noMove = Array.from(new Set((d.noMove || []).concat([ban.before])));
+    d.extras = P.cleanExtras((d.extras || []).concat([{ id: "x" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), k: "move", min: T.move, label: ban.to ? "Travel to " + ban.to : "", after }]));
+  } else {
+    const src = plan.days[ban.day], x = src && (src.extras || []).find((y) => y.id === ban.id); if(!x) return no("That item has changed. Try again.");
+    src.extras = src.extras.filter((y) => y.id !== ban.id); if(!src.extras.length) delete src.extras;
+    d.extras = P.cleanExtras((d.extras || []).concat([Object.assign({}, x, { after })]));
+  }
+  save(pid, plan); rerender();
+  H().toast((ban.k === "meal" ? "Meal" : ban.k === "amove" ? "Company move" : "Moved") + (after ? " now after Sc " + nOf(after) : " now at the start of Day " + (day + 1)) + ". Times updated.", "ok", 1800);
 }
 // Alt+↑/↓: one place up or down, across day boundaries (the first strip of a day goes to the end of the day before)
 function sbNudge(pid, id, dir){
@@ -1232,6 +1270,8 @@ function sbWire(box, pid, canEdit){
   if(!canEdit){ box.onpointerdown = null; return; }
   box.oncontextmenu = (e) => { const row = e.target.closest(".sbRow"); if(!row || e.target.closest("input, select, textarea")) return; const b = row.querySelector(".sbMore"); if(!b) return; e.preventDefault(); if(SBM.btn !== b) sbActMenu(pid, b); };
   box.onpointerdown = (e) => {
+    const bn = e.target.closest(".sbBan[data-bk]");
+    if(bn && e.button === 0 && !bn.closest(".sbDayWrap.folded")){ if(e.pointerType !== "mouse" && !e.target.closest(".sbGrip")) return; if(e.pointerType === "mouse") e.preventDefault(); SBD.press = { box, pid, row: bn, x: e.clientX, y: e.clientY }; return; }
     const row = e.target.closest(".sbRow"); if(!row || e.button > 0 || e.target.closest("select, input, button, a, label, .sbPick")) return;
     const grip = !!e.target.closest(".sbGrip");
     if(e.pointerType !== "mouse" && !grip) return;     // touch: only the grip picks up, so the page still scrolls
@@ -1479,7 +1519,7 @@ function wire(box, pid, ctx){
       return;
     }
     if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }
-    if(t.dataset.lunch != null){ update((plan) => { const d = plan.days[Number(t.dataset.lunch)]; if(d){ if(t.value === "none"){ d.noMeal = true; delete d.lunch; } else { delete d.noMeal; if(t.value) d.lunch = t.value; else delete d.lunch; } } }); return; }
+    if(t.dataset.lunch != null){ update((plan) => { const d = plan.days[Number(t.dataset.lunch)]; if(d){ delete d.mealAfter; if(t.value === "none"){ d.noMeal = true; delete d.lunch; } else { delete d.noMeal; if(t.value) d.lunch = t.value; else delete d.lunch; } } }); return; }
     if(t.dataset.wrapat != null){ update((plan) => { const d = plan.days[Number(t.dataset.wrapat)]; if(d){ if(t.value) d.wrapAt = t.value; else delete d.wrapAt; } }); return; }
     if(t.dataset.call != null){ update((plan) => { const d = plan.days[Number(t.dataset.call)]; if(d) d.call = t.value === plan.settings.call ? "" : t.value; }); return; }
     if(t.dataset.status != null){ const id = t.dataset.status, v = t.value; update((plan) => { P.setStatus(plan, id, v); }); H().toast("Sc " + ((ctx.bd && P.sceneMap(ctx.bd)[id] || {}).n || "") + ": " + v, "ok", 1400); return; }

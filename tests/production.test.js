@@ -256,6 +256,23 @@ test("timetable: a company move when the location changes; settings, defaults an
   const tt = P.timetable({ settings: { days: 2, call: "07:00" }, days: [{ scenes: ["a"] }, { scenes: [] }] }, by);
   assert.strictEqual(tt.length, 2); assert.strictEqual(tt[0].rows[0].shoot, "08:00"); assert.strictEqual(tt[1].wrap, "");
 });
+test("timetable: a meal pinned after a scene, and an automatic move switched off", () => {
+  const by = { a: { id: "a", loc: "STREET", est: 60 }, b: { id: "b", loc: "BRIDGE", est: 60 }, c: { id: "c", loc: "BRIDGE", est: 60 } };
+  const t = P.dayTimes({ scenes: ["a", "b", "c"], mealAfter: "a", lunch: "13:00" }, by, { call: "07:00" });
+  const kinds = t.rows.map((r) => r.type === "scene" ? r.id : r.type);
+  assert.deepStrictEqual(kinds, ["a", "meal", "move", "b", "c"]);
+  const meal = t.rows.find((r) => r.type === "meal"); assert.ok(meal.pinned); assert.deepStrictEqual([meal.start, meal.end], ["09:00", "09:30"]);
+  assert.strictEqual(t.rows.find((r) => r.type === "move").before, "b");
+  // the pinned scene leaves the day: back to the usual rules (here the lunch time)
+  assert.ok(!P.dayTimes({ scenes: ["b", "c"], mealAfter: "a" }, by, { call: "07:00" }).rows.some((r) => r.pinned));
+  // no automatic move before b; a hand move elsewhere keeps its minutes
+  const t2 = P.dayTimes({ scenes: ["a", "b", "c"], noMove: ["b"], extras: [{ id: "m", k: "move", min: 30, after: "b" }] }, by, { call: "07:00" });
+  assert.deepStrictEqual(t2.rows.map((r) => r.type === "scene" ? r.id : r.type), ["a", "b", "extra", "c"]);
+  assert.strictEqual(t2.rows[3].shoot, "11:30");
+  // the plan keeps both through normalize
+  const n = P.normalize({ settings: { days: 1 }, days: [{ scenes: ["a"], mealAfter: "a", noMove: ["b", "b", ""] }] });
+  assert.strictEqual(n.days[0].mealAfter, "a"); assert.deepStrictEqual(n.days[0].noMove, ["b"]);
+});
 
 test("sunrise and sunset: known places and dates, and no sunrise at the pole in summer", () => {
   const hm = (iso, lat, lng, tz) => { const t = P.sunTimes(iso, lat, lng); return [P.hmIn(t.rise, tz), P.hmIn(t.set, tz)]; };

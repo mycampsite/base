@@ -118,6 +118,9 @@ function normalize(plan){
   const arr = (v) => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).sort((a, b) => a - b).map((k) => v[k]) : []);
   let days = arr(plan.days).map((d) => { const o = { id: String((d && d.id) || uid()), scenes: arr(d && d.scenes).map(String).filter(Boolean), call: String((d && d.call) || ""), note: String((d && d.note) || ""), date: parseISO(d && d.date) ? d.date : "" }; const w = cleanWhere(d && d.where); if(w) o.where = w; const hm = (v) => /^\d{2}:\d{2}$/.test(String(v || "")) ? String(v) : ""; if(hm(d && d.lunch)) o.lunch = d.lunch; if(hm(d && d.wrapAt)) o.wrapAt = d.wrapAt; const x = cleanExtras(d && d.extras); if(x.length) o.extras = x;
     // the day's meal: its own length, or none at all
+    // the meal pinned after one scene (dragged there), and automatic company moves switched off before these scenes
+    if(d && d.mealAfter) o.mealAfter = String(d.mealAfter).slice(0, 80);
+    const nm = arr(d && d.noMove).map(String).filter(Boolean).slice(0, 40); if(nm.length) o.noMove = Array.from(new Set(nm));
     if(d && d.noMeal === true) o.noMeal = true; else if(d && d.mealMin != null && d.mealMin !== "" && isFinite(Number(d.mealMin))) o.mealMin = clampInt(d.mealMin, 5, 240, 30);
     return o; });
   // the day count setting is the truth: pad with empty days. More stored days than the setting
@@ -496,23 +499,27 @@ function dayTimes(day, byId, settings){
   let handMove = false;   // a company move added by hand right before this scene replaces the automatic one
   // this day's meal length (its own, the shoot's, or none)
   T.meal = day && day.noMeal ? 0 : (day && day.mealMin > 0 ? day.mealMin : T.meal);
+  // a meal dragged after a scene stays there (only while that scene is on this day); otherwise the lunch time or the rules place it
+  const pinAt = T.meal > 0 && day && day.mealAfter && sc.some((s) => s.id === day.mealAfter) ? day.mealAfter : null;
+  const noMove = (day && day.noMove) || [];
   const extra = (x) => { rows.push({ type: "extra", id: x.id, k: x.k, label: x.label, min: x.min, start: toHM(t), end: toHM(t + x.min) }); t += x.min; if(x.k === "move") handMove = true; };
   extrasAfter(day, "").forEach(extra);
   sc.forEach((s, i) => {
     const e = estOf(s), loc = String(s.loc || "");
-    if(i > 0 && T.move > 0 && !handMove && loc && prevLoc && loc !== prevLoc){ rows.push({ type: "move", from: prevLoc, to: loc, start: toHM(t), end: toHM(t + T.move), min: T.move }); t += T.move; }
+    if(i > 0 && T.move > 0 && !handMove && loc && prevLoc && loc !== prevLoc && noMove.indexOf(s.id) < 0){ rows.push({ type: "move", from: prevLoc, to: loc, before: s.id, start: toHM(t), end: toHM(t + T.move), min: T.move }); t += T.move; }
     const setup = i === 0 ? T.prep : T.turn;
     // the meal goes in before the scene that would run past the meal limit, once the day is close to it
-    if(lunchAt != null && !meal && i > 0 && T.meal > 0 && (t >= lunchAt || (t + setup + e > lunchAt + 45 && t >= lunchAt - 60))){
+    if(!pinAt && lunchAt != null && !meal && i > 0 && T.meal > 0 && (t >= lunchAt || (t + setup + e > lunchAt + 45 && t >= lunchAt - 60))){
       meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal, manual: true }; rows.push(meal); t += T.meal;
     }
-    if(lunchAt == null && !meal && i > 0 && T.meal > 0 && t + setup + e > call + T.mealBy && t >= call + T.mealBy - 150){
+    if(!pinAt && lunchAt == null && !meal && i > 0 && T.meal > 0 && t + setup + e > call + T.mealBy && t >= call + T.mealBy - 150){
       meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal }; rows.push(meal); t += T.meal;
     }
     rows.push({ type: "scene", id: s.id, n: s.n, call: toHM(t), shoot: toHM(t + setup), wrap: toHM(t + setup + e), est: e });
     t += setup + e; est += e; if(loc) prevLoc = loc;
     handMove = false; extrasAfter(day, s.id).forEach(extra);
-    if(lunchAt == null && !meal && T.meal > 0 && t >= call + T.mealBy && i < sc.length - 1){ lateMeal = t > call + T.mealBy; meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal, late: lateMeal }; rows.push(meal); t += T.meal; }
+    if(pinAt === s.id){ meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal, manual: true, pinned: true }; rows.push(meal); t += T.meal; }
+    if(!pinAt && lunchAt == null && !meal && T.meal > 0 && t >= call + T.mealBy && i < sc.length - 1){ lateMeal = t > call + T.mealBy; meal = { type: "meal", start: toHM(t), end: toHM(t + T.meal), min: T.meal, late: lateMeal }; rows.push(meal); t += T.meal; }
   });
   extrasAfter(day, null).forEach(extra);
   const manualWrap = toMin(day && day.wrapAt), autoWrap = sc.length ? toHM(t) : "";
