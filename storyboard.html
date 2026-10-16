@@ -722,6 +722,7 @@ function render(c,w,h,st){
  let blurAt=null;
  if(op.dof){let s=0;const fi=op.focus>=0&&st.figs[op.focus]?op.focus:-1;
   if(fi>=0)s=-toC(Lr(st.figs[fi],FG[fi].G.Hc)).z;
+  else if(op.focus===-2&&Array.isArray(op.fm))s=-toC(A3(op.fm)).z;
   else{let bd=1e9;st.figs.forEach((f,i)=>{const q=pj(Lr(f,FG[i].G.Hc));if(q.d<=NEAR||q.x<0||q.x>CW||q.y<-CH*0.3||q.y>CH*1.3)return;const dd=Math.hypot(q.x-CW/2,q.y-CH/2);if(dd<bd){bd=dd;s=q.d}})}
   if(!(s>0))s=Math.hypot(cm.p[0]-cm.t[0],cm.p[1]-cm.t[1],cm.p[2]-cm.t[2]);
   const k=sc*1.6*Math.pow(mmOf(cm.fov)/35,2)*(2.8/(op.fstop||2.8));
@@ -764,6 +765,11 @@ function render(c,w,h,st){
   Object.keys(hh).forEach(k=>{const q=pj(hh[k]);if(q.d<=NEAR)return;const pe=k==='pel',r=clamp(0.03*q.k*f.h,1.8*sc,4*sc)*(pe?1.35:1);c.beginPath();c.arc(q.x,q.y,r,0,6.2832);c.fillStyle=pe?'rgba(24,95,165,0.18)':'rgba(255,255,255,0.8)';c.fill();c.strokeStyle=BL;c.lineWidth=Math.max(1,r*0.28);c.stroke()});
   const tp=pj(Lr(f,FG[st.sel].G.Hc.clone().add(V(0,0.24,0))));if(tp.d>NEAR&&!op.names){c.font='600 '+clamp(0.12*tp.k*f.h,4.5*sc,9*sc)+'px system-ui,sans-serif';c.fillStyle=f.col;c.textAlign='center';c.fillText(f.n,tp.x,tp.y);c.textAlign='left'}}
  c.restore();
+ // Focus marker: a small target on the set that the focus is pulled to (drag it in any 3D mode)
+ if(!st.thumb&&op.dof&&op.focus===-2&&Array.isArray(op.fm)){const q=pj(A3(op.fm));if(q.d>NEAR){const r=6*sc,col='#ffb02e';
+  c.save();c.lineWidth=1.6*sc;c.strokeStyle='rgba(0,0,0,.55)';c.beginPath();c.arc(q.x,q.y,r+1.2*sc,0,6.2832);c.stroke();
+  c.strokeStyle=col;c.beginPath();c.arc(q.x,q.y,r,0,6.2832);[[-1,0],[1,0],[0,-1],[0,1]].forEach(([a,b])=>{c.moveTo(q.x+a*r*0.45,q.y+b*r*0.45);c.lineTo(q.x+a*r*1.7,q.y+b*r*1.7)});c.stroke();
+  c.fillStyle=col;c.beginPath();c.arc(q.x,q.y,1.6*sc,0,6.2832);c.fill();c.restore()}}
  if(!st.thumb&&op.guides){c.strokeStyle=TH.guide;c.lineWidth=0.8*sc;c.beginPath();[1,2].forEach(i=>{c.moveTo(w*i/3,0);c.lineTo(w*i/3,h);c.moveTo(0,h*i/3);c.lineTo(w,h*i/3)});c.stroke()}
  const lw2=w/sc;
  (st.ink||[]).forEach(s=>{if(!s.p.length)return;const p=s.p.length<2?[s.p[0],[s.p[0][0]+0.1,s.p[0][1]]]:s.p;c.strokeStyle=s.c;c.lineWidth=s.w*sc;path(c,p.map(q=>[(q[0]+lw2/2)*sc,q[1]*sc]),false,false);c.stroke()});
@@ -929,7 +935,7 @@ const TPL={
 
 
 /* ---------- embedded state: one live editor, bound to the open shot ---------- */
-const OPT0={grid:true,shadows:true,sun:35,guides:false,night:false,dof:false,fstop:2.8,focus:-1,names:false,lock:false};
+const OPT0={grid:true,shadows:true,sun:35,guides:false,night:false,dof:false,fstop:2.8,focus:-1,fm:null,names:false,lock:false};
 let OPT=Object.assign({},OPT0);
 const VN=['Front','Side','Back','Low','High','Top'];
 let objs=[],figs=[],ct=cl(CAM0),cv_=cl(CAM0),sel=0,so=-1,mode='draw',cmode='orbit',tn='Empty',customs={};
@@ -1039,6 +1045,7 @@ function wire(cv,sig){
   const q=pt(e),u=unroll(q);setupMain();drag=OPT.lock?null:{m:'cam',k:cmode,last:u,moved:0};
   if(drag&&(e.button===1||e.button===2||e.shiftKey)){drag.k='move';return}
   if(drag&&e.altKey){drag.k='look';return}
+  if(drag&&OPT.dof&&OPT.focus===-2&&Array.isArray(OPT.fm)){const s=pj(A3(OPT.fm));if(s.d>NEAR&&Math.hypot(s.x-u[0],s.y-u[1])<14){drag={m:'fm',py:OPT.fm[1]};kick();return}}
   if(mode==='set'){const rv=ray(q),hit=pickObj(rv);if(hit){const o=hit.o,H=cam.position.clone().addScaledVector(rv,hit.t);so=o.id;drag={m:'obj',o,py:H.y,dx:o.x-H.x,dz:o.z-H.z};panel();kick()}return}
   if(mode==='fig'){let f=figs[sel],hd=null;
    if(f){const hh=handlesOf(f,figGeo(figs)[sel]);let bd=16;Object.keys(hh).forEach(k=>{const s=pj(hh[k]),dd=Math.hypot(s.x-u[0],s.y-u[1]);if(s.d>NEAR&&dd<bd){bd=dd;hd=k}})}
@@ -1052,6 +1059,7 @@ function wire(cv,sig){
   if(drag.m==='cam'){const dx=u[0]-drag.last[0],dy=u[1]-drag.last[1];drag.last=u;drag.moved+=Math.abs(dx)+Math.abs(dy);camOp(drag.k,dx,dy);snapCam()}
   else if(drag.m==='obj'){const h=onY(ray(q),drag.py);if(h){if(!drag.u){pushUndo();drag.u=1}drag.o.x=h.x+drag.dx;drag.o.z=h.z+drag.dz;if(e.altKey)snapMark=[];else snapPiece(drag.o)}}
   else if(drag.m==='fig'){if(!drag.u){pushUndo();drag.u=1}figDrag(drag,q)}
+  else if(drag.m==='fm'){const h=onY(ray(q),drag.py);if(h){if(!drag.u){pushUndo();drag.u=1}OPT.fm=[h.x,drag.py,h.z]}}
   kick()},{signal:sig});
  const endPtr=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2&&pinch){if(pinch.moved)camEnd();pinch=null}if(!drag||ptrs.size)return;
   snapMark=[];const wasCam=drag.m==='cam'&&drag.moved>=3;if(drag.m==='cam'&&mode==='set'&&drag.moved<3&&so!==-1)so=-1;drag=null;panel();kick();if(wasCam)camEnd()};
@@ -1101,7 +1109,7 @@ function panel(){if(!pn)return;if(mode==='draw'||!BOUND){pn.innerHTML='';return}
    +'<div'+(OPT.lock?' class="locked"':'')+'><div class="lbl">View</div>'+pills(VN,'v',null)
    +'<div class="lbl">Camera</div>'+sl('Lens','mm',0,100,0.5,mmToV(mm).toFixed(1),Math.round(mm)+'mm')+sl('Height','cy',0.05,12,0.01,ct.p[1].toFixed(2),ct.p[1].toFixed(2)+' m')
    +sl('Distance','dol',0.3,20,0.05,d.toFixed(2),d.toFixed(1)+' m')+sl('Roll','roll',-30,30,1,Math.round(ct.roll),Math.round(ct.roll)+'°')+sl('Pan','pan',-180,180,1,aimPan(ct),aimPan(ct)+'°')+sl('Tilt','tilt',-85,85,1,aimTilt(ct),aimTilt(ct)+'°')+'</div>'
-   +sec('dof','Depth of field',chk('dof','Depth of field')+'<div class="row2"><div style="flex:1;min-width:0"><div class="lbl">Aperture</div>'+selBox('fstop',[1.4,2,2.8,4,5.6,8,11,16].map(v=>[v,'f/'+v]),OPT.fstop)+'</div><div style="flex:1;min-width:0"><div class="lbl">Focus on</div>'+selBox('focus',[[-1,'Auto (subject)']].concat(figs.map((p,i)=>[i,p.n])),OPT.focus)+'</div></div>')
+   +sec('dof','Depth of field',chk('dof','Depth of field')+'<div class="row2"><div style="flex:1;min-width:0"><div class="lbl">Aperture</div>'+selBox('fstop',[1.4,2,2.8,4,5.6,8,11,16].map(v=>[v,'f/'+v]),OPT.fstop)+'</div><div style="flex:1;min-width:0"><div class="lbl">Focus on</div>'+selBox('focus',[[-1,'Auto (subject)'],[-2,'Focus marker']].concat(figs.map((p,i)=>[i,p.n])),OPT.focus)+(OPT.focus===-2?'<div class="lbl" style="margin-top:4px">Drag the orange marker on the set</div>':'')+'</div></div>')
    +sec('camMore','Options','<div class="lbl">Drag to</div>'+pills([['orbit','Orbit'],['look','Look'],['move','Move']],'cm',cmode)+'<div class="lbl">Look</div>'+pills([['0','Day'],['1','Night']],'nt',OPT.night?'1':'0')+chk('guides','Thirds guide')+chk('names','Nameplates')+'<div class="lockRow'+(OPT.lock?' on':'')+'">'+chk('lock','Lock camera')+'</div>')}
  else if(mode==='set'){
   h+='<div class="lbl">Location</div>'+selBox('tp',Object.keys(TPL).concat(Object.keys(customs)),TPL[tn]||customs[tn]?tn:'',TPL[tn]||customs[tn]?'':'Custom')
@@ -1162,7 +1170,7 @@ function act(d){const f=figs[sel],o=objs.find(x=>x.id===so);let camMoved=false;
  if(a==='fa'&&figs.length<8){pushUndo();addFig()}
  if(d.fa&&figs.length<8){pushUndo();addFig(d.fa==='__x'?null:d.fa==='__e'?'__extra':d.fa)}
  if(d.fstop){pushUndo();OPT.fstop=+d.fstop}
- if(d.focus!==undefined&&d.focus!==''){pushUndo();OPT.focus=+d.focus}
+ if(d.focus!==undefined&&d.focus!==''){pushUndo();OPT.focus=+d.focus;if(OPT.focus===-2&&!Array.isArray(OPT.fm))OPT.fm=[ct.t[0],Math.max(0.3,ct.t[1]),ct.t[2]]}
  if(a==='cp'){copySel();return}
  if(a==='ps'){pasteClip();return}
  if(a==='fx'&&f){pushUndo();removeFig(sel)}

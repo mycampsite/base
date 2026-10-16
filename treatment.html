@@ -241,6 +241,8 @@
   .palSplit{ flex:0 0 8px; cursor:col-resize; position:relative; background:transparent; }
   .palSplit::after{ content:""; position:absolute; top:50%; left:50%; width:4px; height:44px; border-radius:3px; background:rgba(255,255,255,.22); transform:translate(-50%,-50%); transition:background .12s, height .12s; }
   .palSplit:hover::after, .palSplit.on::after{ background:#fff; height:72px; }
+  .palRole{ font:700 10px Inter,sans-serif; letter-spacing:.06em; text-transform:uppercase; opacity:.85; text-align:center; padding-top:2px; }
+  .palRole span{ font-weight:500; opacity:.8; margin-left:4px; }
   .palWt{ display:inline-flex; align-items:center; gap:2px; border-radius:9px; background:rgba(127,127,127,.2); padding:0 2px; }
   .palWt button{ width:22px !important; height:26px !important; background:none !important; font-size:13px !important; }
   .palWt b{ font:700 11px Inter,sans-serif; min-width:20px; text-align:center; }
@@ -3342,6 +3344,20 @@
     const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
     return out.sort((a, b) => lum(a) - lum(b)).map((c) => "#" + [c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join(""));
   }
+  // The colour hierarchy of a picture: how much of the frame each colour covers. picks = colours already chosen (kept);
+  // the rest are filled with the next most-covering distinct colours. Returns [{ hex, share }] biggest share first.
+  async function paletteShares(srcs, n, picks){
+    const bins = {};
+    for(const src of srcs){ const one = await binsOf(src); for(const k in one){ const a = one[k], b = bins[k] || (bins[k] = { n:0, r:0, g:0, b:0 }); b.n += a.n; b.r += a.r; b.g += a.g; b.b += a.b; } }
+    const list = Object.keys(bins).map((k) => { const b = bins[k]; return { r:b.r / b.n, g:b.g / b.n, b:b.b / b.n, n:b.n }; }).sort((a, b) => b.n - a.n);
+    const dist = (a, b) => Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b), hx = (c) => "#" + [c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+    const out = (picks || []).map((h) => { const c = hx2rgb(h); return { r:c.r, g:c.g, b:c.b, keep:h }; });
+    [64, 44, 28, 0].forEach((th) => { for(const c of list){ if(out.length >= n) break; if(!out.includes(c) && out.every((o) => dist(o, c) > th)) out.push(c); } });
+    if(!out.length) return [];
+    const got = out.map(() => 0); let tot = 0;
+    list.forEach((c) => { let bi = 0, bd = 1e9; out.forEach((o, i) => { const d = dist(o, c); if(d < bd){ bd = d; bi = i; } }); got[bi] += c.n; tot += c.n; });
+    return out.map((o, i) => ({ hex:o.keep || hx(o), share:tot ? got[i] / tot : 0 })).sort((a, b) => b.share - a.share);
+  }
   function repalette(n){
     const pg = curPage();
     commit(() => rebuildPage(pg, pg.layout, { n }), "Swatches");
@@ -3431,7 +3447,7 @@
     async function generate(kind){
       const tok = ++genTok, c = await candidates(srcMode);
       if(tok !== genTok) return;
-      snap();
+      snap(); cols.forEach((x) => { delete x.pct; });
       const locked = cols.filter((x) => x.lock).map((x) => x.hex);
       if(c && c.length){
         const used = locked.slice();
@@ -3447,6 +3463,23 @@
         cols.forEach((x, i) => { if(x.lock) return; const hu = (base + (i % 2 ? scheme : 0) + (i * 360 / (cols.length + 1)) * (Math.random() * .5 + .25)) % 360; x.hex = hsl2hex(hu, 35 + Math.random() * 45, 18 + Math.random() * 64); });
       }
       if(!cols.some((x) => x.lock)) cols.sort((a, b) => lumOf(a.hex) - lumOf(b.hex));   // dark to light, unless you've pinned some
+      paint();
+    }
+    // Colour hierarchy: dominant → secondary → accents by how much of the picture each covers; each swatch's size follows its share.
+    // Locked colours stay and are ranked too.
+    async function hierarchy(){
+      const tok = ++genTok;
+      let ids = srcMode === "all" ? T.images.map((x) => x.id) : srcMode === "page" ? pageImgIds : [srcMode];
+      if(!ids.length) ids = Array.from(usedImageIds());
+      if(!ids.length){ notify("Add photos first: the hierarchy comes from a picture.", true); return; }
+      const got = await Promise.all(ids.slice(0, 24).map(ensureImg)), srcs = got.filter(Boolean).map((c) => c.thumb || c.src);
+      const res = srcs.length ? await paletteShares(srcs, cols.length, cols.filter((x) => x.lock).map((x) => x.hex)) : [];
+      if(tok !== genTok || !res.length) return;
+      snap();
+      const byHex = {}; cols.forEach((x) => { if(x.lock) byHex[x.hex] = x; });
+      const top = res[0].share || 1;
+      cols = res.map((r) => { const x = byHex[r.hex] || { hex:r.hex, name:"", lock:false };
+        return Object.assign(x, { pct:Math.round(r.share * 100), w:Math.max(1, Math.min(4, Math.round(4 * r.share / top))) }); });
       paint();
     }
     // a new colour: the next distinct one from the current photo source, else a hue turn from its neighbour
@@ -3469,6 +3502,7 @@
         <div class="palTitle"><b>Palette Studio</b><span class="palHint">Click the photo to pick a colour · Space for a new mix · drag swatches to reorder · paste hex codes to import</span></div>
         <div class="palHeadActs">
           <div class="palGroup"><button type="button" id="palUndo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button><button type="button" id="palRedo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button></div>
+          <button type="button" class="btn sm" id="palHier" title="Order by how much of the picture each colour covers: dominant first, accents last, sized to match">Hierarchy</button>
           <button type="button" class="btn sm" id="palGen" title="New mix from the current photos">Shuffle <kbd>Space</kbd></button>
           <button type="button" class="iconBtn sm" id="palX" title="Close" aria-label="Close">✕</button>
         </div>
@@ -3641,6 +3675,7 @@
           <label class="palPick" title="Change colour"><input type="color" value="${c.hex}" data-a="pick"></label>
           <input class="palHex" value="${c.hex.toUpperCase()}" maxlength="7" spellcheck="false" aria-label="Hex code">
           <input class="palName" value="${esc(c.name || "")}" placeholder="Name" maxlength="28" aria-label="Colour name">
+          ${c.pct != null ? `<div class="palRole">${i === 0 ? "Dominant" : i === 1 ? "Secondary" : i === cols.length - 1 && cols.length > 2 ? "Accent" : "Support"}<span>${c.pct}%</span></div>` : ""}
         </div>`;
       }).join("") + (cols.length < MAXC ? `<button type="button" class="palAddEnd" data-a="addEnd" title="Add a colour" aria-label="Add a colour"><span>+</span></button>` : "");
       landedK = 0;
@@ -3683,7 +3718,7 @@
     colsEl.addEventListener("input", (e) => {
       const t = e.target; if(!t.closest(".palCol")) return; const i = idxOf(t);
       if(!editing){ snap(); editing = true; }
-      if(t.dataset.a === "pick"){ cols[i].hex = t.value; const col = t.closest(".palCol"); col.style.background = t.value; col.style.color = lumOf(t.value) > 0.55 ? "#111" : "#fff"; col.querySelector(".palHex").value = t.value.toUpperCase(); updatePreview(); }
+      if(t.dataset.a === "pick"){ cols[i].hex = t.value; delete cols[i].pct; const col = t.closest(".palCol"); col.style.background = t.value; col.style.color = lumOf(t.value) > 0.55 ? "#111" : "#fff"; col.querySelector(".palHex").value = t.value.toUpperCase(); updatePreview(); }
       else if(t.classList.contains("palName")){ cols[i].name = t.value; updatePreview(); }
     });
     colsEl.addEventListener("change", (e) => {
@@ -3708,6 +3743,7 @@
     colsEl.addEventListener("dragend", () => { dragFrom = -1; dropAt = -1; clearDrop(); colsEl.querySelectorAll(".dragging").forEach((x) => x.classList.remove("dragging")); });
     shade.querySelectorAll(".palFoot .seg").forEach((sg) => sg.addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if(!b) return; const k = sg.dataset.k; o[k] = k === "gap" ? Number(b.dataset.v) : b.dataset.v; dirty = true; paint(); }));
     $p("#palGen").onclick = () => generate("roll");
+    $p("#palHier").onclick = () => hierarchy();
     $p("#palUndo").onclick = doUndo; $p("#palRedo").onclick = doRedo;
     $p("#palPlus").onclick = () => addColour(); $p("#palMinus").onclick = removeColour;
     $p("#palCopy").onclick = async () => { try{ await navigator.clipboard.writeText(cols.map((c) => c.hex.toUpperCase()).join(" ")); notify("Hex codes copied"); }catch(_e){} };
