@@ -830,6 +830,31 @@ async function api(action, args = {}, tries = 0) {
   }
   return out.data;
 }
+// A dot on the browser-tab icon when Sync finishes while you're looking elsewhere (blue = done, red = it failed).
+// It clears as soon as you come back to the tab.
+const TAB_ICON = (document.querySelector('link[rel="icon"]') || {}).href || "favicon.png";
+function tabDot(failed) {
+  if (document.hasFocus() && !document.hidden) return;
+  const link = document.querySelector('link[rel="icon"]'); if (!link) return;
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
+      g.drawImage(img, 0, 0, 64, 64);
+      g.beginPath(); g.arc(48, 16, 15, 0, Math.PI * 2); g.fillStyle = "#1b1b1b"; g.fill();
+      g.beginPath(); g.arc(48, 16, 11, 0, Math.PI * 2); g.fillStyle = failed ? "#ff6b61" : "#3b8cff"; g.fill();
+      link.href = c.toDataURL("image/png");
+      if (!/^● /.test(document.title)) document.title = "● " + document.title;
+    } catch (_e) {}
+  };
+  img.src = TAB_ICON;
+}
+function tabDotClear() {
+  const link = document.querySelector('link[rel="icon"]'); if (link && link.href !== TAB_ICON) link.href = TAB_ICON;
+  if (/^● /.test(document.title)) document.title = document.title.slice(2);
+}
+window.addEventListener("focus", tabDotClear);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) tabDotClear(); });
 async function run(btn, fn) {
   btn.disabled = true;
   try { await fn(); } catch (e) { toast(e.message || String(e)); }
@@ -2049,7 +2074,7 @@ window.__CampHub = {
       toast("Call sheets are up to date.", "ok");
     } catch (e) { window.CampProdPanel && window.CampProdPanel.csError(pid, e.message || String(e)); throw e; }
   }),
-  syncSheets: async (pid, fileId, btn) => run(btn, async () => {
+  syncSheets: async (pid, fileId, btn) => run(btn, async () => { try {
     // Order matters only where one doc reads another: Crew & Contacts first (the Budget reads its crew rows),
     // then Schedule, Budget and Shot list together (separate Sheets, built at the same time), call sheets last.
     const have = ((sheetsByProject[pid] && sheetsByProject[pid].list) || []).map(s => s.name || "");
@@ -2081,7 +2106,8 @@ window.__CampHub = {
     }
     toast("Schedule, budget and call sheets now follow the plan.", "ok");
     await loadSheets(pid);
-  })
+    tabDot(false);
+  } catch (e) { tabDot(true); throw e; } })
 };
 
 // ---------- drafts: exported PDFs kept under their script (served by Camp's script cloud) ----------

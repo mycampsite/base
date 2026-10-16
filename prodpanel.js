@@ -723,7 +723,7 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbDayWrap.folded .sbDay{ border-bottom:0; }
 .sbDayL, .sbDayR, .sbDayB{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; min-width:0; }
 .sbDayR{ justify-content:flex-end; }
-.sbDayB{ grid-column:1 / -1; padding-left:40px; }
+.sbDayB{ grid-column:1 / -1; }
 .sbDayL, .sbDayR{ min-height:30px; }
 .sbTimes{ display:inline-flex; align-items:center; height:30px; border:1px solid var(--uiBorder); border-radius:8px; background:#171717; }
 .sbTimes .sbT{ height:100%; padding:0 2px 0 10px; gap:2px; }
