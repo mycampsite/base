@@ -1651,7 +1651,7 @@ async function exportDoc(kind, fileId, retried) {
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (_e) {}
   // the Breakdown tab's element sheets go with the schedule and call sheets (the Schedule sheet gets Breakdown + Elements tabs)
   let breakdown = null;
-  if((kind === "schedule" || kind === "callsheets") && window.CampBdPanel && window.CampBdPanel.payload){ try{ breakdown = await window.CampBdPanel.payload(current.pid, fileId); }catch(_e){ breakdown = null; } }
+  if((kind === "schedule" || kind === "callsheets" || kind === "budget") && window.CampBdPanel && window.CampBdPanel.payload){ try{ breakdown = await window.CampBdPanel.payload(current.pid, fileId); }catch(_e){ breakdown = null; } }
   // call / shoot / wrap per scene, the meal, company moves, place, sun and weather: worked out in the hub, laid out by the Schedule sheet
   let times = null;
   if ((kind === "schedule" || kind === "callsheets") && window.CampProdPanel && window.CampProdPanel.timetable) { try { times = await window.CampProdPanel.timetable(current.pid); } catch (_e) { times = null; } }
