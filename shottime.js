@@ -12,7 +12,7 @@
    Inputs (what the hub already has; nothing here is stored):
      scene { id, ie: "INT"|"EXT"|"INT/EXT"|"I/E", dn: "D"|"N"|"M"(dawn/dusk)|"C", eighths, cast: [names] or a count,
              tags: [tag keys] (see sceneTags), est, estAuto }
-     shot  { size, angle, move, equip, desc, cast: "ANA, BEN" or a count,                    (the shot list's columns)
+     shot  { size, angle, move, equip, desc, cast: "ANA, BEN" or a count, min (EST. MIN typed), (the shot list's columns)
              mv, li, st, takes, dur, inc }                                                   (optional overrides; empty = work it out) */
 (function (root) {
 "use strict";
@@ -162,8 +162,9 @@ function shotTime(scene, shot, ctx, cfgIn){
   const sc = MV[0] + LI[0] + Math.min(cast, 6) * 0.4 + (isNight ? 1 : 0) + tg.score, score = r1(sc);   // shown to 1 decimal, used in full
   const setup = Math.max(3, Math.round(raw * cfg.setup[st]));
   const shoot = Math.ceil(Math.round(takes * (takeSec / 60 + 1 + 0.4 * sc) * 1000) / 1000);
-  const exact = Math.round((setup + shoot) * (1 + cfg.cont / 100));
-  return { size, cls, mv, li, cast, st, takes, takeSec, tags: inFrame.map((t) => t.key), score, complexity: band(sc, cfg), setup, shoot, exact, min: ceilTo(exact, cfg.round) };
+  const exact = Math.round((setup + shoot) * (1 + cfg.cont / 100)), auto = ceilTo(exact, cfg.round);
+  const typed = num(shot.min) > 0 ? Math.min(1440, Math.round(num(shot.min))) : 0;   // EST. MIN typed in the shot list wins
+  return { size, cls, mv, li, cast, st, takes, takeSec, tags: inFrame.map((t) => t.key), score, complexity: band(sc, cfg), setup, shoot, exact, auto, typed: !!typed, min: typed || auto };
 }
 
 // ---------- a scene: prep (once) plus every shot in order ----------

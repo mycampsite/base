@@ -495,10 +495,10 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 </script>
 
 <script src="breakdown.js" defer></script>
-<script src="production.js?v=5" defer></script>
-<script src="shottime.js?v=1" defer></script>
+<script src="production.js?v=6" defer></script>
+<script src="shottime.js?v=2" defer></script>
 <script src="elements.js?v=5" defer></script>
-<script src="prodpanel.js?v=8" defer></script>
+<script src="prodpanel.js?v=9" defer></script>
 <script src="bdpanel.js?v=15" defer></script>
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=2" defer></script>
@@ -1624,6 +1624,9 @@ async function exportDoc(kind, fileId, retried) {
   // call / shoot / wrap per scene, the meal, company moves, place, sun and weather: worked out in the hub, laid out by the Schedule sheet
   let times = null;
   if ((kind === "schedule" || kind === "callsheets") && window.CampProdPanel && window.CampProdPanel.timetable) { try { times = await window.CampProdPanel.timetable(current.pid); } catch (_e) { times = null; } }
+  // the shot list's EST. MIN column: each shot's estimate, worked out in the hub (a number typed in the Sheet is kept there)
+  let shotMins = null;
+  if (kind === "shotlist" && window.CampProdPanel && window.CampProdPanel.shotMinutes) { try { shotMins = await window.CampProdPanel.shotMinutes(current.pid); } catch (_e) { shotMins = null; } }
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 240000);
   let res;
   try {
@@ -1631,7 +1634,7 @@ async function exportDoc(kind, fileId, retried) {
       // The Production plan travels with every export, so the schedule and budget follow the panel
       body: JSON.stringify({ key: lsGet(KEY_KEY) || "", action: kind, fileId, folderId: p.folderId, tz, plan: (p && p.production && p.production.scriptId === fileId) ? p.production : null, breakdown,
         // call / shoot / wrap per scene, the meal and company moves, worked out in the hub (the Schedule sheet lays them out)
-        times }) });
+        times, shotMins }) });
     res = await r.json();
   } catch (err) {
     throw new Error(err && err.name === "AbortError" ? "Google took too long. Try again: it may be half made, and trying again finishes it." : "Couldn't reach the script cloud.");

@@ -399,6 +399,17 @@ function withShotTimes(bd, shotMap, plan){
   Object.assign(WST, { bd, map: shotMap, ck, out });
   return out;
 }
+// Each shot's estimated minutes by its Sheet key, for the shot list's EST. MIN column (sent with Sync). The estimate, not a
+// number typed over it (the Sheet keeps those). null if the breakdown isn't ready.
+async function shotMinutes(pid){
+  try{
+    const bd = await planBd(pid); if(!bd) return null;
+    const hub = H(), p = hub.project(pid), ids = hub.scriptIds(p), plan = planOf(pid), sid = (plan.scriptId && ids.indexOf(plan.scriptId) >= 0) ? plan.scriptId : ids[0];
+    const map = (S.shots[sid] && S.shots[sid].map) || {}, out = {};
+    bd.scenes.forEach((s) => { const list = (s.id && map[s.id]) || [], res = s.shotRes; if(!res) return; list.forEach((sh, k) => { if(sh.key && res.shots[k]) out[sh.key] = res.shots[k].auto; }); });
+    return out;
+  }catch(_e){ return null; }
+}
 // The shot list for a script (read once, then from memory); the Breakdown tab shows the same shot times
 function shotsFor(scriptId){ if(!scriptId) return {}; if(!S.shots[scriptId]) loadShots(scriptId); return (S.shots[scriptId] && S.shots[scriptId].map) || {}; }
 
@@ -637,7 +648,7 @@ function draw(pid){
 
   // Shot list by shoot day: the storyboard's shots, in the order the scenes are shot
   const shSt = S.shots[scriptId] || {};
-  const shotMinOf = (id, k) => { const r = byId[id] && byId[id].shotRes, t = r && r.shots[k]; return t ? `<span title="${esc(t.complexity + " · setup " + t.setup + " + shooting " + t.shoot + " min (" + t.takes + " takes)")}">${t.min}</span>` : ""; };
+  const shotMinOf = (id, k) => { const r = byId[id] && byId[id].shotRes, t = r && r.shots[k]; return t ? `<span title="${esc(t.typed ? "Typed in the shot list (the estimate is " + t.auto + ")" : t.complexity + " · setup " + t.setup + " + shooting " + t.shoot + " min (" + t.takes + " takes)")}">${t.min}${t.typed ? "*" : ""}</span>` : ""; };
   const shotRows = pl.days.map((d, i) => {
     const ds = P.dayShots(d, shotMap); if(!ds.scenes.length) return "";
     return `<tr><td class="shotDay" colspan="8">Day ${i + 1}<span>${esc(fmtDate(dates[i]) || "no date")} · ${ds.total} shot${ds.total === 1 ? "" : "s"}</span></td></tr>` +
@@ -1720,5 +1731,5 @@ function focusScene(pid, id){
   clearTimeout(focusScene.t); focusScene.t = setTimeout(() => { SB.landed = []; rerender(); }, 1400);
   rerender();
 }
-window.CampProdPanel = { withShotTimes, shotsFor, focusScene, syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, timetable, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
+window.CampProdPanel = { withShotTimes, shotsFor, shotMinutes, focusScene, syncNow, isStale, render, setMode, csError, moveSceneBefore, planOf, timetable, undo: (pid) => stepHist(pid, true), reloadScript: (id) => loadScript(id, true), castTypes, setCastType: (pid, name, t, auto) => setCastType(pid, name, t, auto), CAST_TYPES: P.CAST_TYPES };
 })();

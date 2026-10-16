@@ -78,5 +78,11 @@ test("config: rounding and contingency can be changed per project", () => {
   assert.strictEqual(T.ceilTo(40, 10), 40); assert.strictEqual(T.ceilTo(40.0000001, 10), 40); assert.strictEqual(T.ceilTo(41, 10), 50);
 });
 
+test("EST. MIN typed in the shot list wins for that shot; the estimate is still worked out", () => {
+  const r = T.sceneShots(kitchen, [cu(), Object.assign(cu("move"), { min: 25 })]);
+  assert.strictEqual(r.shots[1].typed, true); assert.strictEqual(r.shots[1].min, 25); assert.strictEqual(r.shots[1].auto, 30);
+  assert.strictEqual(r.total, 50 + 25);
+});
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 if(failed) process.exit(1);
