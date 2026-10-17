@@ -112,4 +112,44 @@
   // Sign this device out of Google/Camp (the Library's "Sign out on this device")
   window.campSignOut = async function(){ try{ const auth = await within(start(), 4000); if(auth) await auth.signOut(); }catch(_e){} cur = ""; };
   start(); window.campIdToken();
+
+  // ---- Is this page the one that was published? ----
+  // GitHub Pages can keep a page in the browser for about ten minutes, so someone can be looking at yesterday's
+  // Camp without knowing it. Each deploy stamps the pages and version.json with the same build; when the two
+  // differ, this says so and offers a reload. It never reloads on its own — that would throw away what
+  // someone is in the middle of typing.
+  (function buildWatch(){
+    const meta = document.querySelector('meta[name="camp-build"]');
+    const mine = meta && meta.content;
+    if(!mine || mine === "__BUILD__") return;   // a copy that was never deployed (someone's own machine)
+    let shown = false, last = 0;
+    const show = function(){
+      if(shown) return; shown = true;
+      const bar = document.createElement("div");
+      bar.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:2147483000;display:flex;align-items:center;gap:10px;" +
+        "background:#1a1b1f;color:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.18);border-radius:11px;" +
+        "padding:9px 11px;box-shadow:0 14px 40px rgba(0,0,0,.5);font:13px/1.3 Inter,system-ui,sans-serif;";
+      const txt = document.createElement("span"); txt.textContent = "Camp has been updated.";
+      const go = document.createElement("button"); go.type = "button"; go.textContent = "Reload";
+      go.style.cssText = "font:inherit;font-weight:600;color:inherit;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:4px 10px;cursor:pointer;";
+      go.onclick = function(){ location.reload(); };
+      const no = document.createElement("button"); no.type = "button"; no.textContent = "✕"; no.setAttribute("aria-label", "Dismiss");
+      no.style.cssText = "font:inherit;color:rgba(255,255,255,.6);background:none;border:0;cursor:pointer;padding:2px 4px;";
+      no.onclick = function(){ bar.remove(); };
+      bar.appendChild(txt); bar.appendChild(go); bar.appendChild(no);
+      (document.body || document.documentElement).appendChild(bar);
+    };
+    const check = async function(){
+      if(shown || Date.now() - last < 120000) return;
+      last = Date.now();
+      try{
+        const r = await fetch("version.json?_=" + Date.now(), { cache: "no-store" });
+        if(!r.ok) return;
+        const j = await r.json();
+        if(j && j.build && j.build !== "__BUILD__" && j.build !== mine) show();
+      }catch(_e){}
+    };
+    setTimeout(check, 4000);
+    document.addEventListener("visibilitychange", function(){ if(!document.hidden) check(); });
+  })();
 })();

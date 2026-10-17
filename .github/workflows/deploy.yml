@@ -20,6 +20,9 @@ jobs:
       - run: NODE_PATH="$RUNNER_TEMP/pw/node_modules" node tests/pages.smoke.js
       - run: sed -i "s|__API_KEY__|${{ secrets.GOOGLE_API_KEY }}|" config.json index.html
       - run: grep -c "__API_KEY__" config.json index.html || echo "replaced"
+      # Stamp this deploy on every page and in version.json, so a page left open in a browser can tell it is behind
+      # (not idtoken.js: it compares against the literal __BUILD__ to know when it is running from an undeployed copy)
+      - run: sed -i "s|__BUILD__|${GITHUB_SHA::12}|g" version.json index.html library.html editor.html treatment.html storyboard.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
