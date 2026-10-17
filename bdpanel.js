@@ -316,6 +316,7 @@ const css = `
   #bdctl .stp .ie, #bdctl .stp .dn, #bdctl .stp .sd, #bdctl .stp .mk{ display:none; }
   #bdctl .stp .cast{ grid-column:2 / 4; font-size:11.5px; }
 }
+#bdctl .cond{ display:inline-block; margin-left:6px; padding:0 6px; border-radius:8px; font-size:11px; font-weight:600; background:rgba(241,199,107,.16); color:#f1c76b; vertical-align:1px; cursor:help; }
 #bdctl .rpGrid{ columns:320px; column-gap:12px; padding-top:12px; }
 #bdctl .rp{ break-inside:avoid; margin-bottom:12px; border:1px solid color-mix(in srgb, var(--cc) 50%, #222); border-radius:12px; overflow:hidden; background:#1b1b1b; }
 #bdctl .rp tr:hover td{ background:rgba(255,255,255,.03); }
@@ -467,7 +468,7 @@ function modelFor(pid, sid, sc, p){
   const opts = planOpts(p), akey = JSON.stringify(opts);
   if(sc.doc && (!sc.bd || sc.akey !== akey)){ sc.bd = B.analyze(sc.doc, opts); sc.akey = akey; S.model = null; }
   const st = storeOf(pid, sid), mk = SKEY(pid, sid) + "|" + sc.akey + "|" + (sc.modified || "");
-  if(!S.model || S.modelKey !== mk){ S.model = E.build(sc.doc, sc.bd, st); S.modelKey = mk; try{ S.model.cont = E.continuity(sc.doc, sc.bd, S.model); }catch(_e){ S.model.cont = []; } }
+  if(!S.model || S.modelKey !== mk){ S.model = E.build(sc.doc, sc.bd, st); S.modelKey = mk; try{ S.model.cont = E.continuity(sc.doc, sc.bd, S.model); }catch(_e){ S.model.cont = []; } S.model.cond = {}; S.model.cont.forEach((f) => { if(f.elKey) S.model.cond[f.elKey] = f; }); }
   return S.model;
 }
 // Every edit goes through here: apply it, remember it for undo, save it, rebuild
@@ -648,6 +649,12 @@ function scMatch(x){
   if((f === "D" || f === "N") && x.dn !== f) return false;
   return !q || String(x.n) === q || String(x.sno || "").toLowerCase() === q || (x.heading || "").toLowerCase().indexOf(q) >= 0 || (x.syn || "").toLowerCase().indexOf(q) >= 0;
 }
+// The thing's condition from the Continuity report: "becomes cracked" in the scene it happens, "cracked" after
+function condTag(b, s, k){
+  const f = b.cond && b.cond[k]; if(!f || s.n < f.fromN) return "";
+  const now = s.n === f.fromN;
+  return ` <span class="cond" title="${esc(f.summary)}">${now ? "becomes " : ""}${esc(f.state)}</span>`;
+}
 function sheetsView(b, can){
   const s = b.scenes[S.sel - 1];
   const castNos = (x) => (x.els.cast || []).map((k) => b.elements[k].no).filter(Boolean).sort((p, q) => p - q);
@@ -674,7 +681,7 @@ function sheetsView(b, can){
       const e = b.elements[k], tip = (e.auto ? "Found in the script: " + e.why.join(", ") : "Added by hand") + (e.scenes.length > 1 ? " · in scenes " + E.sceneNos(b, e.scenes) : "");
       return `<tr class="${e.manual && !e.auto ? "man" : ""}" title="${esc(tip)}">
         <td class="c-no">${isCast && e.no ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}</td>
-        <td class="c-nm"><b data-a="edit" data-k="${esc(k)}">${esc(e.name)}</b><button type="button" class="goText" data-a="opentext" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in the scene text" title="Show in the scene text">↗</button></td>
+        <td class="c-nm"><b data-a="edit" data-k="${esc(k)}">${esc(e.name)}</b>${condTag(b, s, k)}<button type="button" class="goText" data-a="opentext" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in the scene text" title="Show in the scene text">↗</button></td>
         <td class="c-q">${s.qty && s.qty[k] ? s.qty[k] : isCast ? "" : "1"}</td>
         <td class="c-nt">${e.note ? esc(e.note) : `<span class="mu">—</span>`}</td>
         <td class="c-sc" title="${e.scenes.length} scene${e.scenes.length === 1 ? "" : "s"}">${e.scenes.length > 1 ? e.scenes.length : ""}</td>

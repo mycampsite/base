@@ -853,6 +853,55 @@ function build(doc, bd, store) {
     };
   });
 
+  // The fullest name the script gives a thing: "Magic 8 ball", not "Ball". Read from the script's own words: "a/the/his …"
+  // then up to three words ending in the element's word ("a Magic 8 ball", "the 8-ball"). Only for one-word names nobody renamed.
+  const scText = bds.map(function (s, i) { const t = txOf(s, i); return (t.action || []).concat(t.talk || []).join(" \n "); });
+  Object.keys(els).forEach(function (k) {
+    const e = els[k];
+    if (names[k] || !/^(props|weapons|vehicles|animals)$/.test(e.cat) || /\s/.test(e.name)) return;
+    const w = e.name.toLowerCase();
+    const re = new RegExp("\\b(?:a|an|the|his|her|their|its|my|your|our|this|that)\\s+((?:[A-Za-z0-9'’]+\\s+){1,3}|(?:[A-Za-z0-9'’]+\\s+){0,2}[A-Za-z0-9'’]+-)(" + escapeRe(w) + ")\\b", "gi");
+    const tally = {};
+    e.scenes.forEach(function (n) {
+      const tx = scText[n - 1] || ""; let m; re.lastIndex = 0;
+      while ((m = re.exec(tx)) !== null) {
+        // keep only the words that are part of the name: Capitalised ("Magic"), numbers ("8", "'67", "eight"), or CAPS
+        // when the writer capped the whole thing. Describing words ("battered", "red") stay out, as everywhere else.
+        const caps = m[2] === m[2].toUpperCase() && /[A-Z]/.test(m[2]);
+        const toks = m[1].trim().split(/\s+/);
+        const hy = /-$/.test(toks[toks.length - 1]);
+        const keep = [];
+        for (let j = toks.length - 1; j >= 0; j--) {
+          const t = toks[j].replace(/-$/, "");
+          if (/^(?:[A-Z][a-z'’]+|[0-9]+[A-Za-z'’]*|['’][0-9]{2}|one|two|three|four|five|six|seven|eight|nine|ten)$/.test(t) || (caps && /^[A-Z]{2,}$/.test(t))) keep.unshift(t); else break;
+        }
+        if (!keep.length || (keep.length === 1 && /^one$/i.test(keep[0]))) continue;   // "one cup" is a count, "8 ball" a name
+        if (keep.some(function (t) { return ctx.castWord[t.toUpperCase()]; })) continue;   // "Jimmy's" etc: a person, not the name
+        const q = keep.join(" ") + (hy ? "-" : " ") + m[2];
+        const kq = q.toLowerCase(), t = tally[kq] = tally[kq] || { q: q, n: 0 }; t.n++;
+      }
+    });
+    const best = Object.keys(tally).map(function (x) { return tally[x]; }).sort(function (x, y) { return y.q.split(/[\s-]/).length - x.q.split(/[\s-]/).length || y.n - x.n; })[0];
+    if (!best) return;
+    let q = best.q; if (q === q.toUpperCase()) q = q.toLowerCase().replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
+    e.name = q.charAt(0).toUpperCase() + q.slice(1);
+  });
+
+  // A word that is only ever part of a fuller name ("MAGIC" from "the MAGIC 8 BALL") is not a prop of its own
+  Object.keys(els).forEach(function (k) {
+    const e = els[k];
+    if (names[k] || e.manual || !/^(props|weapons|vehicles)$/.test(e.cat) || /\s/.test(e.name)) return;
+    const w = e.name.toLowerCase();
+    const host = Object.keys(els).filter(function (o) {
+      const x = els[o]; if (o === k || x.cat !== e.cat) return false;
+      const ws = x.name.toLowerCase().split(/[\s-]+/);
+      return ws.length > 1 && ws.indexOf(w) >= 0 && ws[ws.length - 1] !== w && e.scenes.every(function (n) { return x.scenes.indexOf(n) >= 0; });
+    })[0];
+    if (!host) return;
+    scenes.forEach(function (sc) { const l = sc.els[e.cat]; if (l && l.indexOf(k) >= 0) { l.splice(l.indexOf(k), 1); delete sc.hits[k]; sc.count--; } });
+    delete els[k];
+  });
+
   // Elements in a category, most-used first (cast by cast number)
   const byCat = {};
   CATS.forEach(function (c) { byCat[c.id] = []; });
@@ -1252,6 +1301,19 @@ const CONT_DAY_ = /\b([Mm]oonlight|[Mm]oonlit|the moon|full moon|[Mm]idnight|[Ss
 const CONT_NIGHT_ = /\b(sunlight|sunshine|sunny|sunrise|midday|noon|blue sky|bright daylight|the sun (?:beats|blazes|streams|shines))\b/i;
 const CONT_USING_ = /\b(unlocks?|unlocked|opens?|opened|uses?|used|turns? on|picks? up|inserts?|starts?|drives?|shakes?|wears?|reads?)\b/i;
 const CONT_INTRO_ = /\b(hands? (?:\w+ )?(?:over|the|a|an|her|him|them|\w+ the)|handed|gives?|gave|passes|produces|finds?|found|discovers?|reveals?|pulls? out|takes? out|brings?|for the first time|never seen)\b/i;
+// [condition, words for the moment it happens ("cracks"), words for how it looks ("cracked")]
+const CONT_STATES_ = [
+  ["cracked", "cracks|crack forms|splinters", "cracked|splintered"],
+  ["broken", "breaks|smashes|shatters|snaps in two", "broken|smashed|shattered"],
+  ["bloody", "", "bloody|bloodied|blood-soaked|blood-stained|bloodstained"],
+  ["wet", "", "soaked|drenched|sodden|soaking wet|dripping wet"],
+  ["burnt", "catches fire|bursts into flames|burns", "burnt|burned|charred|scorched|singed"],
+  ["torn", "rips|tears open", "torn|ripped|shredded"],
+  ["dented", "dents|crumples", "dented|crumpled|caved-in"],
+  ["muddy", "", "muddy|mud-caked"]
+].map(function (x) { return { s: x[0], verb: x[1] ? new RegExp("^(?:" + x[1] + ")$", "i") : null, adj: new RegExp("^(?:" + x[2] + ")$", "i"), any: new RegExp("\\b(" + [x[1], x[2]].filter(Boolean).join("|") + ")\\b", "i") }; });
+// "broken over his arm" (a shotgun opened), "broken open", "burns rubber": not a change of condition
+const CONT_NOT_STATE_ = /\b(broken (?:over|open|in)|burns? (?:rubber|out|through)|breaks (?:the silence|off|down|into|away|free|up|in))\b/i;
 function contSentences(text) {
   const out = [];
   String(text || "").split(/\n\s*\n|\n/).forEach(function (para) {
@@ -1333,6 +1395,48 @@ function continuity(doc, bd, b) {
     if (!use || !intro || intro.p.n <= use.p.n) return;
     add({ type: "USED BEFORE INTRODUCED", sev: "low", key: "intro|" + k, scenes: [use.p.no, intro.p.no], quotes: [use.line, intro.line],
       summary: e.name + " is used in scene " + use.p.no + " but only handed over or found in scene " + intro.p.no + ". Check the order." });
+  });
+
+  // 4. A thing changes condition: cracked, broken, bloody, wet, burnt, torn, dented. From that scene on it has to look that way
+  // (and if scenes are shot out of order, there may need to be a clean one and a damaged one)
+  if (b && b.elements) Object.keys(b.elements).forEach(function (k) {
+    const e = b.elements[k];
+    if (!/^(props|weapons|vehicles|wardrobe)$/.test(e.cat)) return;
+    const nm = e.name.toLowerCase(), head = nm.split(" ").pop();
+    if (head.length < 3) return;
+    const nameRe = new RegExp("\\b(" + escapeRe(nm) + "|" + escapeRe(head) + ")s?\\b", "i");
+    // Costume isn't carried from scene to scene on the sheets, so look for it by its full name in the later scenes too
+    const fullRe = new RegExp("\\b" + escapeRe(nm) + "s?\\b", "i"), first = Math.min.apply(null, e.scenes);
+    const order = e.scenes.concat(per.filter(function (p) { return p.n > first && e.scenes.indexOf(p.n) < 0 && /\s/.test(nm) && all(p).some(function (l) { return fullRe.test(l); }); }).map(function (p) { return p.n; }))
+      .sort(function (a, c) { return a - c; });
+    for (let i = 0; i < order.length; i++) {
+      const p = per[order[i] - 1]; if (!p) continue;
+      let hit = null;
+      p.sents.some(function (line) {
+        const m = nameRe.exec(line); if (!m || CONT_NOT_STATE_.test(line)) return false;
+        // The condition word has to belong to the thing: right before it ("the cracked 8 ball", "a crack forms in the 8 ball")
+        // or straight after it with nothing in between but a few words ("the 8 ball cracks", "the jacket is soaked").
+        const before = line.slice(0, m.index).split(/[,;:—–()]/).pop().trim().split(/\s+/).slice(-5).join(" ");
+        const after = line.slice(m.index + m[0].length).split(/[,;:—–().!?]| and | but /)[0].trim().split(/\s+/).slice(0, 4).join(" ");
+        for (let j = 0; j < CONT_STATES_.length; j++) {
+          const st = CONT_STATES_[j], mb = st.any.exec(before), ma = st.any.exec(after), w0 = (mb || ma || [""])[0];
+          if (!w0) continue;
+          const isVerb = st.verb && st.verb.test(w0);
+          // how it looks in the scene it first appears in is just how it looks; only a change counts there
+          if (!isVerb && i === 0) continue;
+          hit = { state: st.s, line: line }; return true;
+        }
+        return false;
+      });
+      if (!hit) continue;
+      const later = order.slice(i + 1).map(function (n) { return (per[n - 1] || {}).no || String(n); });
+      add({ type: "CONDITION CHANGE", sev: later.length ? "medium" : "low", key: "cond|" + k, elKey: k, state: hit.state, fromN: p.n,
+        scenes: [p.no].concat(later), quotes: [hit.line],
+        summary: e.name + " becomes " + hit.state + " in scene " + p.no + "." + (later.length ? (/^(wet|bloody|muddy)$/.test(hit.state)
+          ? " Check whether it's still " + hit.state + " in scene" + (later.length > 1 ? "s " : " ") + later.join(", ") + "; if it stays that way and those shoot first, plan a second one."
+          : " It stays " + hit.state + " in scene" + (later.length > 1 ? "s " : " ") + later.join(", ") + "; if those shoot first, plan a second one.") : "") });
+      break;
+    }
   });
 
   const rank = { high: 0, medium: 1, low: 2 };

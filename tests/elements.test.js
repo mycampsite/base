@@ -507,5 +507,22 @@ test("continuity: 'last night' and a street name don't make a DAY scene a night 
   assert.deepStrictEqual(cont([["scene", "INT. KITCHEN - DAY"], ["action", "MUM is still angry about last night. Moon Street is quiet."]]), []);
 });
 
+test("names: the fullest name the script gives (Magic 8 ball, not Ball), describing words left out", () => {
+  const b = run([["scene", "INT. SHOP - DAY"], ["action", "JIMMY pulls out the MAGIC 8 BALL."], ["scene", "EXT. YARD - DAY"], ["action", "He shakes the 8 ball. The ball says yes."]]);
+  assert.deepStrictEqual(names(b, 1, "props"), ["Magic 8 Ball"]);   // and no stray "Magic"
+  assert.deepStrictEqual(names(b, 2, "props"), ["Magic 8 Ball"]);
+  const c = run([["scene", "INT. KITCHEN - DAY"], ["action", "ANA grabs a battered suitcase and a red cup."]]);
+  assert.ok(!names(c, 1, "props").some((n) => /battered|red/i.test(n)), names(c, 1, "props").join());
+});
+test("continuity: a prop that cracks stays cracked; how a thing first looks, or a person being soaked, isn't a change", () => {
+  const f = cont([["scene", "INT. SHOP - DAY"], ["action", "JIMMY picks up a Magic 8 ball and shakes it."],
+    ["scene", "EXT. YARD - DAY"], ["action", "A crack forms in the 8 ball and the fortune spins."],
+    ["scene", "INT. CAR - DAY"], ["action", "He stares at the ball."]]);
+  const c = f.filter((x) => x.type === "CONDITION CHANGE");
+  assert.strictEqual(c.length, 1); assert.strictEqual(c[0].state, "cracked"); assert.deepStrictEqual(c[0].scenes, ["2", "3"]);
+  assert.deepStrictEqual(cont([["scene", "EXT. ROAD - NIGHT"], ["action", "MAGGIE, soaked, grips a crumpled MAP. FRANK holds a shotgun broken over his arm."],
+    ["scene", "INT. CAR - NIGHT"], ["action", "Maggie studies the map. Frank cleans the shotgun."]]).filter((x) => x.type === "CONDITION CHANGE"), []);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
