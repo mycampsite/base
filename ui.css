@@ -60,3 +60,9 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   #banner:has(.liveFaces) .area{ display:none; }
   #banner .livePill:not(.off){ display:none; }
 }
+
+/* Touch screens: iOS zooms the page when a field under 16px gets focus. Keep every typing field at 16px on
+   phones and tablets (a mouse/trackpad computer is unaffected). */
+@media (pointer:coarse) and (max-width:1100px){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=button]):not([type=submit]):not([type=file]), select, textarea{ font-size:16px !important; }
+}

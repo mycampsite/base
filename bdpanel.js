@@ -330,6 +330,16 @@ const css = `
 #bdctl .rpDay td:first-child{ width:1%; white-space:nowrap; overflow-wrap:normal; color:var(--uiMuted); }
 #bdctl .rpDay .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
 @media (max-width:760px){
+  /* Header: the Sheets/Elements/Reports switch gets its own full-width row, the summary chips scroll on one line,
+     and the Reset/Undo buttons sit together underneath, so nothing overlaps. */
+  #bdctl .bdTop{ gap:8px; padding:8px 10px; }
+  #bdctl .bdActs{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; order:1; flex:1 1 100%; }
+  #bdctl .bdActs > .seg[role=tablist]{ order:-1; flex:1 1 100%; }
+  #bdctl .bdActs > .seg[role=tablist] button{ flex:1 1 0; height:36px; font-size:13px; }
+  #bdctl .bdActs > select{ flex:1 1 100%; height:40px; }
+  #bdctl .bdChips{ order:2; flex:1 1 100%; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
+  #bdctl .bdChips::-webkit-scrollbar{ display:none; }
+  #bdctl .bdChip{ flex:0 0 auto; }
   #bdctl .bdBody{ padding:0 10px 90px; }
   #bdctl .bdSplit{ grid-template-columns:1fr; }
   #bdctl .bdList{ flex-direction:row; max-height:none; overflow-x:auto; position:static; padding-bottom:6px; }

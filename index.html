@@ -357,12 +357,13 @@
     .userChip span{ display:none; }
     .lbl{ display:none; }
     .pHead{ padding:10px 10px 0; gap:6px; }
-    .pHead h2{ flex:1 1 100%; order:-1; font-size:16px; }
+    .pHead h2{ flex:1 1 140px; order:-1; font-size:16px; }
     .pHead .btn, .actions .btn{ padding:0 11px; }
-    .mtabs{ padding:0 4px; }
-    /* Phones: all the tabs fit on screen (icon over label) instead of Production hiding off the edge */
-    .mtab{ flex:1 1 0; min-width:0; flex-direction:column; gap:4px; padding:9px 1px 8px; font-size:10px; letter-spacing:-.1px; }
-    .mtab svg{ width:17px; height:17px; }
+    /* Phones: a swipeable tab row (icon over label). Each tab keeps a readable size instead of being squeezed
+       to fit; the next tab peeks in at the edge so it is obvious the row scrolls. */
+    .mtabs{ padding:0 4px; overflow-x:auto; scroll-snap-type:x proximity; scroll-padding:0 24px; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; }
+    .mtab{ flex:0 0 auto; min-width:68px; flex-direction:column; gap:4px; padding:9px 10px 8px; font-size:11.5px; scroll-snap-align:center; }
+    .mtab svg{ width:19px; height:19px; }
     .mtab .n{ display:none; }
     #listPane{ padding:10px; }
     .listHead .muted{ flex:1 1 100%; }
@@ -1271,6 +1272,7 @@ function renderBody() {
   const ns = scriptIds(p).length, sh = sheetsByProject[current.pid];
   void ns; void sh;   // the main tabs no longer show counts
   document.querySelectorAll(".mtab").forEach(t => { const on = t.dataset.tab === current.tab; t.classList.toggle("on", on); t.setAttribute("aria-selected", on ? "true" : "false"); });
+  { const at = document.querySelector(".mtab.on"); if (at && at.scrollIntoView && window.matchMedia("(max-width:760px)").matches) { try { at.scrollIntoView({ inline: "center", block: "nearest" }); } catch (_e) {} } }
 
   const prod = isProdTab(current.tab), board = current.tab === "board", lay = current.tab === "layouts";
   $("listPane").classList.toggle("hidden", prod || board || lay);
