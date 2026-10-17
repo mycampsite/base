@@ -80,6 +80,16 @@
   .acct{ flex-basis:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--uiMuted); padding:4px 2px 0; }
   .acct span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .acct button{ border:0; background:none; color:var(--uiMuted); cursor:pointer; font:inherit; text-decoration:underline; padding:0; }
+  .acct .myColor{ flex:0 0 auto; width:20px; height:22px; text-decoration:none; }
+  .acct .myColor svg{ width:100%; height:100%; display:block; }
+  .acct #who{ flex:1 1 auto; }
+  .colorPop{ position:fixed; z-index:60; background:#1d1e22; border:1px solid rgba(255,255,255,.14); border-radius:10px; padding:10px; box-shadow:0 14px 34px rgba(0,0,0,.55); display:grid; grid-template-columns:repeat(4, 64px); gap:6px; }
+  .colorPop b{ grid-column:1 / -1; font:600 11.5px/1.3 Inter, system-ui, sans-serif; color:var(--uiText, #eee); }
+  .colorPop button{ display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 2px; border-radius:8px; border:1px solid transparent; background:none; color:var(--uiMuted, #9a9aa0); font:500 10.5px/1 Inter, system-ui, sans-serif; cursor:pointer; }
+  .colorPop button svg{ width:24px; height:26px; }
+  .colorPop button:hover, .colorPop button:focus-visible{ border-color:rgba(255,255,255,.25); color:var(--uiText, #eee); }
+  .colorPop button.on{ border-color:var(--tc); color:var(--uiText, #eee); }
+  .colorPop button.taken::after{ content:"in use"; font-size:9px; opacity:.7; }
   #calBtn.on{ background:rgba(255,255,255,.1); }
   .userChip{ display:flex; align-items:center; gap:8px; padding:3px 3px 3px 10px; border:1px solid var(--uiBorder); border-radius:14px; font-size:12.5px; color:var(--uiMuted); max-width:280px; }
   .userChip span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -421,7 +431,7 @@
     <div class="sideFoot">
       <button id="newProject" class="btn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New project</button>
       <a class="btn" href="library.html" title="All scripts, including ones not in a project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Script library</a>
-      <div class="acct"><span id="who"></span><button id="signOut" type="button">Sign out</button></div>
+      <div class="acct"><button id="myColor" type="button" class="myColor" aria-haspopup="true" aria-label="Your colour" title="Your colour: what teammates see you as"></button><span id="who"></span><button id="signOut" type="button">Sign out</button></div>
     </div>
   </aside>
 
@@ -699,6 +709,7 @@ function presPut(force) {
 function presLeave() {
   const r = PRES.ref; PRES.ref = null;
   if (PRES.unsub) { try { PRES.unsub(); } catch (_e) {} PRES.unsub = null; }
+  lookLeave();
   PRES.data = {}; drawOnline();
   if (r) { try { onDisconnect(r).cancel(); } catch (_e) {} return remove(r).catch(() => {}); }
   return Promise.resolve();
@@ -713,6 +724,7 @@ function presSync() {
       PRES.last = "";
       if (PRES.connected) { onDisconnect(PRES.ref).remove().catch(() => {}); presPut(true); }
       PRES.unsub = onValue(ref(db, "projects/" + pid + "/presence"), s => { PRES.data = s.val() || {}; drawOnline(); }, () => { PRES.data = {}; drawOnline(); });
+      lookJoin(pid);
     }
     return;
   }
@@ -724,7 +736,68 @@ onValue(ref(db, ".info/connected"), s => {
   if (PRES.connected && PRES.ref) { onDisconnect(PRES.ref).remove().catch(() => {}); presPut(true); }
 });
 window.addEventListener("pagehide", () => { if (PRES.ref) { try { remove(PRES.ref); } catch (_e) {} } });
-const presColor = uid => { const C = (window.CampTent && window.CampTent.colors) || ["#7d8f4e"]; let h = 0; for (const ch of String(uid)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return C[h % C.length]; };
+// Colours: someone's own pick (look/<pid>) first, the rest spread so nobody shares one; names only reach owners
+let PRES_COLS = {};
+const presColor = uid => PRES_COLS[uid] || "#7d8f4e";
+const presWho = uid => window.CampTent ? window.CampTent.who(uid, presColor(uid)) : "Someone";
+// ---------- your colour and name ----------
+// look/<pid>/<uid> = "#rrggbb" (members read, you write your own): your colour, the same in every project you're in.
+// names/<pid>/<uid> = your Google name (owners read, you write your own). ⚠ needs the look/ and names/ rules; without
+// them the writes are refused, colours stay automatic and everyone stays a colour name. Nothing else changes.
+const MYCOL_KEY = "Camp_MY_COLOR_V1";
+const LOOK = { unsubs: [], pid: null };
+window.CampLook = window.CampLook || { chosen: {}, people: {} };
+const myPick = () => { const c = String(lsGet(MYCOL_KEY) || "").toLowerCase(); return window.CampTent && window.CampTent.colors.indexOf(c) >= 0 ? c : ""; };
+const myName = () => String((me && (me.displayName || (me.email || "").split("@")[0])) || "").replace(/\s+/g, " ").trim().slice(0, 60);
+function lookLeave() { LOOK.unsubs.forEach(u => { try { u(); } catch (_e) {} }); LOOK.unsubs = []; LOOK.pid = null; window.CampLook.chosen = {}; window.CampLook.people = {}; }
+function lookJoin(pid) {
+  lookLeave(); LOOK.pid = pid; let first = true;
+  LOOK.unsubs.push(onValue(ref(db, "look/" + pid), s => {
+    const v = s.val() || {}; window.CampLook.chosen = v;
+    if (first && me) {
+      first = false; const mine = String(v[me.uid] || "").toLowerCase(), pick = myPick();
+      if (pick && pick !== mine) set(ref(db, "look/" + pid + "/" + me.uid), pick).catch(() => {});    // carry your colour into this project
+      else if (!pick && mine) lsSet(MYCOL_KEY, mine);                                                  // new device: remember it
+    }
+    drawOnline();
+  }, () => { window.CampLook.chosen = {}; drawOnline(); }));
+  LOOK.unsubs.push(onValue(ref(db, "names/" + pid), s => { window.CampLook.people = s.val() || {}; drawOnline(); }, () => { window.CampLook.people = {}; }));
+  const nm = myName(); if (me && nm) set(ref(db, "names/" + pid + "/" + me.uid), nm).catch(() => {});
+}
+function drawMyColor() {
+  const b = $("myColor"), T = window.CampTent; if (!b || !T) return;
+  const c = myPick() || (me && PRES_COLS[me.uid]) || "";
+  b.style.visibility = me ? "" : "hidden";
+  b.innerHTML = T.svg(c || "#7d8f4e");
+  b.title = c ? "Your colour: " + T.label("", c) + ". Click to change" : "Pick your colour";
+}
+function openColorPop() {
+  const old = document.querySelector(".colorPop"); if (old) { old.remove(); return; }
+  const T = window.CampTent, b = $("myColor"); if (!T || !b || !me) return;
+  const cur = myPick() || PRES_COLS[me.uid] || "", chosen = window.CampLook.chosen || {};
+  const taken = new Set(Object.keys(chosen).filter(u => u !== me.uid).map(u => String(chosen[u]).toLowerCase()));
+  const pop = document.createElement("div"); pop.className = "colorPop"; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Your colour");
+  pop.innerHTML = `<b>Your colour</b>` + T.colors.map((c, i) => `<button type="button" data-c="${c}" style="--tc:${c}" class="${c === cur ? "on" : ""}${taken.has(c) ? " taken" : ""}"${taken.has(c) ? ` title="Someone in this project already picked ${T.names[i]}"` : ""}>${T.svg(c)}${T.names[i]}</button>`).join("");
+  document.body.appendChild(pop);
+  const r = b.getBoundingClientRect(), ph = pop.offsetHeight, pw = pop.offsetWidth;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + "px";
+  pop.style.top = (r.top - ph - 8 > 8 ? r.top - ph - 8 : r.bottom + 8) + "px";
+  const close = () => { pop.remove(); document.removeEventListener("pointerdown", away, true); document.removeEventListener("keydown", esc_, true); };
+  const away = e => { if (!pop.contains(e.target) && e.target !== b && !b.contains(e.target)) close(); };
+  const esc_ = e => { if (e.key === "Escape") { close(); b.focus(); } };
+  document.addEventListener("pointerdown", away, true); document.addEventListener("keydown", esc_, true);
+  pop.onclick = async e => {
+    const x = e.target.closest("button[data-c]"); if (!x) return;
+    const c = x.dataset.c; close(); lsSet(MYCOL_KEY, c); drawMyColor();
+    const pids = Object.keys(projects).filter(pid => projects[pid] && projects[pid].members && projects[pid].members[me.uid]);
+    const res = await Promise.allSettled(pids.map(pid => set(ref(db, "look/" + pid + "/" + me.uid), c)));
+    if (pids.length && res.every(x => x.status === "rejected")) toast("Saved on this device only: the database doesn't accept colours yet (rules step needed).", "err");
+    else toast("You're " + T.label("", c) + " now, in every project.", "ok");
+  };
+  const on = pop.querySelector("button.on") || pop.querySelector("button"); if (on) on.focus();
+}
+$("myColor").addEventListener("click", openColorPop);
+
 function drawOnline() {
   const box = $("pOnline"); if (!box) return;
   const mem = (projects[PRES.pid] && projects[PRES.pid].members) || {};
@@ -733,11 +806,14 @@ function drawOnline() {
     tabs.sort((a, b) => (b.at || 0) - (a.at || 0));
     return tabs.length ? { uid, a: String(tabs[0].a || "In the project"), at: tabs[0].at || 0, more: tabs.length - 1 } : null;
   }).filter(Boolean).sort((a, b) => b.at - a.at);
+  const T = window.CampTent;
+  PRES_COLS = T && T.assign ? T.assign(Object.keys(PRES.data || {}).concat(me ? [me.uid] : []).filter((u, i, a) => a.indexOf(u) === i).sort()) : {};
+  drawMyColor();
   if (!people.length) { box.innerHTML = ""; return; }
-  const T = window.CampTent, shown = people.slice(0, 5);
-  box.innerHTML = shown.map(p => { const col = presColor(p.uid), n = T ? T.label("", col) : "Someone", tip = n + " · " + p.a + (p.more ? " (+" + p.more + " more tab" + (p.more > 1 ? "s" : "") + ")" : "");
+  const shown = people.slice(0, 5);
+  box.innerHTML = shown.map(p => { const col = presColor(p.uid), n = presWho(p.uid), tip = n + " · " + p.a + (p.more ? " (+" + p.more + " more tab" + (p.more > 1 ? "s" : "") + ")" : "");
     return `<span class="liveFace tent" tabindex="0" role="img" style="--tc:${col}" data-name="${esc(tip)}" aria-label="${esc(tip)}">${T ? T.svg(col) : ""}</span>`; }).join("")
-    + (people.length > shown.length ? `<span class="liveFace more" title="${esc(people.slice(5).map(p => (T ? T.label("", presColor(p.uid)) : "Someone") + " · " + p.a).join("\n"))}">+${people.length - shown.length}</span>` : "");
+    + (people.length > shown.length ? `<span class="liveFace more" title="${esc(people.slice(5).map(p => presWho(p.uid) + " · " + p.a).join("\n"))}">+${people.length - shown.length}</span>` : "");
 }
 
 // ---------- toast ----------
@@ -985,7 +1061,7 @@ onAuthStateChanged(auth, async user => {
   const fresh = !me || me.cached;
   me = user;
   lsSet(SESSION_KEY, JSON.stringify({ uid: user.uid, email: user.email }));
-  $("who").textContent = user.email;
+  $("who").textContent = user.email; drawMyColor();
   $("gate").classList.add("hidden"); $("top").classList.remove("hidden"); $("app").classList.remove("hidden");
   render();
   if (!fresh) return;

@@ -150,7 +150,16 @@
     const put = () => { if(off) return; let a = ""; try{ a = String(getArea() || ""); }catch(_e){} r.set({ a: a.replace(/\s+/g, " ").trim().slice(0, 79) || page, at: Date.now(), pg: page }).catch((e) => { if(/permission/i.test(String(e && e.message))) off = true; }); };
     db.ref(".info/connected").on("value", (s) => { if(s.val() === true && !off){ r.onDisconnect().remove(); put(); } });
     window.addEventListener("pagehide", () => { try{ r.remove(); }catch(_e){} });
+    lookJoin(db, pid);
     return { touch(){ clearTimeout(t); t = setTimeout(put, 600); }, leave(){ off = true; try{ r.onDisconnect().cancel(); r.remove(); }catch(_e){} } };
+  }
+  // Chosen colours (look/<pid>, members can read) and names (names/<pid>, owners only: everyone else is refused and
+  // just sees colour names). Kept in window.CampLook for CampTent.assign / CampTent.who; "camp-look" tells the page.
+  function lookJoin(db, pid){
+    const L = window.CampLook = window.CampLook || { chosen: {}, people: {} };
+    const tell = () => { try{ window.dispatchEvent(new Event("camp-look")); }catch(_e){} };
+    try{ db.ref("look/" + pid).on("value", (s) => { L.chosen = s.val() || {}; tell(); }, () => {}); }catch(_e){}
+    try{ db.ref("names/" + pid).on("value", (s) => { L.people = s.val() || {}; tell(); }, () => {}); }catch(_e){}
   }
 
    window.camp = { ensureGoogleUser, roomAccess, route, normalizeEndpoint, loadConfig_, getCloudEndpoint, getCloudKey, setCloudKey, cloudParam, escapeHtml, loadScript, askPassword, fetchJson_, apiGet, apiPost, presenceJoin };

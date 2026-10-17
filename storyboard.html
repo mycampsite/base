@@ -1550,10 +1550,12 @@ window.SB3D={
     const p = LIVE.pres, C = (window.CampTent && window.CampTent.colors) || ["#7d8f4e","#d4932a","#5a86b8","#84707c","#c9633d","#3f9a8c","#9a5c8f","#a98a5a"];
     const h = (s) => { let x = 2166136261; for(let i = 0; i < s.length; i++){ x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; };
     const ids = Object.keys(p).sort((a, b) => ((p[a] && p[a].j) || 0) - ((p[b] && p[b].j) || 0) || (a < b ? -1 : 1)), used = new Set(), out = {};
+    if(window.CampTent && window.CampTent.assign) return window.CampTent.assign(ids);
     ids.forEach((id) => { let k = h(id) % C.length; for(let i = 0; i < C.length && used.has(k); i++) k = (k + 1) % C.length; used.add(k); out[id] = C[k]; });
     return out;
   };
-  const peerName = (k, cols) => window.CampTent ? window.CampTent.label("", (cols || peerCols())[k]) : "Someone";
+  const peerName = (k, cols) => window.CampTent ? window.CampTent.who(k, (cols || peerCols())[k]) : "Someone";
+  window.addEventListener("camp-look", () => { try{ renderPeers(); }catch(_e){} });
   const peersAlive = () => { const now = Date.now() + LIVE.offset; return Object.keys(LIVE.pres).filter((k) => k !== LIVE.uid && LIVE.pres[k] && (now - Number(LIVE.pres[k].h || 0)) < 80000); };
   const peersOn = (shotKey) => peersAlive().filter((k) => LIVE.pres[k].s === shotKey);
   function peerDotsHtml(shotKey){

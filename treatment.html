@@ -4829,10 +4829,12 @@
   const lcHash = (s) => { let h = 2166136261; for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
   function liveColors(){
     const p = LV.presence || {}, ids = Object.keys(p).sort((a, b) => ((p[a] && p[a].j) || 0) - ((p[b] && p[b].j) || 0) || (a < b ? -1 : 1)), used = new Set(), out = {};
+    if(window.CampTent && window.CampTent.assign) return window.CampTent.assign(ids);
     ids.forEach((id) => { let k = lcHash(id) % LV_COLORS.length; for(let i = 0; i < LV_COLORS.length && used.has(k); i++) k = (k + 1) % LV_COLORS.length; used.add(k); out[id] = LV_COLORS[k]; });
     return out;
   }
-  const peerName = (k, cols) => { const n = (LV.presence[k] || {}).n; return window.CampTent ? window.CampTent.label(n, (cols || liveColors())[k]) : (n || "Someone"); };
+  const peerName = (k, cols) => { const n = (LV.presence[k] || {}).n; return window.CampTent ? window.CampTent.who(k, (cols || liveColors())[k]) : (n || "Someone"); };
+  window.addEventListener("camp-look", () => { try{ renderLivePill(); updateNavDots(); drawRemote(); }catch(_e){} });
   const alivePeers = () => { const now = Date.now() + LV.offset; return Object.keys(LV.presence).filter((k) => k !== LV.uid && LV.presence[k] && (now - Number(LV.presence[k].h || 0)) < 80000); };
   const initials = (n) => { const p = String(n || "?").trim().split(/\s+/); return ((p[0] || "?")[0] + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase(); };
   function electLeader(){

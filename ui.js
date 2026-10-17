@@ -59,6 +59,21 @@
   window.CampTent = {
     colors: ["#7d8f4e", "#d4932a", "#5a86b8", "#84707c", "#c9633d", "#3f9a8c", "#9a5c8f", "#a98a5a"],
     names: ["Olive", "Amber", "Blue", "Mauve", "Terracotta", "Teal", "Plum", "Sand"],
+    // Colours for everyone present (ids in join order): a colour someone picked for themselves comes first
+    // (window.CampLook.chosen, read from look/<pid>), the rest are spread so two people don't share one.
+    assign: function (ids) {
+      var C = this.colors, ch = (window.CampLook && window.CampLook.chosen) || {}, used = {}, out = {};
+      ids.forEach(function (id) { var c = String(ch[id] || "").toLowerCase(); if (C.indexOf(c) >= 0) { out[id] = c; used[c] = 1; } });
+      ids.forEach(function (id) {
+        if (out[id]) return;
+        var h = 2166136261, s = String(id); for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+        var k = (h >>> 0) % C.length; for (var j = 0; j < C.length && used[C[k]]; j++) k = (k + 1) % C.length;
+        used[C[k]] = 1; out[id] = C[k];
+      });
+      return out;
+    },
+    // Owners see the person's name (names/<pid> is readable by owners only); everyone else sees the colour's name
+    who: function (uid, color) { var n = window.CampLook && window.CampLook.people && window.CampLook.people[uid]; return n ? String(n) : this.label("", color); },
     // Everyone is shown as their tent's colour ("Amber"), never by a typed name
     label: function (name, color) {
       var i = this.colors.indexOf(String(color || "").toLowerCase());
