@@ -132,6 +132,9 @@
   .mtab{ border:0; background:transparent; cursor:pointer; padding:7px 12px; font-size:13px; font-weight:600; color:var(--uiMuted); border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; display:inline-flex; align-items:center; gap:7px; }
   .mtab:hover{ color:var(--uiText); }
   .mtab.on{ color:var(--uiText); border-bottom-color:var(--uiText); }
+  .mtab.presMark, .tab.presMark{ position:relative; }
+  .mtab.presMark::before, .tab.presMark::before{ content:""; position:absolute; inset:1px; border-radius:7px; padding:1.5px; background:var(--pring); pointer-events:none;
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
   .mtab svg{ width:15px; height:15px; }
   .mtab .n{ font-size:11px; color:var(--uiMuted); font-weight:600; }
 
@@ -690,11 +693,11 @@ window.addEventListener("camp:bd-nav", () => saveLast(true));
 // connection drops (onDisconnect). Other pages (script, treatment, storyboard) write the same place through camp-core.js.
 // ⚠ needs the presence rule (projects/$pid/presence/$uid). Without it the writes are refused and nobody shows; nothing else breaks.
 const PRES = { tab: Math.random().toString(36).slice(2, 10), last: "", pid: null, ref: null, unsub: null, data: {}, timer: 0, connected: false, off: false };
-const TAB_NAMES = { scripts: "Scripts", treatment: "Treatment", storyboard: "Storyboard", breakdown: "Breakdown", schedule: "Schedule", docs: "Docs", board: "Board" };
+const TAB_NAMES = { scripts: "Scripts", treatment: "Treatment", storyboard: "Storyboard", breakdown: "Breakdown", schedule: "Schedule", docs: "Docs", layouts: "Layouts", board: "Board" };
 function presArea() {
   const t = TAB_NAMES[current.tab] || "Hub";
   if (current.tab === "breakdown") { const v = bdView(); return "Breakdown › " + (v ? v.charAt(0).toUpperCase() + v.slice(1) : "Sheets"); }
-  if (current.tab === "schedule") return "Schedule › " + (current.key === "@strip" ? "Stripboard" : current.key === "@cs" ? "Call sheets" : "Shoot plan");
+  if (current.tab === "schedule") return "Schedule › " + (current.key === "@strip" ? "Stripboard" : current.key === "@cs" ? "Call sheets" : "Stripboard");
   if (current.tab === "docs") { const c = sheetsByProject[current.pid], sh = c && c.list.find(x => x.id === current.key); return "Docs" + (sh ? " › " + tabLabel(sh.name) : ""); }
   return t;
 }
@@ -798,17 +801,45 @@ function openColorPop() {
 }
 $("myColor").addEventListener("click", openColorPop);
 
+// ---------- where everyone is: thin rings in their colours on the tab (and sub-tab) they're on ----------
+// Read from each person's latest presence entry: the Script / Treatment / Storyboard pages mark their tab; the hub's
+// "Hub · Schedule › Stripboard" marks Schedule, then Stripboard if you're on Schedule too. Up to 4 rings, newest inside.
+const PAGE_TAB = { script: "scripts", treatment: "treatment", storyboard: "storyboard" };
+let PRES_PEOPLE = [];
+function presSpot(p) {
+  if (p.pg && PAGE_TAB[p.pg]) return { tab: PAGE_TAB[p.pg], sub: "" };
+  const m = /^Hub · ([^›]+?)(?: › (.+))?$/.exec(p.a || ""); if (!m) return null;
+  const tab = Object.keys(TAB_NAMES).find(k => TAB_NAMES[k] === m[1].trim());
+  return tab ? { tab, sub: (m[2] || "").trim() } : null;
+}
+function markEl(el, list) {
+  if (el.dataset.t0 == null) el.dataset.t0 = el.title || "";
+  if (!list.length) { el.classList.remove("presMark"); el.style.removeProperty("--pring"); el.title = el.dataset.t0; return; }
+  // one outline, split left to right into equal colour segments (newest first), with a hairline gap between them
+  const cs = list.slice(0, 4).map(p => presColor(p.uid)), w = 100 / cs.length;
+  const stops = cs.map((c, i) => c + " " + (i * w + (i ? 1.5 : 0)).toFixed(2) + "% " + ((i + 1) * w - (i < cs.length - 1 ? 1.5 : 0)).toFixed(2) + "%" + (i < cs.length - 1 ? ", transparent 0 " + ((i + 1) * w + 1.5).toFixed(2) + "%" : ""));
+  el.classList.add("presMark"); el.style.setProperty("--pring", "linear-gradient(90deg, " + stops.join(", ") + ")");
+  el.title = (el.dataset.t0 ? el.dataset.t0 + "\n" : "") + "Here now: " + list.map(p => presWho(p.uid)).join(", ");
+}
+function drawPresMarks(people) {
+  if (people) PRES_PEOPLE = people;
+  const ps = PRES_PEOPLE.map(p => Object.assign({ spot: presSpot(p) }, p)).filter(p => p.spot);
+  document.querySelectorAll(".mtab[data-tab]").forEach(b => markEl(b, ps.filter(p => p.spot.tab === b.dataset.tab)));
+  const box = $("tabs"); if (!box) return;
+  box.querySelectorAll(".tab").forEach(b => markEl(b, ps.filter(p => p.spot.tab === current.tab && p.spot.sub && p.spot.sub === b.textContent.trim())));
+}
+
 function drawOnline() {
   const box = $("pOnline"); if (!box) return;
   const mem = (projects[PRES.pid] && projects[PRES.pid].members) || {};
   const people = Object.keys(PRES.data || {}).filter(uid => (!me || uid !== me.uid) && mem[uid]).map(uid => {
     const tabs = Object.values(PRES.data[uid] || {}).filter(x => x && typeof x === "object");
     tabs.sort((a, b) => (b.at || 0) - (a.at || 0));
-    return tabs.length ? { uid, a: String(tabs[0].a || "In the project"), at: tabs[0].at || 0, more: tabs.length - 1 } : null;
+    return tabs.length ? { uid, a: String(tabs[0].a || "In the project"), pg: String(tabs[0].pg || ""), at: tabs[0].at || 0, more: tabs.length - 1 } : null;
   }).filter(Boolean).sort((a, b) => b.at - a.at);
   const T = window.CampTent;
   PRES_COLS = T && T.assign ? T.assign(Object.keys(PRES.data || {}).concat(me ? [me.uid] : []).filter((u, i, a) => a.indexOf(u) === i).sort()) : {};
-  drawMyColor();
+  drawMyColor(); drawPresMarks(people);
   if (!people.length) { box.innerHTML = ""; return; }
   const shown = people.slice(0, 5);
   box.innerHTML = shown.map(p => { const col = presColor(p.uid), n = presWho(p.uid), tip = n + " · " + p.a + (p.more ? " (+" + p.more + " more tab" + (p.more > 1 ? "s" : "") + ")" : "");
@@ -1386,6 +1417,7 @@ function renderTabs() {
   // bring the open tab into view sideways only (scrollIntoView would also scroll the page)
   const on = box.querySelector(".tab.on");
   if (on) { const l = on.offsetLeft - box.offsetLeft, r = l + on.offsetWidth; if (l < box.scrollLeft) box.scrollLeft = l - 8; else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth + 8; }
+  drawPresMarks();
 }
 // Sync in the bar: owner only, once there's a plan; marked when the Sheets are behind the plan
 function syncState() {
