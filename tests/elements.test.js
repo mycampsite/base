@@ -139,6 +139,22 @@ test("flags: what never happens, and what no person does, isn't a stunt", () => 
   assert.deepStrictEqual(b.scenes[2].flags.filter((f) => f === "stunts"), ["stunts"]);
 });
 
+test("props: a prop found once is picked up wherever the script names it again", () => {
+  const b = run([["scene", "EXT. YARD - DAY"], ["action", "JIMMY picks up a Magic 8 ball and shakes it."],
+    ["scene", "EXT. YARD - DAY"], ["action", "A crack forms in the 8 ball and the fortune spins."],
+    ["scene", "INT. HALL - NIGHT"], ["action", "The hall is empty. Applause rings out somewhere far away."]]);
+  assert.ok(names(b, 1, "props").some((n) => /ball/i.test(n)), names(b, 1, "props").join());
+  assert.ok(names(b, 2, "props").some((n) => /ball/i.test(n)), "scene 2 should have the ball too: " + names(b, 2, "props").join());
+  assert.deepStrictEqual(names(b, 3, "props"), []);   // nothing of the sort is named in scene 3
+});
+
+test("props: a word doing a job isn't the prop (\"Applause rings\" is not the ring)", () => {
+  const b = run([["scene", "INT. STAGE - DAY"], ["action", "TGM holds up a silver ring."],
+    ["scene", "INT. HALL - NIGHT"], ["action", "Applause rings around the empty hall."]]);
+  assert.ok(names(b, 1, "props").some((n) => /ring/i.test(n)), names(b, 1, "props").join());
+  assert.deepStrictEqual(names(b, 2, "props").filter((n) => /ring/i.test(n)), []);
+});
+
 test("estimates: about an hour a page, heavier for stunts, never under 15 minutes", () => {
   assert.strictEqual(E.estimate({ eighths: 8, flags: [] }), 60);
   assert.strictEqual(E.estimate({ eighths: 8, flags: ["stunts"] }), 90);

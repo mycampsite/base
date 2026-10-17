@@ -155,7 +155,7 @@ const NOT_PROP_ = /^(laugh|laughs|laughter|giggle|giggles|chuckle|chuckles|snigg
 // Verb + particle pairs where nothing is actually picked up or carried
 const IDIOM_PARTICLE_ = /^(?:holds?|holding|hold) (?:in|back|onto|out for|off)\b|^(?:gives?|giving) (?:in|way|up on)\b|^(?:takes?|taking) (?:in|over|after|against)\b|^(?:picks?|picking) (?:on|at)\b|^(?:passes?|passing) (?:out|away|up)\b|^(?:reads?|reading) into\b|^(?:opens?|opening) up (?:to|about)\b|^(?:puts? down) (?:to)\b/i;
 const QUANT_ = /^(stack|pile|pair|couple|handful|bunch|set|lot|lots|piece|pieces|bit|bits|kind|sort|load|heap|row|line|box|bag|bottle|glass|mug|cup|plate|bowl|packet|pack|tin|can|jar|slice|wad|roll|sheet|bundle|armful)$/;
-const HANDLE_ = alt("picks up|pick up|picking up|grabs|grab|grabbing|snatches|holds|holding|hold up|holds up|hands|handing|passes|passing|gives|pours|pouring|sips|sipping|drinks|drinking|swigs|opens|opening|unlocks|reads|reading|carries|carrying|drops|dropping|throws|tosses|puts down|sets down|places|pulls out|pulling out|takes out|takes|produces|lights|lighting|loads|aims|points|clutches|clutching|wields|wielding|swings|unwraps|unfolds|signs|dials|answers|plugs in|switches on|turns on|switches off|fills|empties|wipes|polishes|polishing|sharpens|packs|packing|unpacks|unzips|eats|eating|chews|bites into|smokes|smoking|stubs out|offers|slides|shows|hides|pockets|grips|gripping|cradles|cradling|rifles through|rummages through|searches through|finds|fetches|lifts|raises|brandishes|nurses|stirs|fries|frying|cooks|cooking|chops|slices|serves|wraps|ties|buckles|cleans|repairs|fixes|rewinds|plays|holds out|pulls on|winds");
+const HANDLE_ = alt("reveals|revealing|unveils|picks up|pick up|picking up|grabs|grab|grabbing|snatches|holds|holding|hold up|holds up|hands|handing|passes|passing|gives|pours|pouring|sips|sipping|drinks|drinking|swigs|opens|opening|unlocks|reads|reading|carries|carrying|drops|dropping|throws|tosses|puts down|sets down|places|pulls out|pulling out|takes out|takes|produces|lights|lighting|loads|aims|points|clutches|clutching|wields|wielding|swings|unwraps|unfolds|signs|dials|answers|plugs in|switches on|turns on|switches off|fills|empties|wipes|polishes|polishing|sharpens|packs|packing|unpacks|unzips|eats|eating|chews|bites into|smokes|smoking|stubs out|offers|slides|shows|hides|pockets|grips|gripping|cradles|cradling|rifles through|rummages through|searches through|finds|fetches|lifts|raises|brandishes|nurses|stirs|fries|frying|cooks|cooking|chops|slices|serves|wraps|ties|buckles|cleans|repairs|fixes|rewinds|plays|holds out|pulls on|winds");
 const STOPAT_ = /^(and|or|but|with|on|in|into|onto|to|from|at|off|over|under|across|behind|beside|next|toward|towards|as|while|then|before|after|out|up|down|by|for|of|against|around|through|between|so|that|which|who|until|again|back|away|here|there|now|closer|tight|tightly|hard|firmly|slowly|quickly|gently)$/;
 const EXACT_NUM_ = /^(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|twenty|thirty|fifty|a dozen|dozen|a couple of|couple of|a pair of)$/;
 const NUMW_ = { "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "twelve": 12, "twenty": 20, "thirty": 30, "fifty": 50, "a dozen": 12, "dozen": 12, "dozens of": 24, "a few": 3, "few": 3, "a couple of": 2, "couple of": 2, "a handful of": 5, "handful of": 5, "several": 4, "some": 4, "a group of": 6, "group of": 6, "a pair of": 2, "hundreds of": 100, "thousands of": 500, "a crowd of": 50, "scores of": 40 };
@@ -776,6 +776,31 @@ function build(doc, bd, store) {
     return e;
   };
 
+  // What the script finds in each scene, worked out once (the carry-over pass below reads it too)
+  const sugg = bds.map(function (s, i) { return suggestScene(s, txOf(s, i), ctx); });
+  // ---- The same thing, scene after scene ----
+  // A prop is usually only *described* where it first turns up ("JIMMY reveals a Magic 8 ball"); later scenes just
+  // name it ("the 8 ball comes into view"), with no verb to give it away. Anything found once is therefore looked
+  // for by name everywhere else, so the prop list for each scene is what is actually on the floor. Only for things
+  // carried from scene to scene: set dressing and costume belong to their own scene, and the name must be
+  // distinctive enough that the word can't mean something else.
+  const CARRY_ = { props: 1, weapons: 1, vehicles: 1, animals: 1 };
+  const carry = [];
+  (function () {
+    const seen = {};
+    sugg.forEach(function (list) {
+      list.forEach(function (it) {
+        const k = resolve(alias, it.k);
+        if (!CARRY_[k.split("|")[0]] || seen[k] || drop[k]) return;
+        const nm = clean(names[k] || it.n).toLowerCase();
+        if (nm.length < 4) return;   // "ball" yes, "cup" no: a short word is too easy to mean something else
+        if (NOT_PROP_.test(nm) || ctx.locs[nm.toUpperCase()]) return;
+        seen[k] = 1;
+        carry.push({ k: k, c: it.c, n: it.n, nm: nm, re: new RegExp("\\b" + escapeRe(nm) + "e?s?\\b", "i") });
+      });
+    });
+  })();
+
   const scenes = bds.map(function (s, i) {
     const sk = sceneKey(s), meta = smeta[sk] || {}, offs = {};
     (off[sk] || []).forEach(function (k) { offs[resolve(alias, k)] = 1; offs[k] = 1; });
@@ -789,7 +814,7 @@ function build(doc, bd, store) {
       src[e.key] = src[e.key] && src[e.key] !== how ? "both" : how;
       return true;
     };
-    suggestScene(s, txOf(s, i), ctx).forEach(function (it) {
+    sugg[i].forEach(function (it) {
       if (offs[it.k] || offs[resolve(alias, it.k)]) return;
       const e = touch(it.k, it.c, it.n, s.n, s.eighths, true, it.why);
       if (put(e, it.q, "auto")) {
@@ -798,6 +823,21 @@ function build(doc, bd, store) {
         if (e && it.caps) e.caps = true;
       }
     });
+    // Named again in a later scene: the same prop, so it belongs on that scene's list too
+    (function () {
+      const tx = txOf(s, i), said = (tx.action || []).concat(tx.talk || []).join(" ");
+      if (!said) return;
+      carry.forEach(function (c) {
+        if (offs[c.k] || (per[c.c] || []).indexOf(c.k) >= 0) return;
+        const m = c.re.exec(said); if (!m) return;
+        // The word has to be the thing, not an action: "Applause rings" is not the magic ring. A plural "s" that
+        // the element's own name doesn't have is the tell, unless a determiner in front makes it a noun again.
+        const before = said.slice(Math.max(0, m.index - 24), m.index);
+        if (m[0].toLowerCase() !== c.nm && !/\b(the|a|an|his|her|their|its|my|your|our|that|this|these|those|another|each|every|one|two|three|\d+)\s+(?:\S+\s+){0,2}$/i.test(before)) return;
+        const e = touch(c.k, c.c, c.n, s.n, s.eighths, true, "named in the scene");
+        put(e, [m[0]], "auto");
+      });
+    })();
     (tags[sk] || []).forEach(function (t) { if (!t || !CAT[t.c] || !clean(t.n)) return; put(touch(key(t.c, t.n), t.c, t.c === "cast" ? clean(t.n).toUpperCase() : clean(t.n).charAt(0).toUpperCase() + clean(t.n).slice(1), s.n, s.eighths, false, "tagged"), Array.isArray(t.q) && t.q.length ? t.q : [clean(t.n)], "hand"); });
     Object.keys(per).forEach(function (c) { per[c].sort(function (a, b) { return c === "cast" ? ((els[a].no || 999) - (els[b].no || 999)) : els[a].name.localeCompare(els[b].name); }); });
     const d = days[i] || {};
