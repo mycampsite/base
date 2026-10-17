@@ -580,8 +580,8 @@ function draw(pid){
   const acts = `<div class="ctlActs">
       <span class="ctlUR"><button class="btn sm ico rf${sc.state === "loading" ? " spin" : ""}" type="button" data-a="reload" aria-label="Refresh" title="Refresh: re-read the latest script and storyboard shots into this view. Nothing is written to your Sheets (Sync does that)."><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>${canEdit ? `<button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button>` : ""}</span>
       <span class="ctlMore"><button class="btn sm" type="button" data-a="menu" aria-haspopup="menu" aria-expanded="${S.menu}" title="More">⋯</button>${S.menu ? `<div class="ctlMenu" role="menu">
-        <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room</small></button>
-        <button type="button" data-a="reauto"${canEdit ? "" : " disabled"}>Re-plan all<small>Lay out every scene again from scratch</small></button>
+        <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room (pages, hours and days off)</small></button>
+        <button type="button" data-a="reauto"${canEdit ? "" : " disabled"}>Re-plan all<small>Lay out every scene again, keeping cast days and company moves down</small></button>
         <button type="button" data-a="reload">Refresh script<small>Read the latest script and storyboard shots</small></button>
         ${S.popout ? "" : `<button type="button" data-a="pop">Pop out<small>Open the plan in its own window</small></button>`}
       </div>` : ""}</span></div>`;
@@ -592,12 +592,13 @@ function draw(pid){
   const pageOpts = []; for(let e = 16; e <= 80; e += 4) pageOpts.push(e);
   if(pageOpts.indexOf(st.maxEighths) < 0) pageOpts.push(st.maxEighths), pageOpts.sort((a, b) => a - b);
   const phone = matchMedia("(max-width:760px)").matches;
-  const settings = `<details class="setWrap"${(S.view === "strips" ? S.setOpen : (!phone || S.setOpen)) ? " open" : ""}><summary>Settings<span>${st.days} day${st.days === 1 ? "" : "s"} · ${st.perWeek}/wk · ${P.fmtEighths(st.maxEighths)} pg/day</span></summary><div class="ctlSet">
+  const settings = `<details class="setWrap"${(S.view === "strips" ? S.setOpen : (!phone || S.setOpen)) ? " open" : ""}><summary>Settings<span>${st.days} day${st.days === 1 ? "" : "s"} · ${st.perWeek}/wk · ${P.fmtEighths(st.maxEighths)} pg · ${st.maxHours}h/day</span></summary><div class="ctlSet">
       ${scriptSel}
       <label>Shoot days<span class="ctlStep"><button type="button" data-a="days-" aria-label="One fewer day"${dis}>−</button><input type="number" min="1" max="${P.MAX_DAYS}" value="${st.days}" data-s="days"${dis}><button type="button" data-a="days+" aria-label="One more day"${dis}>+</button></span></label>
       <label>First shoot day<input type="date" value="${esc(st.start)}" data-s="start"${dis}></label>
       <label>Shooting week<select data-s="perWeek"${dis}>${[[5, "5 days (Mon–Fri)"], [6, "6 days (Mon–Sat)"], [7, "7 days"]].map(([v, n]) => `<option value="${v}"${v === st.perWeek ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <label>Pages per day (limit)<select data-s="maxEighths"${dis}>${pageOpts.map((e) => `<option value="${e}"${e === st.maxEighths ? " selected" : ""}>${P.fmtEighths(e)}</option>`).join("")}</select></label>
+      <label title="Call to wrap. Auto-schedule fills a day only up to this, and a longer day is flagged">Hours per day (limit)<select data-s="maxHours"${dis}>${[8, 9, 10, 11, 12, 13, 14].concat([8, 9, 10, 11, 12, 13, 14].indexOf(st.maxHours) < 0 ? [st.maxHours] : []).sort((a, b) => a - b).map((h) => `<option value="${h}"${h === st.maxHours ? " selected" : ""}>${h} hours</option>`).join("")}</select></label>
       <label>Default call<span class="ctlTime">${timeSelect(st.call, 'data-s="call"', dis)}<button type="button" class="btn sm h24${is24() ? " on" : ""}" data-a="h24" aria-pressed="${is24()}" title="Show times as 24-hour (this device)">24h</button></span></label>
       <label class="wide">Location<input type="text" data-s="where" value="${esc(st.where ? st.where.name : "")}" placeholder="City or address" maxlength="80"${dis} title="${st.where ? esc(st.where.label || st.where.name) + (st.where.lat == null ? " (not found: sunrise and weather need a place that can be found)" : "") : "Where you're shooting: gives each day's sunrise, sunset and forecast. A day can have its own."}"></label>
       ${(() => { const T = P.timeSettings(st); const f = (k, label, tip) => `<label title="${tip}">${label}<input type="number" min="0" max="${k === "mealBy" ? 12 : 600}" step="${k === "mealBy" ? 0.5 : 5}" data-t="${k}" value="${k === "mealBy" ? T[k] / 60 : T[k]}"${dis}></label>`;
@@ -1738,7 +1739,7 @@ function autoPlan(pid, ctx, all){
     if(!all && now === had) H().toast("Nothing to place: every scene is already on a day. If the script just changed, press Refresh first.", "ok", 3600);
     else H().toast((all ? "Re-planned " : "Placed ") + (all ? now : now - had) + " scene" + ((all ? now : now - had) === 1 ? "" : "s") + ".", "ok", 2200);
   }
-  if(r.unplaced.length) H().toast(r.unplaced.length + " scene" + (r.unplaced.length === 1 ? " doesn't" : "s don't") + " fit in " + r.plan.settings.days + " days at this page limit. Add days or raise the limit.");
+  if(r.unplaced.length) H().toast(r.unplaced.length + " scene" + (r.unplaced.length === 1 ? " doesn't" : "s don't") + " fit in " + r.plan.settings.days + " days at these limits (" + P.fmtEighths(r.plan.settings.maxEighths) + " pages, " + r.plan.settings.maxHours + " hours a day, and days off). Add days or raise a limit.");
 }
 function confirmShrink(pid, r){
   const go = () => { if(r.moved.length) S.notice[pid] = Object.assign({ added: [], removed: [] }, S.notice[pid] || {}, { moved: r.moved }); save(pid, r.plan); rerender(); };

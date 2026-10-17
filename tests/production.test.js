@@ -405,5 +405,27 @@ test("availability: days off are kept tidy, flagged when booked, and auto-schedu
   assert.ok(!P.validate(r, b).some((x) => x.code === "CASTOFF"));
 });
 
+test("auto-schedule: an hours limit cuts days, and the tidy pass keeps limits and saves cast days", () => {
+  const sc = (id, n, loc, est, cast, dn) => ({ id, n, loc, dn: dn || "D", eighths: 4, est, cast });
+  const b = { scenes: [sc("a", 1, "HOUSE", 180, ["ANA"]), sc("b", 2, "HOUSE", 180, ["ANA"]), sc("c", 3, "HOUSE", 180, ["ANA"]), sc("d", 4, "PARK", 60, ["BEN"])], cast: [{ name: "ANA" }, { name: "BEN" }] };
+  const r = P.autoSchedule({ settings: { days: 3, maxEighths: 80, maxHours: 8 }, days: [] }, b, { all: true }).plan;
+  const byId = P.sceneMap(b);
+  r.days.forEach((d) => assert.ok(d.scenes.length <= 1 || P.dayFits(d, d.scenes, byId, r.settings), "every day within 8 hours"));
+  assert.ok(r.days.every((d) => d.scenes.filter((id) => byId[id].loc === "HOUSE").length <= 2), "three 3-hour scenes don't fit one 8-hour day");
+  assert.strictEqual(P.normalize({ settings: { maxHours: 99 } }).settings.maxHours, 24);
+  assert.strictEqual(P.normalize({}).settings.maxHours, 12);
+  // the tidy pass: ANA's two scenes split across days 1 and 3 come together
+  const b2 = { scenes: [sc("x", 1, "HOUSE", 60, ["ANA"]), sc("y", 2, "PARK", 60, ["BEN"]), sc("z", 3, "HOUSE", 60, ["ANA"])], cast: [] };
+  const pl = P.normalize({ settings: { days: 3, maxEighths: 80 }, days: [{ scenes: ["x"] }, { scenes: ["y"] }, { scenes: ["z"] }] });
+  const before = P.planCost(pl.days.map((d) => d.scenes), P.sceneMap(b2));
+  P.improvePlan(pl, P.sceneMap(b2), new Set(["x", "y", "z"]), () => true);
+  assert.ok(P.planCost(pl.days.map((d) => d.scenes), P.sceneMap(b2)) < before);
+  assert.ok(pl.days.some((d) => d.scenes.indexOf("x") >= 0 && d.scenes.indexOf("z") >= 0), "the HOUSE scenes end up on one day");
+  // scenes not in the movable set stay put
+  const pl2 = P.normalize({ settings: { days: 3, maxEighths: 80 }, days: [{ scenes: ["x"] }, { scenes: ["y"] }, { scenes: ["z"] }] });
+  P.improvePlan(pl2, P.sceneMap(b2), new Set(), () => true);
+  assert.deepStrictEqual(pl2.days.map((d) => d.scenes), [["x"], ["y"], ["z"]]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

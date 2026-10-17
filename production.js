@@ -8,7 +8,7 @@
 (function (root) {
 "use strict";
 
-const DEFAULTS = { start: "", days: 5, perWeek: 7, maxEighths: 40, call: "07:00" };
+const DEFAULTS = { start: "", days: 5, perWeek: 7, maxEighths: 40, maxHours: 12, call: "07:00" };
 const MAX_DAYS = 120;
 
 // ---------- small helpers ----------
@@ -145,6 +145,7 @@ function normalize(plan){
     days: clampInt(s.days, 1, MAX_DAYS, DEFAULTS.days),
     perWeek: clampInt(s.perWeek, 5, 7, DEFAULTS.perWeek),
     maxEighths: clampInt(s.maxEighths, 4, 160, DEFAULTS.maxEighths),
+    maxHours: clampInt(s.maxHours, 4, 24, DEFAULTS.maxHours),   // call to wrap; auto-schedule fills a day only up to this
     call: /^\d{2}:\d{2}$/.test(s.call || "") ? s.call : DEFAULTS.call,
     off: (Array.isArray(s.off) ? s.off : (s.off && typeof s.off === "object" ? Object.values(s.off) : [])).filter((x) => parseISO(x)).sort()
   };
@@ -341,30 +342,91 @@ function stripOrder(todo){
   });
   return strips;
 }
+// Would this day still fit if these scenes were on it? (pages, and hours from call to wrap)
+function dayFits(day, ids, byId, settings){
+  const sc = ids.map((id) => byId[id]).filter(Boolean);
+  if(sc.reduce((a, x) => a + (x.eighths || 0), 0) > settings.maxEighths && sc.length > 1) return false;
+  const t = dayTimes(Object.assign({}, day, { scenes: ids, wrapAt: "" }), byId, settings);
+  return t.length <= (settings.maxHours || 12) * 60 || sc.length <= 1;   // one scene longer than a day still gets a day (it's flagged)
+}
+// What a layout costs, roughly as a 1st AD weighs it (lower is better):
+//   paid cast days (first to last day, holds included) ×3, each place on each day ×2, each extra place in a day
+//   (a company move) ×2, a day mixing day and night ×4, each special element (wrangler, stunts, vehicles) on each day ×1
+function planCost(days, byId){
+  const first = {}, last = {}; let cost = 0;
+  days.forEach((ids, i) => {
+    const sc = ids.map((id) => byId[id]).filter(Boolean); if(!sc.length) return;
+    const locs = new Set(sc.map((x) => x.loc || "?")), lights = new Set(sc.map(lightOf)), sp = new Set([].concat(...sc.map((x) => (x.specials || []).concat(heavyOf(x)))));
+    cost += locs.size * 2 + (locs.size - 1) * 2 + sp.size + (lights.has("D") && lights.has("N") ? 4 : 0);
+    sc.forEach((x) => (x.cast || []).forEach((n) => { if(!(n in first)) first[n] = i; last[n] = i; }));
+  });
+  Object.keys(first).forEach((n) => { cost += (last[n] - first[n] + 1) * 3; });
+  return cost;
+}
+// Improve a layout by moving one scene to another day, or swapping two, while it gets cheaper (see planCost).
+// Only scenes in `movable` move; pages, hours and days off are respected. Stops after a few passes or ~400 ms.
+function improvePlan(plan, byId, movable, can){
+  const st = plan.settings, days = plan.days.map((d) => d.scenes.slice()), t0 = Date.now();
+  const fits = (i, ids) => dayFits(plan.days[i], ids, byId, st);
+  let best = planCost(days, byId);
+  for(let pass = 0; pass < 6 && Date.now() - t0 < 400; pass++){
+    let better = false;
+    for(let a = 0; a < days.length; a++){
+      for(const id of days[a].slice()){
+        if(!movable.has(id) || Date.now() - t0 > 400) continue;
+        const s = byId[id]; if(!s) continue;
+        for(let b = 0; b < days.length; b++){
+          if(b === a || !can(s, b)) continue;
+          const from = days[a].filter((x) => x !== id), to = days[b].concat(id);
+          const trial = days.slice(); trial[a] = from; trial[b] = to;
+          const c = planCost(trial, byId);
+          if(c < best && fits(b, to)){ days[a] = from; days[b] = to; best = c; better = true; break; }
+          // swap with a movable scene on that day
+          let done = false;
+          for(const o of days[b]){
+            if(!movable.has(o) || !can(byId[o], a)) continue;
+            const fa = from.concat(o), tb = days[b].filter((x) => x !== o).concat(id);
+            const t2 = days.slice(); t2[a] = fa; t2[b] = tb;
+            const c2 = planCost(t2, byId);
+            if(c2 < best && fits(a, fa) && fits(b, tb)){ days[a] = fa; days[b] = tb; best = c2; better = true; done = true; break; }
+          }
+          if(done) break;
+        }
+      }
+    }
+    if(!better) break;
+  }
+  plan.days.forEach((d, i) => { d.scenes = days[i]; });
+  return plan;
+}
 function autoSchedule(plan, breakdown, opts){
   opts = opts || {};
   plan = normalize(plan);
-  const byId = sceneMap(breakdown), max = plan.settings.maxEighths;
+  const byId = sceneMap(breakdown), st = plan.settings;
   if(opts.all) plan.days.forEach((d) => { d.scenes = []; });
   const placed = new Set(); plan.days.forEach((d) => d.scenes.forEach((id) => placed.add(id)));
   const todo = (breakdown && breakdown.scenes || []).filter((s) => s.id && !placed.has(s.id));
-  const used = plan.days.map((d) => dayStats(d, byId, max).eighths);
   const onDay = plan.days.map((d) => d.scenes.map((id) => byId[id]).filter(Boolean));
   const left = [], dates = planDates(plan);
   const can = (s, i) => { const u = unavailOn(plan, s, dates[i]); return !u.cast.length && !u.loc; };   // nobody booked on a day they can't do
+  const moved = new Set();
   stripOrder(todo).forEach((s) => {
     let best = -1, bs = -Infinity;
     for(let i = 0; i < plan.days.length; i++){
       if(!can(s, i)) continue;
-      if(used[i] + (s.eighths || 0) > max) continue;
+      const ids = plan.days[i].scenes.concat(s.id);
+      if(!dayFits(plan.days[i], ids, byId, st) && plan.days[i].scenes.length) continue;
       const v = fitScore(s, onDay[i]);
       if(v > bs){ bs = v; best = i; }
     }
     // a single scene longer than a whole day still goes on an empty day (it'll be flagged)
-    if(best < 0) best = used.findIndex((u, i) => u === 0 && can(s, i));
+    if(best < 0) best = plan.days.findIndex((d, i) => !d.scenes.length && can(s, i));
     if(best < 0){ left.push(s.id); return; }
-    plan.days[best].scenes.push(s.id); used[best] += s.eighths || 0; onDay[best].push(s);
+    plan.days[best].scenes.push(s.id); onDay[best].push(s); moved.add(s.id);
   });
+  // then tidy: fewer paid cast days, holds, company moves and returns (only the scenes placed now move)
+  if(opts.improve !== false && moved.size) improvePlan(plan, byId, moved, can);
+  if(opts.all) plan.days.forEach((d, i) => sortDay(plan, i, "loc", byId));
   return { plan, unplaced: left };
 }
 
@@ -375,9 +437,10 @@ function suggestDay(sceneId, plan, breakdown){
   const max = plan.settings.maxEighths, st = plan.days.map((d) => dayStats(d, byId, max)), dates = planDates(plan);
   const can = (i) => { const u = unavailOn(plan, s, dates[i]); return !u.cast.length && !u.loc; };
   let best = -1;
-  st.forEach((x, i) => { if(can(i) && x.eighths + s.eighths <= max && x.locs.indexOf(s.loc) >= 0 && best < 0) best = i; });
+  const fitsH = (i) => dayFits(plan.days[i], plan.days[i].scenes.concat(sceneId), byId, plan.settings);
+  st.forEach((x, i) => { if(can(i) && x.eighths + s.eighths <= max && x.locs.indexOf(s.loc) >= 0 && best < 0 && fitsH(i)) best = i; });
   if(best >= 0) return best;
-  st.forEach((x, i) => { if(can(i) && x.eighths + s.eighths <= max && (best < 0 || x.eighths < st[best].eighths)) best = i; });
+  st.forEach((x, i) => { if(can(i) && x.eighths + s.eighths <= max && (best < 0 || x.eighths < st[best].eighths) && fitsH(i)) best = i; });
   return best;
 }
 
@@ -433,7 +496,8 @@ function validate(plan, breakdown){
   plan.days.forEach((d, i) => {
     if(!hasScenes[i]) return;
     const tt = tts[i], callM = toMin(tt.call), N = "Day " + (i + 1);
-    if(tt.length > 12 * 60) out.push({ level: "warn", code: "LONGDAY", day: i + 1, text: N + " runs " + hm(tt.length) + " (call " + tt.call + ", wrap " + tt.wrap + "). Over 12 hours: check overtime and safe travel home" });
+    const maxH = plan.settings.maxHours || 12;
+    if(tt.length > maxH * 60) out.push({ level: "warn", code: "LONGDAY", day: i + 1, text: N + " runs " + hm(tt.length) + " (call " + tt.call + ", wrap " + tt.wrap + "). Over the " + maxH + "-hour limit: check overtime and safe travel home" });
     if(tt.lateMeal || tt.rows.some((r) => r.type === "meal" && r.late)) out.push({ level: "warn", code: "LATEMEAL", day: i + 1, text: N + ": the first meal break starts more than 6 hours after call. A meal penalty may apply" });
     else if(d.noMeal && tt.length > 6 * 60) out.push({ level: "warn", code: "NOMEAL", day: i + 1, text: N + " runs " + hm(tt.length) + " with no meal break" });
     const kidScenes = (d.scenes || []).map((id) => byId[id]).filter((sc) => sc && (sc.cast || []).some((n) => kids[n]));
@@ -729,7 +793,7 @@ function dayShots(day, shotMap){
   return { scenes, total: scenes.reduce((a, s) => a + s.shots.length, 0) };
 }
 
-const api = { cleanAvail, availOff, setAvail, availRuns, unavailOn, DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
+const api = { dayFits, planCost, improvePlan, cleanAvail, availOff, setAvail, availRuns, unavailOn, DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
   EXTRA_KINDS, cleanExtras, moveSceneIn, moveManyIn, sortDay, stripMatch, castIds, placeScenes, STATUSES, statusOf, setStatus, cleanWhere, whereOf, sunTimes, hmIn, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);
