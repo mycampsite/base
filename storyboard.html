@@ -1979,7 +1979,7 @@ window.SB3D={
   // and cast are longer-form, so they live in the subheading underneath instead.
   function sceneTitle(sc){
     const bits = [sc.ie, (sc.dn || "").toUpperCase()].filter(Boolean);
-    return "SC " + sc.n + (bits.length ? " - " + bits.join(" - ") : "");
+    return "SC " + (sc.no || sc.n) + (bits.length ? " - " + bits.join(" - ") : "");
   }
   function sceneSub(sc){ return [sc.day ? "Day " + sc.day : "", sc.set, sc.cast].filter(Boolean).join(" · "); }
 
