@@ -464,6 +464,28 @@ function budgetAnalyze_(doc, opts) {
   }
 
   // ---- Background extras & flags per scene ----
+  // Something that is only threatened, imagined or about to happen isn't shot, so it isn't a flag.
+  const NOT_YET_ = /\b(about to|almost|nearly|as if to|as though to|ready to|threatens to|threatening to|wants to|going to|tries to|trying to|moves to|would(?: have)?|could(?: have)?|hopes to|refuses to|instead of)\s+\w*\s*$/i;
+  // Flags that describe what a person physically does. An object doing it ("the camcorder tumbles") needs no coordinator.
+  const PHYSICAL_FLAG_ = { stunts: 1, intimacy: 1, water: 1 };
+  const sentenceAround_ = function (hay, a, b) {
+    let s = hay.lastIndexOf(".", a); const q = hay.lastIndexOf("!", a), e = hay.lastIndexOf("?", a);
+    s = Math.max(s, q, e, hay.lastIndexOf("\n", a));
+    let t = hay.slice(b).search(/[.!?\n]/);
+    return hay.slice(s + 1, t < 0 ? hay.length : b + t + 1);
+  };
+  // Written in capitals, but a camera or editing term rather than somebody doing something
+  const CAPS_TERM_ = /^(INT|EXT|I\/E|CUT|FADE|DISSOLVE|SMASH|MATCH|POV|INSERT|SUPER|TITLE|CARD|CLOSE|ECU|CU|MCU|MS|WS|ANGLE|BACK|LATER|MONTAGE|FLASHBACK|INTERCUT|SFX|VFX|FX|CONTINUOUS|CONT|MORE|OS|VO|O\.S|V\.O|END|THE|AND|BUT|NO|OK|DAY|NIGHT|CAMCORDER|CAMERA|SCREEN|TV|MOMENTS|SERIES|BLACK|WIDE|TIGHT|REVERSE|TRACKING|AERIAL|ESTABLISHING)$/;
+  // Who or what can perform a stunt: people, and the vehicles and animals a stunt team works with.
+  // An inert object doing something ("the camcorder tumbles") is not one.
+  const BG_PERFORMER_ = /\b(he|she|they|him|her|them|his|their|hers|himself|herself|themselves|everyone|everybody|someone|somebody|nobody|man|men|woman|women|guy|guys|girl|girls|boy|boys|kid|kids|child|children|person|people|crowd|audience|driver|rider|stuntman|stunt double|dancer|dancers|fighter|fighters|soldier|soldiers|cop|cops|guard|guards|car|cars|ute|truck|van|bus|taxi|cab|jeep|tractor|motorbike|motorcycle|bike|bicycle|scooter|train|tram|boat|dinghy|plane|chopper|helicopter|horse|horses|pony|dog|bull|cattle|kangaroo)\b/i;
+  const hasPerson_ = function (sen, castWords) {
+    if (BG_PERFORMER_.test(sen)) return true;
+    // A name in capitals is almost always someone doing something — whether or not they ever speak.
+    // Camera and editing terms are written the same way, so they don't count.
+    const caps = sen.match(/\b[A-Z][A-Z'’\-]{1,}\b/g) || [];
+    return caps.some(function (w) { const n = w.replace(/['’]+s?$/i, ""); return castWords[n] || !CAPS_TERM_.test(n); });
+  };
   const flagDefs = BG_FLAGS_.map(function (f) { return { def: f, re: f.re ? new RegExp(f.re, "gi") : null, not: f.not ? new RegExp(f.not, "gi") : null, scenes: [], words: {}, eighths: 0 }; });
   const castWords = {};
   Object.keys(chars).forEach(function (n) { n.split(/\s+/).forEach(function (w) { if (w.length > 1) castWords[w] = true; }); });
@@ -508,7 +530,11 @@ function budgetAnalyze_(doc, opts) {
         const inSkip = skip.some(function (r) { return a < r[1] && b > r[0]; });
         // A character's name isn't a thing ("RIVER walks in", "DUCK nods")
         const isName = castWords[m[0].toUpperCase()] && /[A-Z]/.test(m[0].charAt(0));
-        if (!inSkip && !isName) { addFlag(f.def.id, s, m[0]); hits++; }
+        // Something nobody does: "about to punch the door", "as if to jump"
+        const didnt = NOT_YET_.test(hay.slice(Math.max(0, a - 28), a));
+        // Physical action needs a person doing it: "It tumbles a little" is the camcorder, not a stunt
+        const noOne = PHYSICAL_FLAG_[f.def.id] && !hasPerson_(sentenceAround_(hay, a, b), castWords);
+        if (!inSkip && !isName && !didnt && !noOne) { addFlag(f.def.id, s, m[0]); hits++; }
       }
     });
   });

@@ -113,6 +113,32 @@ test("story days: other playback labels count, ordinary prose and INSERT don't",
   assert.strictEqual(day("He turns off the TV: it clicks."), "D2");         // prose that happens to hold a colon
 });
 
+test("props: a verb with a particle isn't handling something (\"holds in their laughs\")", () => {
+  const b = run([["scene", "INT. A - DAY"], ["action", "Everyone else holds in their laughs. He gives in to the urge and picks on the new kid."]]);
+  assert.deepStrictEqual(names(b, 1, "props"), []);
+  const still = run([["scene", "INT. A - DAY"], ["action", "She holds a chipped mug."]]);
+  assert.ok(names(still, 1, "props").some((n) => /mug/i.test(n)), names(still, 1, "props").join());
+});
+
+test("wardrobe: a possessive name owns the wet costume, and a bracketed aside doesn't hide the rest", () => {
+  const b = run([["scene", "EXT. YARD - DAY"], ["character", "TGM"], ["dialogue", "Introducing!"],
+    ["action", "JIMMY aims the hose at TGM's face. A burst of water crashes into TGM's face, and he is soaked."]]);
+  assert.ok(names(b, 1, "wardrobe").some((n) => /^Tgm: wet costume/i.test(n)), names(b, 1, "wardrobe").join());
+  const c = run([["scene", "INT. KITCHEN - NIGHT"], ["character", "THE MAN"], ["dialogue", "Hey."],
+    ["action", "THE MAN, wearing a dilapidated vaquero (cowboy) outfit with chaps, a cowboy hat and a brown jacket, eats cake."]]);
+  const w = names(c, 1, "wardrobe").join(" | ").toLowerCase();
+  assert.ok(/vaquero outfit/.test(w) && /cowboy hat/.test(w) && /brown jacket/.test(w), w);
+});
+
+test("flags: what never happens, and what no person does, isn't a stunt", () => {
+  const b = run([["scene", "INT. BATHROOM - DAY"], ["action", "TGM is about to punch the door. He thinks better of it."],
+    ["scene", "EXT. YARD - DAY"], ["action", "JOHN drops the camcorder. It tumbles a little then settles."],
+    ["scene", "EXT. YARD - DAY"], ["action", "TGM jumps off the shed and tumbles onto the grass."]]);
+  assert.deepStrictEqual(b.scenes[0].flags.filter((f) => f === "stunts"), []);
+  assert.deepStrictEqual(b.scenes[1].flags.filter((f) => f === "stunts"), []);
+  assert.deepStrictEqual(b.scenes[2].flags.filter((f) => f === "stunts"), ["stunts"]);
+});
+
 test("estimates: about an hour a page, heavier for stunts, never under 15 minutes", () => {
   assert.strictEqual(E.estimate({ eighths: 8, flags: [] }), 60);
   assert.strictEqual(E.estimate({ eighths: 8, flags: ["stunts"] }), 90);
