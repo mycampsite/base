@@ -92,6 +92,27 @@ test("story days: night to morning, LATER headings, flashbacks don't move the da
   assert.deepStrictEqual(b.scenes.map((s) => s.day), ["D1", "N1", "D2", "Flashback", "D2", "D3"]);
 });
 
+test("story days: played-back footage keeps the day and doesn't split the night around it", () => {
+  // Jimmy watches the party tape at night: the DAY headings belong to the footage, not to a new morning
+  const b = run([["scene", "INT. DINING TABLE - NIGHT"], ["action", "JIMMY watches the screen."],
+    ["scene", "EXT. BACKYARD - DAY"], ["action", "CAMCORDER POV: TGM lifts the sheet."],
+    ["scene", "INT. DINING TABLE - NIGHT"], ["action", "JIMMY stares."],
+    ["scene", "EXT. BACKYARD - DAY"], ["action", "CAMCORDER POV: The fortune reads F*CK AROUND AND FIND OUT."]]);
+  assert.deepStrictEqual(b.scenes.map((s) => s.day), ["N1", "Footage", "N1", "Footage"]);
+  assert.deepStrictEqual(b.scenes.map((s) => s.playback), [false, true, false, true]);
+  assert.deepStrictEqual(b.scenes.map((s) => s.storyDay), [1, 1, 1, 1]);   // still groups with the night it is watched on
+});
+
+test("story days: other playback labels count, ordinary prose and INSERT don't", () => {
+  const day = (first) => run([["scene", "INT. OFFICE - NIGHT"], ["action", "They watch."],
+    ["scene", "INT. LOBBY - DAY"], ["action", first]]).scenes[1].day;
+  assert.strictEqual(day("SECURITY FOOTAGE: A man walks in."), "Footage");
+  assert.strictEqual(day("ON THE TV: A reporter stands in the rain."), "Footage");
+  assert.strictEqual(day("INSERT: a cracked phone screen."), "D2");         // present time, not playback
+  assert.strictEqual(day("JIMMY'S POV: the grass."), "D2");                 // a point of view, not footage
+  assert.strictEqual(day("He turns off the TV: it clicks."), "D2");         // prose that happens to hold a colon
+});
+
 test("estimates: about an hour a page, heavier for stunts, never under 15 minutes", () => {
   assert.strictEqual(E.estimate({ eighths: 8, flags: [] }), 60);
   assert.strictEqual(E.estimate({ eighths: 8, flags: ["stunts"] }), 90);

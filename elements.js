@@ -657,19 +657,38 @@ const NEXT_DAY_ = /\b(NEXT (DAY|MORNING|NIGHT|EVENING|AFTERNOON)|THE FOLLOWING (
 const MORNINGISH_ = /\b(DAY|MORNING|EARLY MORNING|LATE MORNING|DAWN|SUNRISE|FIRST LIGHT|DAYTIME|NOON|MIDDAY|AFTERNOON)\b/;
 const SAME_ = /\b(CONTINUOUS|CONT'?D?|SAME|SAME TIME|MOMENTS LATER|SECONDS LATER|MINUTES LATER|A MOMENT LATER|SIMULTANEOUS|INTERCUT)\b/;
 const FLASH_ = /\b(FLASHBACK|FLASH BACK|DREAM|DREAM SEQUENCE|MEMORY|FLASH FORWARD|FLASHFORWARD|FANTASY|NIGHTMARE)\b/;
+// Footage played back on screen (a camcorder tape, CCTV, the news). The time of day on the heading belongs to
+// the footage, not to the people watching it, so these scenes neither take a new story day nor break the run of
+// the scenes around them: a night scene either side of played-back DAY footage is still the same night.
+const PLAYBACK_ = /\b(CAMCORDER|HANDYCAM|CAMERA PHONE|VHS|BETAMAX|HOME VIDEO|HOME MOVIE|VIDEO|FOOTAGE|CCTV|SECURITY CAM(ERA)?|SURVEILLANCE|DASH ?CAM|BODY ?CAM|PLAYBACK|REPLAY|ARCHIVE|NEWS REPORT|TAPE|RECORDING|TV|TELEVISION|SCREEN|MONITOR|PROJECTOR)\b/;
+// "CAMCORDER POV:", "ENTER CAMCORDER POV:", "ON THE TV:", "SECURITY FOOTAGE —" … a short label opening the scene.
+// Takes the action line as written: the label is in capitals, which keeps ordinary prose ("he turns off the TV: it
+// clicks") out of it.
+function playbackLead_(raw) {
+  const m = /^([^.!?]{0,40}?)\s*[:—–-]\s/.exec(String(raw || ""));
+  if (!m || /[a-z]/.test(m[1])) return false;
+  const lead = m[1].toUpperCase();
+  return PLAYBACK_.test(lead) && !FLASH_.test(lead);
+}
 function storyDays(bdScenes, texts) {
   let day = 1, prev = null;
   return bdScenes.map(function (s, i) {
     const h = String(s.heading || "").toUpperCase();
-    const first = texts[i] && texts[i].action.length ? texts[i].action[0].toUpperCase() : "";
+    const firstRaw = texts[i] && texts[i].action.length ? texts[i].action[0] : "";
+    const first = firstRaw.toUpperCase();
     const flash = FLASH_.test(h) || /^(FLASHBACK|SUPER: ?FLASHBACK)/.test(first);
     if (flash) return { day: day, dn: s.dn, flash: true, label: "Flashback" };
+    const playback = playbackLead_(firstRaw) || (PLAYBACK_.test(h) && /\b(POV|FOOTAGE|PLAYBACK|REPLAY)\b/.test(h));
+    // Footage can come from any day — this afternoon's camcorder tape, last week's CCTV — and the script rarely says
+    // which, so say "Footage" rather than name a day we can't know (set it by hand on the sheet to pin it down).
+    // Either way it stays out of the chain, so the scenes around it still read as one stretch of time.
+    if (playback) return { day: day, dn: s.dn, flash: false, playback: true, label: "Footage" };
     if (prev) {
       if (NEXT_DAY_.test(h) || (/^(SUPER|TITLE|CARD)/.test(first) && NEXT_DAY_.test(first))) day++;
       else if (!SAME_.test(h) && prev.dn === "N" && s.dn !== "N" && MORNINGISH_.test(h.split(/\s[-–—]\s/).slice(1).join(" "))) day++;
     }
     prev = s;
-    return { day: day, dn: s.dn, flash: false, label: (s.dn === "N" ? "N" : "D") + day };
+    return { day: day, dn: s.dn, flash: false, playback: false, label: (s.dn === "N" ? "N" : "D") + day };
   });
 }
 
@@ -774,7 +793,7 @@ function build(doc, bd, store) {
     return {
       n: s.n, sno: s.sno || String(s.n), id: s.id, key: sk, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, dn: s.dn, eighths: s.eighths, bg: s.bg, flags: s.flags || [],
       syn: clean(meta.syn), synAuto: !clean(meta.syn),   // only what someone typed: no summary is made up from the script
-      day: clean(meta.day) || d.label || "", dayAuto: !clean(meta.day), storyDay: d.day || 1, flash: !!d.flash,
+      day: clean(meta.day) || d.label || "", dayAuto: !clean(meta.day), storyDay: d.day || 1, flash: !!d.flash, playback: !!d.playback,
       est: Number(meta.est) > 0 ? Math.round(Number(meta.est)) : estAuto, estAuto: !(Number(meta.est) > 0),
       unit: clean(meta.unit) || "Main", note: clean(meta.note), dir: clean(meta.dir), mute: Array.isArray(meta.mute) ? meta.mute.map(String) : (meta.mute && typeof meta.mute === "object" ? Object.keys(meta.mute).map(function (i) { return String(meta.mute[i]); }) : []),
       env: (Array.isArray(meta.env) ? meta.env : (meta.env && typeof meta.env === "object" ? Object.keys(meta.env).map(function (i) { return meta.env[i]; }) : [])).map(String).filter(function (k) { return ENV_KEYS_.indexOf(k) >= 0; }), els: per, hits: hits, src: src, qty: qty,
