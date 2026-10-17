@@ -132,9 +132,10 @@
   .mtab{ border:0; background:transparent; cursor:pointer; padding:7px 12px; font-size:13px; font-weight:600; color:var(--uiMuted); border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; display:inline-flex; align-items:center; gap:7px; }
   .mtab:hover{ color:var(--uiText); }
   .mtab.on{ color:var(--uiText); border-bottom-color:var(--uiText); }
-  .mtab.presMark, .tab.presMark{ position:relative; }
-  .mtab.presMark::before, .tab.presMark::before{ content:""; position:absolute; inset:1px; border-radius:7px; padding:1.5px; background:var(--pring); pointer-events:none;
-    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+  .mtab, .tab{ position:relative; }
+  .presDots{ position:absolute; top:3px; right:3px; display:flex; pointer-events:none; }
+  .presDots i{ width:5px; height:5px; border-radius:50%; }
+  .presDots i + i{ margin-left:2px; }
   .mtab svg{ width:15px; height:15px; }
   .mtab .n{ font-size:11px; color:var(--uiMuted); font-weight:600; }
 
@@ -814,13 +815,14 @@ function presSpot(p) {
 }
 function markEl(el, list) {
   if (el.dataset.t0 == null) el.dataset.t0 = el.title || "";
-  if (!list.length) { el.classList.remove("presMark"); el.style.removeProperty("--pring"); el.title = el.dataset.t0; return; }
-  // one outline, split left to right into equal colour segments (newest first), with a hairline gap between them
-  const cs = list.slice(0, 4).map(p => presColor(p.uid)), w = 100 / cs.length;
-  const stops = cs.map((c, i) => c + " " + (i * w + (i ? 1.5 : 0)).toFixed(2) + "% " + ((i + 1) * w - (i < cs.length - 1 ? 1.5 : 0)).toFixed(2) + "%" + (i < cs.length - 1 ? ", transparent 0 " + ((i + 1) * w + 1.5).toFixed(2) + "%" : ""));
-  el.classList.add("presMark"); el.style.setProperty("--pring", "linear-gradient(90deg, " + stops.join(", ") + ")");
+  let dots = el.querySelector(":scope > .presDots");
+  if (!list.length) { if (dots) dots.remove(); el.title = el.dataset.t0; return; }
+  if (!dots) { dots = document.createElement("span"); dots.className = "presDots"; dots.setAttribute("aria-hidden", "true"); el.appendChild(dots); }
+  // a few small dots in the corner, one per person (newest first), up to 4
+  dots.innerHTML = list.slice(0, 4).map(p => `<i style="background:${presColor(p.uid)}"></i>`).join("");
   el.title = (el.dataset.t0 ? el.dataset.t0 + "\n" : "") + "Here now: " + list.map(p => presWho(p.uid)).join(", ");
 }
+
 function drawPresMarks(people) {
   if (people) PRES_PEOPLE = people;
   const ps = PRES_PEOPLE.map(p => Object.assign({ spot: presSpot(p) }, p)).filter(p => p.spot);
