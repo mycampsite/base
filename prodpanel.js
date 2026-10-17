@@ -196,6 +196,12 @@ const css = `
 .lcChip button{ border:0; background:none; color:var(--uiMuted); cursor:pointer; font-size:11px; width:18px; height:18px; border-radius:50%; padding:0; }
 .lcChip button:hover{ color:var(--uiText); background:rgba(255,255,255,.1); }
 .lcActs{ display:flex; gap:6px; flex-wrap:wrap; }
+.avWrap{ display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:5px; flex:0 1 auto; min-width:0; }
+.avLbl{ font-size:11px; color:var(--uiMuted); margin-right:2px; }
+.lcChip.off{ border-color:rgba(255,139,131,.45); background:rgba(255,139,131,.08); color:#ffb4ae; }
+.avAdd{ position:relative; display:inline-flex; align-items:center; height:24px; padding:0 9px; border:1px dashed var(--uiBorder); border-radius:999px; font-size:11.5px; color:var(--uiMuted); cursor:pointer; }
+.avAdd:hover{ border-color:rgba(255,255,255,.35); color:var(--uiText); }
+.avAdd input{ position:absolute; inset:0; opacity:0; width:100%; cursor:pointer; }
 .lcForm{ margin:0 12px 10px; padding:10px 12px; border:1px solid var(--uiBorder); border-radius:10px; background:rgba(255,255,255,.03); display:grid; gap:8px; font-size:12.5px; }
 .lcName{ display:flex; gap:8px; align-items:center; color:var(--uiMuted); }
 .lcName input{ height:30px; border-radius:8px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); padding:0 8px; text-transform:uppercase; flex:1; max-width:260px; }
@@ -950,12 +956,14 @@ function sbView(c){
     const ok = P.stripMatch(s, F); if(!ok) hidden++;
     const stat = P.statusOf(pl, id), rv = revOf[id], isNew = n && n.added.indexOf(id) >= 0;
     const ids = P.castIds(s, bd.cast), kidNight = s.dn === "N" && (s.cast || []).some((x) => kids[x]);
+    const un = day >= 0 ? P.unavailOn(pl, s, dates[day]) : { cast: [], loc: "" }, unList = un.cast.concat(un.loc ? [un.loc] : []);
     const hiOn = SB.hi && (s.cast || []).indexOf(SB.hi) >= 0, nsh = shotMap[id] ? shotMap[id].length : 0;
     const cls = ["sbRow", sel.has(id) ? "sel" : "", landed.has(id) ? "landed" : "", ok ? "" : "sbHide", SB.hi ? (hiOn ? "hi" : "dim") : "", stat !== "Scheduled" ? "st-" + stat.replace(/[^a-z]/gi, "").toLowerCase() : ""].filter(Boolean).join(" ");
     const tags = (stat !== "Scheduled" ? `<em class="sbStat s-${stat.replace(/[^a-z]/gi, "").toLowerCase()}">${esc(stat)}</em>` : "")
       + (rv ? `<em class="sbTag rev"${tipAttr("Changed in the script since it was scheduled: " + revText(rv))}>Revised</em>` : "")
       + (isNew ? `<em class="sbTag new"${tipAttr("New in the script")}>New</em>` : "")
       + (s.estSrc === "shots" ? `<em class="sbTag sh"${tipAttr("Time from the shot list: " + s.shotN + " shot" + (s.shotN === 1 ? "" : "s") + " (" + s.shotTimed + " with EST. MIN typed, the rest suggested)" + (s.shotRes && s.shotRes.prep ? " plus " + s.shotRes.prep + " min prep" : "") + " = " + fmtMins(s.est) + (s.estBd ? ". The breakdown's estimate was " + fmtMins(s.estBd) : ""))}>${s.shotN} shot${s.shotN === 1 ? "" : "s"}</em>` : "")
+      + (unList.length ? `<em class="sbTag warn"${tipAttr(unList.join(", ") + (unList.length === 1 ? " isn't" : " aren't") + " available on " + fmtDayShort(dates[day]) + ". Move the scene, or change the days off under Cast or Locations")}>⚠ Unavailable</em>` : "")
       + (kidNight ? `<em class="sbTag warn"${tipAttr("Night scene with a cast member under 18: check work-hour limits, permit and chaperone")}>⚠ Minor</em>` : "");
     return `<div class="${cls}" role="row" tabindex="0" data-sid="${esc(id)}" data-day="${day}" style="--sc:${stripColor(s)}" aria-selected="${sel.has(id)}" aria-label="${esc("Scene " + SN(s) + ", " + s.heading + ". Double-click for its breakdown sheet")}">
       ${canEdit ? `<span class="sbGrip"${tipAttr("Drag to move")} aria-hidden="true">⋮⋮</span>` : `<span class="sbGrip off"></span>`}
@@ -1412,14 +1420,23 @@ function flagsView(pl, bd, canEdit){
 }
 /* ---------- cast: Lead / Supporting / … as the script suggests, or as you choose ---------- */
 const TYPE_LABEL = { "Featured (non-speaking)": "Featured (non-speaking)" };
+// Days a cast member or place can't be used: runs of dates as chips, and a date picker to add one
+const fmtDayShort = (iso) => { const d = P.parseISO(iso); return d ? d.toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" }) : iso; };
+function availCtl(pl, k, name, canEdit){
+  const off = P.availOff(pl, k, name), runs = P.availRuns(off);
+  if(!runs.length && !canEdit) return "";
+  const chip = ([a, z]) => `<span class="lcChip off">${esc(a === z ? fmtDayShort(a) : fmtDayShort(a) + " – " + fmtDayShort(z))}${canEdit ? `<button type="button" data-a="avrm" data-avk="${k}" data-avn="${esc(name)}" data-a0="${a}" data-z="${z}" aria-label="${esc(name)} is available again on these days" title="Available again">✕</button>` : ""}</span>`;
+  return `<div class="avWrap"><span class="avLbl">${runs.length ? "Unavailable" : ""}</span>${runs.map(chip).join("")}${canEdit ? `<label class="avAdd"${tipAttr("Pick a day " + name + " can't " + (k === "cast" ? "work" : "be used") + ". Auto-schedule won't book it, and a day that does is flagged")}>＋ Day off<input type="date" data-avk="${k}" data-avn="${esc(name)}" aria-label="Add a day ${esc(name)} is unavailable"></label>` : ""}</div>`;
+}
 function castView(pl, bd, canEdit){
   if(!bd.cast.length) return "";
   const chosen = {}; (pl.castType || []).forEach((c) => { chosen[c.name] = c.t; });
   const n = Object.keys(chosen).filter((k) => bd.cast.some((c) => c.name === k)).length;
-  return `<details class="dood fx" data-sec="cast"${lsGet(CAST_KEY) === "1" ? " open" : ""}><summary>Cast · ${bd.cast.length} character${bd.cast.length === 1 ? "" : "s"}${n ? " (" + n + " set by hand)" : ""}</summary>
-    <div class="fxNote">Set by how much each character is in the script. Change any type here.</div>
+  const nOff = bd.cast.filter((c) => P.availOff(pl, "cast", c.name).length).length;
+  return `<details class="dood fx" data-sec="cast"${lsGet(CAST_KEY) === "1" ? " open" : ""}><summary>Cast · ${bd.cast.length} character${bd.cast.length === 1 ? "" : "s"}${n ? " (" + n + " set by hand)" : ""}${nOff ? " · " + nOff + " with days off" : ""}</summary>
+    <div class="fxNote">Set by how much each character is in the script. Change any type here, and add the days someone can't work.</div>
     ${bd.cast.map((c) => `<div class="fxRow"><div class="fxName"><b>${esc(c.name)}</b><span>${c.onCamCount || c.scenes.length} scene${(c.onCamCount || c.scenes.length) === 1 ? "" : "s"}${chosen[c.name] && c.autoType !== c.type ? " · script suggests " + esc(c.autoType) : ""}</span></div>
-      <label class="fxIn">Type <select data-ctype="${esc(c.name)}"${canEdit ? "" : " disabled"}>${P.CAST_TYPES.map((t) => `<option value="${esc(t)}"${c.type === t ? " selected" : ""}>${esc(TYPE_LABEL[t] || t)}${t === c.autoType ? " (auto)" : ""}</option>`).join("")}</select></label></div>`).join("")}
+      <label class="fxIn">Type <select data-ctype="${esc(c.name)}"${canEdit ? "" : " disabled"}>${P.CAST_TYPES.map((t) => `<option value="${esc(t)}"${c.type === t ? " selected" : ""}>${esc(TYPE_LABEL[t] || t)}${t === c.autoType ? " (auto)" : ""}</option>`).join("")}</select></label>${availCtl(pl, "cast", c.name, canEdit)}</div>`).join("")}
   </details>`;
 }
 // Set (or clear, when it's the automatic one) a character's type. Used by the Plan tab and the Board.
@@ -1435,7 +1452,7 @@ function setCastType(pid, name, t, auto){
 const ROOM_RE = /^(KITCHEN|LOUNGE|LOUNGE ROOM|LIVING ROOM|SITTING ROOM|DINING ROOM|FAMILY ROOM|BEDROOM|MASTER BEDROOM|.*'S BEDROOM|.*'S ROOM|BATHROOM|ENSUITE|TOILET|LAUNDRY|HALLWAY|HALL|CORRIDOR|STAIRS|STAIRCASE|LANDING|ATTIC|BASEMENT|CELLAR|GARAGE|STUDY|OFFICE|NURSERY|PANTRY|FRONT DOOR|BACK DOOR|PORCH|VERANDAH|VERANDA|BALCONY|BACKYARD|BACK YARD|FRONT YARD|YARD|GARDEN|DRIVEWAY|SHED|ROOFTOP)$/;
 function locsView(pl, bd, canEdit){
   const orig = {}; bd.scenes.forEach((s) => { const o = s.oloc || s.loc; if(!o) return; (orig[o] = orig[o] || { n: 0, e: 0 }).n++; orig[o].e += s.eighths; });
-  const names = Object.keys(orig); if(names.length < 2 && !(pl.locMerge || []).length) return "";
+  const names = Object.keys(orig); if(!names.length) return "";
   const map = {}; (pl.locMerge || []).forEach((m) => { map[m.from] = m.to; });
   // place -> the script locations in it
   const places = {};
@@ -1450,15 +1467,16 @@ function locsView(pl, bd, canEdit){
       <div class="lcBtns"><button type="button" class="btn sm primary" data-a="lcok">${f.place ? "Add" : "Make place"}</button><button type="button" class="btn sm" data-a="lccancel">Cancel</button></div></div>` : "";
   const grouped = list.filter((x) => x.areas.length > 1 || x.areas[0] !== x.name).length;
   return `<details class="dood fx" data-sec="locs"${lsGet(LOCS_KEY) === "1" || inForm ? " open" : ""}><summary>Locations · ${list.length} place${list.length === 1 ? "" : "s"}${names.length !== list.length ? " (" + names.length + " in the script)" : ""}</summary>
-    <div class="fxNote">Group areas (kitchen, yard…) into the one real place you shoot at.
-      ${canEdit ? `<button type="button" class="btn sm" data-a="lcnew">New place…</button>` : ""}
+    <div class="fxNote">Group areas (kitchen, yard…) into the one real place you shoot at, and add the days a place can't be used.
+      ${canEdit && names.length > 1 ? `<button type="button" class="btn sm" data-a="lcnew">New place…</button>` : ""}
       ${rooms.length > 1 && canEdit ? `<button type="button" class="btn sm" data-a="rooms" data-rooms="${esc(rooms.join("|"))}">Put ${rooms.length} rooms in one place…</button>` : ""}</div>
     ${form}
     ${list.map((x) => {
       const areas = x.areas.filter((a) => a !== x.name), own = !!orig[x.name];
       return `<div class="fxRow"><div class="fxName"><b>${esc(x.name)}</b><span>${x.n} scene${x.n === 1 ? "" : "s"} · ${P.fmtEighths(x.e)} pg${areas.length ? " · " + (areas.length + (own ? 1 : 0)) + " areas" : ""}</span>
         ${areas.length ? `<div class="lcAreas">${own ? `<span class="lcChip main" title="Scenes written as ${esc(x.name)} itself">${esc(x.name)}</span>` : ""}${areas.map((a) => `<span class="lcChip">${esc(a)}${canEdit ? `<button type="button" data-a="lcout" data-loc="${esc(a)}" aria-label="Take ${esc(a)} out of ${esc(x.name)}" title="Take out: its own location again">✕</button>` : ""}</span>`).join("")}</div>` : ""}</div>
-        ${canEdit ? `<div class="lcActs"><button type="button" class="btn sm" data-a="lcadd" data-place="${esc(x.name)}">Add areas…</button>${areas.length ? `<button type="button" class="btn sm" data-a="lcren" data-place="${esc(x.name)}" data-own="${own ? 1 : 0}">Rename…</button><button type="button" class="btn sm" data-a="lcsplit" data-place="${esc(x.name)}" title="Every area becomes its own location again">Split</button>` : ""}</div>` : ""}</div>`;
+        ${availCtl(pl, "loc", x.name, canEdit)}
+        ${canEdit && list.length > 1 ? `<div class="lcActs"><button type="button" class="btn sm" data-a="lcadd" data-place="${esc(x.name)}">Add areas…</button>${areas.length ? `<button type="button" class="btn sm" data-a="lcren" data-place="${esc(x.name)}" data-own="${own ? 1 : 0}">Rename…</button><button type="button" class="btn sm" data-a="lcsplit" data-place="${esc(x.name)}" title="Every area becomes its own location again">Split</button>` : ""}</div>` : ""}</div>`;
     }).join("")}
   </details>`;
 }
@@ -1547,6 +1565,14 @@ function wire(box, pid, ctx){
         H().toast(picked.length + " location" + (picked.length === 1 ? "" : "s") + " now part of " + name + ".", "ok", 2200);
         return;
       }
+      if(k === "avrm" && canEdit){
+        const a0 = P.parseISO(a.dataset.a0), z = P.parseISO(a.dataset.z), list = [];
+        for(let t2 = a0 ? a0.getTime() : 0; a0 && z && t2 <= z.getTime() && list.length < 400; t2 += 864e5) list.push(new Date(t2).toISOString().slice(0, 10));
+        const nm = a.dataset.avn, kk = a.dataset.avk;
+        update((plan) => { P.setAvail(plan, kk, nm, list, false); });
+        H().toast(nm + " is available again on " + (list.length === 1 ? fmtDayShort(list[0]) : list.length + " days") + ".", "ok", 1800);
+        return;
+      }
       if(k === "lcout" && canEdit){ update((plan) => { P.ungroupLoc(plan, a.dataset.loc); }); return; }
       if(k === "lcsplit" && canEdit){
         const pl2 = a.dataset.place;
@@ -1619,6 +1645,12 @@ function wire(box, pid, ctx){
       const c = (ctx.bd && ctx.bd.cast || []).find((x) => x.name === t.dataset.ctype);
       setCastType(pid, t.dataset.ctype, t.value, c && c.autoType);
       H().toast(t.dataset.ctype + ": " + t.value, "ok", 1600);
+      return;
+    }
+    if(t.dataset.avk != null){
+      const v = t.value, nm = t.dataset.avn, kk = t.dataset.avk; if(!P.parseISO(v)) return;
+      update((plan) => { P.setAvail(plan, kk, nm, [v], true); });
+      H().toast(nm + " unavailable on " + fmtDayShort(v) + ".", "ok", 1800);
       return;
     }
     if(t.dataset.date != null){ update((plan) => { const d = plan.days[Number(t.dataset.date)]; if(d) d.date = t.value || ""; }); return; }

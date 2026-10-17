@@ -369,9 +369,6 @@ test("a day's meal can be moved, made longer or removed", () => {
   assert.strictEqual(n.days[0].noMeal, true); assert.strictEqual(n.days[1].mealMin, 240); assert.strictEqual(n.days[2].mealMin, undefined);
 });
 
-console.log(`\n${passed} passed, ${failed} failed`);
-if(failed) process.exit(1);
-
 test("hours flags: long day, late meal, short turnaround, child hours, six days in a row", () => {
   const sc = (id, n, est, extra) => Object.assign({ id, n, loc: "HOUSE", dn: "D", eighths: 8, est, cast: [] }, extra || {});
   const big = { scenes: [sc("a", 1, 300), sc("b", 2, 300), sc("c", 3, 300), sc("k", 4, 120, { cast: ["KID"] })], cast: [{ name: "KID", minor: true, age: 9 }] };
@@ -387,3 +384,26 @@ test("hours flags: long day, late meal, short turnaround, child hours, six days 
   const six = codes({ settings: { days: 6, maxEighths: 200, start: "2026-11-02", perWeek: 7 }, days: [1, 2, 3, 4, 5, 6].map((n) => ({ scenes: ["x" + n] })) }, { scenes: [1, 2, 3, 4, 5, 6].map((n) => sc("x" + n, n, 60)), cast: [] });
   assert.ok(six.indexOf("SIXDAYS") >= 0);
 });
+
+test("availability: days off are kept tidy, flagged when booked, and auto-schedule works around them", () => {
+  const sc = (id, n, loc, cast) => ({ id, n, loc, dn: "D", eighths: 8, cast });
+  const b = { scenes: [sc("a", 1, "HOUSE", ["ANA"]), sc("b", 2, "PARK", ["BEN"]), sc("c", 3, "HOUSE", ["ANA", "BEN"])], cast: [{ name: "ANA" }, { name: "BEN" }] };
+  let plan = P.normalize({ settings: { days: 3, maxEighths: 80, start: "2026-11-02", perWeek: 7 }, days: [{ scenes: [] }, { scenes: [] }, { scenes: [] }],
+    avail: [{ k: "cast", name: "ANA", off: ["2026-11-02", "bad", "2026-11-02"] }, { k: "nope", name: "X", off: ["2026-11-02"] }, { k: "loc", name: "PARK", off: [] }] });
+  assert.deepStrictEqual(plan.avail, [{ k: "cast", name: "ANA", off: ["2026-11-02"] }]);
+  P.setAvail(plan, "loc", "PARK", ["2026-11-03", "2026-11-04"], true);
+  assert.deepStrictEqual(P.availRuns(P.availOff(plan, "loc", "PARK")), [["2026-11-03", "2026-11-04"]]);
+  const r = P.autoSchedule(plan, b, { all: true }).plan;
+  const dayOf = (id) => r.days.findIndex((d) => d.scenes.indexOf(id) >= 0);
+  assert.ok(dayOf("a") !== 0 && dayOf("c") !== 0, "ANA's scenes aren't on 2 Nov");
+  assert.strictEqual(dayOf("b"), 0, "the park scene can only go on 2 Nov");
+  r.days[0].scenes.push("a");
+  const w = P.validate(r, b).filter((x) => x.code === "CASTOFF");
+  assert.ok(w.length === 1 && /ANA isn't available/.test(w[0].text) && w[0].day === 1);
+  P.setAvail(r, "cast", "ANA", ["2026-11-02"], false);
+  assert.strictEqual(r.avail.filter((x) => x.k === "cast").length, 0);
+  assert.ok(!P.validate(r, b).some((x) => x.code === "CASTOFF"));
+});
+
+console.log(`\n${passed} passed, ${failed} failed`);
+if(failed) process.exit(1);

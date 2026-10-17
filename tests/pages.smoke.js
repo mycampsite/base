@@ -199,6 +199,22 @@ let BASE = "";
     await p.hover(".sbTot .cap"); await p.waitForTimeout(150);
     await expect(p, () => { const t = document.getElementById("sbTip"); return t && t.classList.contains("show") && t.textContent.length > 5; }, "a tooltip on hover");
   });
+  await page(browser, "availability: a day off for cast, the strip and the day flag it", "/tests/fixtures/plan.html?popout=1", async (p) => {
+    await p.evaluate(() => { localStorage.clear(); const pr = __CampHub.project().production; pr.settings.start = "2026-11-02"; CampProdPanel.render("p1"); });
+    await p.waitForTimeout(800); await p.evaluate(() => CampProdPanel.render("p1")); await p.waitForTimeout(300);
+    await p.click('[data-sb=sec][data-v=cast]'); await p.waitForTimeout(300);
+    await expect(p, () => !!document.querySelector('input[type=date][data-avk="cast"][data-avn="ANA"]'), "a Day off picker on ANA's row");
+    await p.evaluate(() => { const i = document.querySelector('input[data-avk="cast"][data-avn="ANA"]'); i.value = "2026-11-02"; i.dispatchEvent(new Event("change", { bubbles: true })); });
+    await p.waitForTimeout(500);
+    await expect(p, () => JSON.stringify(__CampHub.project().production.avail || []).indexOf("2026-11-02") >= 0, "the day off saved to the plan");
+    await expect(p, () => !!document.querySelector(".lcChip.off [data-a=avrm]"), "the day off shown as a chip");
+    // put ANA's first scene on Day 1 (2 Nov): the strip is tagged and the day warns
+    await p.evaluate(() => { const pr = __CampHub.project().production, sc = doc.lines.filter((l) => l.type === "scene"); pr.days[0].scenes = [sc[0].id]; CampProdPanel.render("p1"); });
+    await p.waitForTimeout(500);
+    await p.click('[data-sb=sec][data-v=strips]').catch(() => {}); await p.waitForTimeout(300);
+    await expect(p, () => Array.from(document.querySelectorAll('.sbDayWrap[data-day="0"] .sbTag.warn')).some((x) => /Unavailable/.test(x.textContent)), "the strip tagged Unavailable");
+    await expect(p, () => /to check/.test((document.querySelector('.sbDayWrap[data-day="0"] .sbDW') || {}).textContent || ""), "Day 1 flagged");
+  });
   await page(browser, "layouts: new board, draw, kit piece, move, undo, note", "/tests/fixtures/layouts.html", async (p) => {
     await p.click("[data-ly=new]"); await p.waitForTimeout(300);
     await expect(p, () => Object.keys(__CampHub.project().layouts).length === 1 && !!document.querySelector(".lyCard.on"), "a new layout, selected");

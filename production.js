@@ -101,6 +101,42 @@ function hmIn(msUtc, tz){
   try{ const f = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz || undefined }); const p = f.formatToParts(new Date(msUtc)); const h = p.find((x) => x.type === "hour").value, m = p.find((x) => x.type === "minute").value; return (h === "24" ? "00" : h) + ":" + m; }
   catch(_e){ const dt = new Date(msUtc); return String(dt.getHours()).padStart(2, "0") + ":" + String(dt.getMinutes()).padStart(2, "0"); }
 }
+// ---------- availability: days a cast member or a place can't be used ----------
+function cleanAvail(v){
+  const arr = Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).map((k) => v[k]) : []);
+  const out = [];
+  arr.forEach((x) => {
+    if(!x || (x.k !== "cast" && x.k !== "loc") || !String(x.name || "").trim()) return;
+    const offs = (Array.isArray(x.off) ? x.off : (x.off && typeof x.off === "object" ? Object.keys(x.off).map((k) => x.off[k]) : [])).map(String).filter((d) => parseISO(d));
+    const off = Array.from(new Set(offs)).sort().slice(0, 366);
+    if(!off.length) return;
+    const name = String(x.name).trim().slice(0, 80), have = out.find((y) => y.k === x.k && y.name === name);
+    if(have) have.off = Array.from(new Set(have.off.concat(off))).sort(); else out.push({ k: x.k, name, off });
+  });
+  return out;
+}
+function availOff(plan, k, name){ const x = ((plan && plan.avail) || []).find((y) => y.k === k && y.name === name); return x ? x.off : []; }
+// Add or remove days off (a list of dates). Mutates and returns the plan.
+function setAvail(plan, k, name, dates, on){
+  plan.avail = cleanAvail(plan.avail);
+  let x = plan.avail.find((y) => y.k === k && y.name === name);
+  if(!x){ if(!on) return plan; x = { k, name, off: [] }; plan.avail.push(x); }
+  const set = new Set(x.off); (dates || []).forEach((d) => { if(!parseISO(d)) return; if(on) set.add(d); else set.delete(d); });
+  x.off = Array.from(set).sort();
+  plan.avail = plan.avail.filter((y) => y.off.length);
+  return plan;
+}
+// Days off grouped into runs of consecutive dates: [["2026-11-03", "2026-11-05"], ["2026-11-09", "2026-11-09"]]
+function availRuns(off){
+  const out = []; (off || []).slice().sort().forEach((d) => { const last = out[out.length - 1]; if(last && Math.round((parseISO(d) - parseISO(last[1])) / 864e5) === 1) last[1] = d; else out.push([d, d]); });
+  return out;
+}
+// Who or what in a scene can't be used on a date: { cast: [names], loc: name | "" }
+function unavailOn(plan, s, iso){
+  if(!iso || !s || !(plan && plan.avail && plan.avail.length)) return { cast: [], loc: "" };
+  const off = (k, n) => availOff(plan, k, n).indexOf(iso) >= 0;
+  return { cast: (s.cast || []).filter((n) => off("cast", n)), loc: s.loc && off("loc", s.loc) ? s.loc : "" };
+}
 function normalize(plan){
   plan = (plan && typeof plan === "object") ? plan : {};
   const s = Object.assign({}, DEFAULTS, plan.settings || {});
@@ -142,6 +178,8 @@ function normalize(plan){
   out.flagStatus = arr(plan.flagStatus).filter((f) => f && f.id && /^(keep|watch|ignore)$/.test(f.s)).map((f) => ({ id: String(f.id), scene: f.scene ? String(f.scene) : "", s: f.s }));
   // each scene's shooting status, when it isn't just "Scheduled" (a list: scene ids may not suit database keys)
   out.status = arr(plan.status).filter((x) => x && x.id && STATUSES.indexOf(x.s) > 0).map((x) => ({ id: String(x.id), s: x.s }));
+  // dates a cast member or a place can't be used: [{ k: "cast" | "loc", name, off: ["YYYY-MM-DD", …] }] (a list: names may not suit keys)
+  out.avail = cleanAvail(plan.avail);
   // links to the call sheets made by the last Sync (kept as they are)
   if(plan.callsheets && typeof plan.callsheets === "object") out.callsheets = plan.callsheets;
   return out;
@@ -312,16 +350,18 @@ function autoSchedule(plan, breakdown, opts){
   const todo = (breakdown && breakdown.scenes || []).filter((s) => s.id && !placed.has(s.id));
   const used = plan.days.map((d) => dayStats(d, byId, max).eighths);
   const onDay = plan.days.map((d) => d.scenes.map((id) => byId[id]).filter(Boolean));
-  const left = [];
+  const left = [], dates = planDates(plan);
+  const can = (s, i) => { const u = unavailOn(plan, s, dates[i]); return !u.cast.length && !u.loc; };   // nobody booked on a day they can't do
   stripOrder(todo).forEach((s) => {
     let best = -1, bs = -Infinity;
     for(let i = 0; i < plan.days.length; i++){
+      if(!can(s, i)) continue;
       if(used[i] + (s.eighths || 0) > max) continue;
       const v = fitScore(s, onDay[i]);
       if(v > bs){ bs = v; best = i; }
     }
     // a single scene longer than a whole day still goes on an empty day (it'll be flagged)
-    if(best < 0) best = used.findIndex((u) => u === 0);
+    if(best < 0) best = used.findIndex((u, i) => u === 0 && can(s, i));
     if(best < 0){ left.push(s.id); return; }
     plan.days[best].scenes.push(s.id); used[best] += s.eighths || 0; onDay[best].push(s);
   });
@@ -332,11 +372,12 @@ function autoSchedule(plan, breakdown, opts){
 function suggestDay(sceneId, plan, breakdown){
   plan = normalize(plan);
   const byId = sceneMap(breakdown), s = byId[sceneId]; if(!s) return -1;
-  const max = plan.settings.maxEighths, st = plan.days.map((d) => dayStats(d, byId, max));
+  const max = plan.settings.maxEighths, st = plan.days.map((d) => dayStats(d, byId, max)), dates = planDates(plan);
+  const can = (i) => { const u = unavailOn(plan, s, dates[i]); return !u.cast.length && !u.loc; };
   let best = -1;
-  st.forEach((x, i) => { if(x.eighths + s.eighths <= max && x.locs.indexOf(s.loc) >= 0 && best < 0) best = i; });
+  st.forEach((x, i) => { if(can(i) && x.eighths + s.eighths <= max && x.locs.indexOf(s.loc) >= 0 && best < 0) best = i; });
   if(best >= 0) return best;
-  st.forEach((x, i) => { if(x.eighths + s.eighths <= max && (best < 0 || x.eighths < st[best].eighths)) best = i; });
+  st.forEach((x, i) => { if(can(i) && x.eighths + s.eighths <= max && (best < 0 || x.eighths < st[best].eighths)) best = i; });
   return best;
 }
 
@@ -412,6 +453,14 @@ function validate(plan, breakdown){
     const rest = gap * 1440 + toMin(b.call) - (toMin(a.call) + a.length);
     if(rest < 10 * 60) out.push({ level: "warn", code: "TURNAROUND", day: i + 2, text: "Day " + (i + 2) + ": only " + hm(Math.max(0, rest)) + " between wrap on Day " + (i + 1) + " (" + a.wrap + ") and call (" + b.call + "). Aim for 10 hours rest" });
   }
+  // Someone or somewhere booked on a day they can't do (needs dates)
+  if((plan.avail || []).length) plan.days.forEach((d, i) => {
+    if(!dates[i]) return;
+    const who = {}, where = {};
+    (d.scenes || []).map((id) => byId[id]).filter(Boolean).forEach((sc) => { const u = unavailOn(plan, sc, dates[i]); u.cast.forEach((n) => { (who[n] = who[n] || []).push(sc.sno || sc.n); }); if(u.loc) (where[u.loc] = where[u.loc] || []).push(sc.sno || sc.n); });
+    Object.keys(who).forEach((n) => out.push({ level: "warn", code: "CASTOFF", day: i + 1, text: "Day " + (i + 1) + ": " + n + " isn't available (Sc " + who[n].join(", ") + ")" }));
+    Object.keys(where).forEach((n) => out.push({ level: "warn", code: "LOCOFF", day: i + 1, text: "Day " + (i + 1) + ": " + n + " isn't available (Sc " + where[n].join(", ") + ")" }));
+  });
   // Six or more shooting days in a row (needs dates)
   let run = 0;
   plan.days.forEach((d, i) => {
@@ -680,7 +729,7 @@ function dayShots(day, shotMap){
   return { scenes, total: scenes.reduce((a, s) => a + s.shots.length, 0) };
 }
 
-const api = { DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
+const api = { cleanAvail, availOff, setAvail, availRuns, unavailOn, DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
   EXTRA_KINDS, cleanExtras, moveSceneIn, moveManyIn, sortDay, stripMatch, castIds, placeScenes, STATUSES, statusOf, setStatus, cleanWhere, whereOf, sunTimes, hmIn, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);
