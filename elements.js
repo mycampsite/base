@@ -1244,7 +1244,102 @@ function csv(b) {
   return [head].concat(rows).map(function (r) { return r.map(q).join(","); }).join("\n");
 }
 
-const api = { CATS: CATS, CAT: CAT, build: build, enrich: enrich, sheetPayload: sheetPayload, suggestScene: suggestScene, sceneTexts: sceneTexts, storyDays: storyDays, estimate: estimate,
+// ---------- Continuity: things a script supervisor catches, found by plain rules (no AI, same answer every run) ----------
+// Each finding: { type, sev, summary, scenes: [scene numbers as shown], quotes: [verbatim lines], key }.
+// A finding always carries the lines it came from, so it can be checked in seconds; when unsure, say nothing.
+const CONT_COLOURS_ = "red|blue|green|yellow|orange|purple|pink|black|white|grey|gray|brown|silver|gold|golden|beige|cream|navy|maroon|teal|tan";
+const CONT_DAY_ = /\b([Mm]oonlight|[Mm]oonlit|the moon|full moon|[Mm]idnight|[Ss]tarlit|[Ss]tarry|under the stars|dead of night|streetlights? (?:flicker|glow|hum|buzz)s?)\b/;   // case-sensitive: "Moon Street" is a street
+const CONT_NIGHT_ = /\b(sunlight|sunshine|sunny|sunrise|midday|noon|blue sky|bright daylight|the sun (?:beats|blazes|streams|shines))\b/i;
+const CONT_USING_ = /\b(unlocks?|unlocked|opens?|opened|uses?|used|turns? on|picks? up|inserts?|starts?|drives?|shakes?|wears?|reads?)\b/i;
+const CONT_INTRO_ = /\b(hands? (?:\w+ )?(?:over|the|a|an|her|him|them|\w+ the)|handed|gives?|gave|passes|produces|finds?|found|discovers?|reveals?|pulls? out|takes? out|brings?|for the first time|never seen)\b/i;
+function contSentences(text) {
+  const out = [];
+  String(text || "").split(/\n\s*\n|\n/).forEach(function (para) {
+    para.split(/(?<=[.!?])\s+/).forEach(function (s) { s = clean(s); if (s.length > 3) out.push(s); });
+  });
+  return out;
+}
+function contYear(t) {
+  t = String(t).replace(/^['’]/, "");
+  return /^\d{4}$/.test(t) ? t.slice(2) : /^\d{2}$/.test(t) ? t : "";
+}
+function continuity(doc, bd, b) {
+  const texts = sceneTexts(doc), byId = {}; texts.forEach(function (t) { if (t.id) byId[t.id] = t; });
+  const sc = (bd && bd.scenes) || [];
+  const per = sc.map(function (s, i) {
+    const t = (s.id && byId[s.id]) || texts[i] || { action: [], talk: [] };
+    return { no: (b && b.nos && b.nos[i]) || String(s.sno || i + 1), n: i + 1, dn: s.dn, sents: contSentences((t.action || []).join("\n")), said: contSentences((t.talk || []).join("\n")) };
+  });
+  const all = function (p) { return p.sents.concat(p.said); };
+  const found = [], seen = {};
+  const add = function (f) { if (seen[f.key]) return; seen[f.key] = 1; found.push(f); };
+
+  // 1. The same thing described two ways: '67 Mustang vs '68 Mustang, a red cup vs a blue cup
+  const years = {};   // thing -> [{yr, p, line}]
+  const cols = {};    // thing -> [{col, p, line}]
+  const yrRe = /(?:^|[^\w])((?:19|20)\d{2}|['’]\d{2})\s+([A-Z][A-Za-z\-]+(?:\s+[A-Z][A-Za-z\-]+)?)/g;
+  const colRe = new RegExp("\\b(" + CONT_COLOURS_ + ")\\s+((?:[a-z][a-z'\\-]+\\s+)?[a-z][a-z'\\-]+)\\b", "gi");
+  const nouns = {}; if (b && b.elements) Object.keys(b.elements).forEach(function (k) { const e = b.elements[k]; if (/^(props|vehicles|weapons|animals|wardrobe)$/.test(e.cat)) nouns[e.name.toLowerCase()] = 1; });
+  per.forEach(function (p) {
+    all(p).forEach(function (line) {
+      let m; yrRe.lastIndex = 0;
+      while ((m = yrRe.exec(line)) !== null) {
+        const thing = m[2].toLowerCase(), y = contYear(m[1]); if (!y) continue;
+        (years[thing] = years[thing] || []).push({ v: y, p: p, line: line });
+      }
+      colRe.lastIndex = 0;
+      while ((m = colRe.exec(line)) !== null) {
+        const thing = singular(m[2].toLowerCase());
+        if (!nouns[m[2].toLowerCase()] && !nouns[thing]) continue;
+        (cols[thing] = cols[thing] || []).push({ v: m[1].toLowerCase().replace("gray", "grey"), p: p, line: line });
+      }
+    });
+  });
+  const clash = function (map, label) {
+    Object.keys(map).forEach(function (thing) {
+      const list = map[thing], first = list[0];
+      const other = list.filter(function (x) { return x.v !== first.v && x.p.n !== first.p.n; })[0];
+      if (!other) return;
+      add({ type: "SAME THING, TWO WAYS", sev: label === "year" ? "high" : "medium", key: "same|" + thing,
+        summary: thing.replace(/\b\w/g, function (c) { return c.toUpperCase(); }) + " is described as " + (label === "year" ? "'" + first.v + " in scene " + first.p.no + " but '" + other.v : first.v + " in scene " + first.p.no + " but " + other.v) + " in scene " + other.p.no + ".",
+        scenes: [first.p.no, other.p.no], quotes: [first.line, other.line] });
+    });
+  };
+  clash(years, "year"); clash(cols, "colour");
+
+  // 2. The heading says one thing, the action says another
+  per.forEach(function (p) {
+    const dn = String(p.dn || "").toUpperCase().charAt(0);
+    all(p).some(function (line) {
+      const bad = dn === "D" ? CONT_DAY_.exec(line) : dn === "N" ? CONT_NIGHT_.exec(line) : null;
+      if (!bad) return false;
+      add({ type: "DAY / NIGHT", sev: "medium", key: "dn|" + p.n, scenes: [p.no], quotes: [line],
+        summary: "Scene " + p.no + " is " + (dn === "D" ? "DAY" : "NIGHT") + " but the action reads " + (dn === "D" ? "night" : "daytime") + " (“" + bad[0] + "”)." });
+      return true;
+    });
+  });
+
+  // 3. Used before it is introduced. The name is matched in full and by its last word ("the key" for BRASS KEY)
+  if (b && b.elements) Object.keys(b.elements).forEach(function (k) {
+    const e = b.elements[k];
+    if (!/^(props|vehicles|weapons)$/.test(e.cat) || e.scenes.length < 2) return;
+    const nm = e.name.toLowerCase(), head = nm.split(" ").pop();
+    if (head.length < 3) return;
+    const re = new RegExp("\\b(" + escapeRe(nm) + "|" + escapeRe(head) + ")s?\\b", "i");
+    const rows = [];
+    e.scenes.forEach(function (n) { const p = per[n - 1]; if (p) p.sents.forEach(function (line) { if (re.test(line)) rows.push({ p: p, line: line }); }); });
+    const use = rows.filter(function (r) { return CONT_USING_.test(r.line) && !CONT_INTRO_.test(r.line); })[0];
+    const intro = rows.filter(function (r) { return CONT_INTRO_.test(r.line); }).pop();
+    if (!use || !intro || intro.p.n <= use.p.n) return;
+    add({ type: "USED BEFORE INTRODUCED", sev: "low", key: "intro|" + k, scenes: [use.p.no, intro.p.no], quotes: [use.line, intro.line],
+      summary: e.name + " is used in scene " + use.p.no + " but only handed over or found in scene " + intro.p.no + ". Check the order." });
+  });
+
+  const rank = { high: 0, medium: 1, low: 2 };
+  return found.sort(function (a, c) { return rank[a.sev] - rank[c.sev] || (parseInt(a.scenes[0], 10) || 0) - (parseInt(c.scenes[0], 10) || 0); });
+}
+
+const api = { CATS: CATS, continuity: continuity, CAT: CAT, build: build, enrich: enrich, sheetPayload: sheetPayload, suggestScene: suggestScene, sceneTexts: sceneTexts, storyDays: storyDays, estimate: estimate,
   key: key, norm: norm, display: display, sceneKey: sceneKey, resolve: resolve,
   tag: tag, untag: untag, drop: dropEl, undrop: undrop, rename: rename, merge: merge, unmerge: unmerge, setNote: setNote, setHero: setHero, setCastNo: setCastNo, clearCastNos: clearCastNos, setScene: setScene,
   report: report, csv: csv, fmtEighths: fmtEighths, sceneNos: sceneNos, sceneNo: sceneNo,

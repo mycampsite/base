@@ -483,5 +483,29 @@ test("cast ID numbers set by hand: swap on clash, the rest follow on, shared and
   assert.ok(!E.resetStore(st, {}).nums);
 });
 
+// ---- Continuity: planted errors must be found, a clean script must stay silent ----
+function cont(lines){ const d = doc(lines), bd = B.analyze(d); return E.continuity(d, bd, E.build(d, bd, {})); }
+const PLANTED = [["scene", "EXT. LOT - NIGHT"], ["action", "The '67 Mustang idles under a dead streetlight."],
+  ["scene", "INT. DINER - DAY"], ["action", "Sarah drops a red coffee cup. Moonlight spills across the booth."],
+  ["scene", "EXT. LOT - NIGHT"], ["action", "Delacroix unlocks the metal footlocker with the BRASS KEY."],
+  ["scene", "EXT. ROAD - DAY"], ["action", "The '68 Mustang is gone. A blue coffee cup rolls by."],
+  ["scene", "INT. CABIN - DAY"], ["action", "Delacroix hands Rena the brass key."]];
+test("continuity: finds the planted errors, each with its lines", () => {
+  const f = cont(PLANTED), types = f.map((x) => x.type);
+  assert.ok(types.includes("SAME THING, TWO WAYS") && f.some((x) => /mustang/i.test(x.summary)), "mustang: " + types.join());
+  assert.ok(f.some((x) => /coffee cup/i.test(x.summary)), "cup colour");
+  assert.ok(f.some((x) => x.type === "DAY / NIGHT" && x.scenes[0] === "2"), "moonlight in a DAY scene");
+  assert.ok(f.some((x) => x.type === "USED BEFORE INTRODUCED" && /key/i.test(x.summary) && x.scenes.join() === "3,5"), "key used before handed over");
+  f.forEach((x) => assert.ok(x.quotes.length && x.quotes.every((q) => q), "every finding cites its lines"));
+});
+test("continuity: a clean script, and the same thing named the same way, raise nothing", () => {
+  assert.deepStrictEqual(cont([["scene", "EXT. LOT - NIGHT"], ["action", "The '67 Mustang idles under a streetlight."],
+    ["scene", "EXT. ROAD - NIGHT"], ["action", "The '67 Mustang races past. JIMMY picks up a red cup."],
+    ["scene", "INT. DINER - DAY"], ["action", "Sunlight fills the booth. The red cup sits on the table."]]), []);
+});
+test("continuity: 'last night' and a street name don't make a DAY scene a night one", () => {
+  assert.deepStrictEqual(cont([["scene", "INT. KITCHEN - DAY"], ["action", "MUM is still angry about last night. Moon Street is quiet."]]), []);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

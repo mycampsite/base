@@ -467,7 +467,7 @@ function modelFor(pid, sid, sc, p){
   const opts = planOpts(p), akey = JSON.stringify(opts);
   if(sc.doc && (!sc.bd || sc.akey !== akey)){ sc.bd = B.analyze(sc.doc, opts); sc.akey = akey; S.model = null; }
   const st = storeOf(pid, sid), mk = SKEY(pid, sid) + "|" + sc.akey + "|" + (sc.modified || "");
-  if(!S.model || S.modelKey !== mk){ S.model = E.build(sc.doc, sc.bd, st); S.modelKey = mk; }
+  if(!S.model || S.modelKey !== mk){ S.model = E.build(sc.doc, sc.bd, st); S.modelKey = mk; try{ S.model.cont = E.continuity(sc.doc, sc.bd, S.model); }catch(_e){ S.model.cont = []; } }
   return S.model;
 }
 // Every edit goes through here: apply it, remember it for undo, save it, rebuild
@@ -995,8 +995,13 @@ function stripsView(b, p){
 
 /* ---------- reports: by category, or what each shoot day needs ---------- */
 function reportsView(b, p){
-  const by = S.rpBy === "day" ? "day" : "cat";
-  const seg = `<div class="bdTools"><div class="seg">${[["cat", "By category"], ["day", "By shoot day"]].map(([v, n]) => `<button type="button" class="${by === v ? "on" : ""}" data-a="rpby" data-v="${v}">${n}</button>`).join("")}</div><button class="btn sm" type="button" data-a="csv" title="Download the whole breakdown as a CSV file" style="margin-left:auto">Download CSV</button></div>`;
+  const by = S.rpBy === "day" ? "day" : S.rpBy === "cont" ? "cont" : "cat", nCont = (b.cont || []).length;
+  const seg = `<div class="bdTools"><div class="seg">${[["cat", "By category"], ["day", "By shoot day"], ["cont", "Continuity" + (nCont ? " (" + nCont + ")" : "")]].map(([v, n]) => `<button type="button" class="${by === v ? "on" : ""}" data-a="rpby" data-v="${v}">${n}</button>`).join("")}</div><button class="btn sm" type="button" data-a="csv" title="Download the whole breakdown as a CSV file" style="margin-left:auto">Download CSV</button></div>`;
+  if(by === "cont"){
+    const sevC = { high: "#e5484d", medium: "#f1c76b", low: "#8a8f98" };
+    const cards = (b.cont || []).map((f) => `<div class="rp" style="--cc:${sevC[f.sev] || "#8a8f98"}"><h4><span>${esc(f.type)}</span><span>Sc ${esc(f.scenes.join(", "))}</span></h4><table><tr><td>${esc(f.summary)}${f.quotes.map((q) => `<div style="opacity:.65;margin-top:4px">“${esc(q)}”</div>`).join("")}</td></tr></table></div>`).join("");
+    return seg + `<div class="bdNote" style="margin-top:12px">Found by rules, not guesses: each note shows the lines it came from. Check the script before changing anything; a few may be intentional.</div>` + `<div class="rpGrid">${cards || `<div class="bdEmpty">Nothing found: no mismatched details, day/night clashes or props used before they're introduced.</div>`}</div>`;
+  }
   if(by === "day"){
     const pd = planDays(b, p);
     if(!pd) return seg + `<div class="bdEmpty">No shoot plan yet. Start it on the Schedule tab to see what each day needs.</div>`;
