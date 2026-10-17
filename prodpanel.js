@@ -41,8 +41,11 @@ const css = `
 .ctlChip.btnChip{ cursor:pointer; background:none; font:inherit; font-size:11.5px; }
 .ctlChip.btnChip:hover{ border-color:rgba(241,199,107,.8); }
 .ctlMore{ position:relative; }
-.ctlUR{ display:inline-flex; gap:2px; }
-.ctlUR .btn{ min-width:32px; padding:0 8px; font-size:15px; }
+.ctlUR{ display:inline-flex; align-items:center; gap:2px; }
+.ctlUR .btn{ min-width:32px; padding:0 8px; font-size:15px; display:inline-flex; align-items:center; justify-content:center; }
+.ctlUR .btn.rf{ margin-right:8px; }
+.ctlUR .btn.spin svg{ animation:ctlSpin .8s linear infinite; }
+@keyframes ctlSpin{ to{ transform:rotate(360deg); } }
 .ctlUR .btn:disabled{ opacity:.35; }
 .ctlMenu{ position:absolute; right:0; top:calc(100% + 6px); z-index:20; min-width:230px; padding:4px; border-radius:10px; background:#1d1e22; border:1px solid rgba(255,255,255,.17); box-shadow:0 14px 40px rgba(0,0,0,.5); display:flex; flex-direction:column; }
 .ctlMenu button{ text-align:left; border:0; background:none; padding:8px 10px; border-radius:7px; cursor:pointer; font-size:13px; }
@@ -567,7 +570,7 @@ function draw(pid){
     ${P.callsheetsStale(raw) ? `<span class="ctlChip warn" title="The plan changed since the last Sync">⟳ Sheets behind the plan${hub.isOwner(p) ? ": Sync" : " (owner Syncs)"}</span>` : ""}`;
   const hh = HIST[pid] || { undo: [], redo: [] };
   const acts = `<div class="ctlActs">
-      <span class="ctlUR"><button class="btn sm" type="button" data-a="reload" title="Refresh: re-read the latest script and storyboard shots into this view. Nothing is written to your Sheets (Sync does that).">⟳ Refresh</button>${canEdit ? `<button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button>` : ""}</span>
+      <span class="ctlUR"><button class="btn sm ico rf${sc.state === "loading" ? " spin" : ""}" type="button" data-a="reload" aria-label="Refresh" title="Refresh: re-read the latest script and storyboard shots into this view. Nothing is written to your Sheets (Sync does that)."><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>${canEdit ? `<button class="btn sm" type="button" data-a="undo" title="Undo (Ctrl+Z)"${hh.undo.length ? "" : " disabled"}>↶</button><button class="btn sm" type="button" data-a="redo" title="Redo (Ctrl+Shift+Z)"${hh.redo.length ? "" : " disabled"}>↷</button>` : ""}</span>
       <span class="ctlMore"><button class="btn sm" type="button" data-a="menu" aria-haspopup="menu" aria-expanded="${S.menu}" title="More">⋯</button>${S.menu ? `<div class="ctlMenu" role="menu">
         <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room</small></button>
         <button type="button" data-a="reauto"${canEdit ? "" : " disabled"}>Re-plan all<small>Lay out every scene again from scratch</small></button>
@@ -865,19 +868,36 @@ button.sbBan[data-bk]:hover .sbBGrip{ opacity:.9; }
   .sbGrip{ font-size:15px; opacity:.8; }
   .sbTools .sbQ{ max-width:none; }
 }
+@page{ size:A4 portrait; margin:10mm; }
 @media print{
+  html, body.sbPrint{ height:auto !important; overflow:visible !important; background:#fff !important; }
   body.sbPrint > *:not(#sbPrintCopy){ display:none !important; }
-  body.sbPrint{ background:#fff !important; }
-  body.sbPrint #sbPrintCopy{ display:block; color:#000; font:11px/1.3 Inter, Arial, sans-serif; }
+  body.sbPrint #sbPrintCopy{ display:block; position:static; width:auto; color:#000; font:10.5px/1.3 Inter, Arial, sans-serif; --uiMuted:#444; --uiText:#000; --uiBorder:#999; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   #sbPrintCopy h1{ font-size:15px; margin:0 0 2px; } #sbPrintCopy .sbPrintDate{ font-size:10px; color:#555; margin-bottom:8px; }
-  #sbPrintCopy .sbDayWrap{ background:#fff; border:1px solid #999; break-inside:auto; }
-  #sbPrintCopy .sbHead, #sbPrintCopy .sbDay, #sbPrintCopy .sbT, #sbPrintCopy .sbTot, #sbPrintCopy .sbSun, #sbPrintCopy .sbWx, #sbPrintCopy .sbSyn, #sbPrintCopy .sbTm, #sbPrintCopy .sbEnd{ color:#000; }
-  #sbPrintCopy .sbDay .place, #sbPrintCopy .sbDay .dtPick{ border:0; padding:0; color:#000; }
-  #sbPrintCopy .sbRow{ -webkit-print-color-adjust:exact; print-color-adjust:exact; background:color-mix(in srgb, var(--sc) 35%, #fff) !important; color:#000; border-color:#999; break-inside:avoid; outline:none !important; box-shadow:none !important; opacity:1 !important; }
+  #sbPrintCopy .sbBoard{ display:block; }
+  #sbPrintCopy .sbHead, #sbPrintCopy .sbRow{ grid-template-columns:24px 30px minmax(0,1fr) 28px 40px 64px 52px; column-gap:8px; }
+  #sbPrintCopy .sbHead{ padding:0 8px 3px 6px; color:#000; border-bottom:1.5px solid #000; margin-bottom:4px; }
+  #sbPrintCopy .sbGrip, #sbPrintCopy .sbDW, #sbPrintCopy .colNeeds, #sbPrintCopy .sbNeeds, #sbPrintCopy .place.empty, #sbPrintCopy .sbFold, #sbPrintCopy .unpin, #sbPrintCopy .sbAddX, #sbPrintCopy .sbMore, #sbPrintCopy .sbTot .cap, #sbPrintCopy .sbBone .sbDayR, #sbPrintCopy .sbBone .sbEmpty{ display:none !important; }
+  #sbPrintCopy .sbDayWrap{ background:#fff; border:1px solid #666; border-radius:0; margin:0 0 8px; break-inside:auto; }
+  #sbPrintCopy .sbDay{ break-after:avoid; padding:5px 8px; border-bottom:1px solid #666; color:#000; }
+  #sbPrintCopy .sbDay .place, #sbPrintCopy .sbDay .dtPick{ border:0; padding:0; color:#000; background:none; height:auto; max-width:none; white-space:normal; }
+  #sbPrintCopy .sbDayL, #sbPrintCopy .sbDayR, #sbPrintCopy .sbDayB{ min-height:0; gap:3px 10px; }
+  #sbPrintCopy .sbDay .sbDn{ font-size:13px; }
+  #sbPrintCopy .sbTimes{ border:0; background:none; height:auto; }
+  #sbPrintCopy .sbTimes .sbT, #sbPrintCopy .sbT{ height:auto; padding:0 12px 0 0; color:#000; }
+  #sbPrintCopy .sbT, #sbPrintCopy .sbTot, #sbPrintCopy .sbSun, #sbPrintCopy .sbWx, #sbPrintCopy .sbSyn, #sbPrintCopy .sbTm{ color:#000; }
+  #sbPrintCopy .sbRows{ display:block; padding:4px 6px 2px; min-height:0; }
+  #sbPrintCopy .sbRow{ height:auto; min-height:28px; padding:3px 8px 3px 4px; margin:0 0 3px; background:color-mix(in srgb, var(--sc) 35%, #fff) !important; color:#000; border:1px solid #999; border-left:5px solid var(--sc, #999); border-radius:2px; break-inside:avoid; outline:none !important; box-shadow:none !important; opacity:1 !important; }
+  #sbPrintCopy .sbRow .sbMain{ overflow:visible; }
+  #sbPrintCopy .sbPlace, #sbPrintCopy .sbSyn{ white-space:normal; overflow:visible; text-overflow:clip; }
+  #sbPrintCopy .sbSyn.none{ display:none; }
+  #sbPrintCopy .sbCast{ white-space:normal; overflow:visible; }
   #sbPrintCopy .sbIE, #sbPrintCopy .sbDN{ color:#000; }
-  #sbPrintCopy .sbEnd{ background:#eee !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  #sbPrintCopy .sbEnd b{ color:#000; }
-  #sbPrintCopy .sbGrip, #sbPrintCopy .sbDW, #sbPrintCopy .colNeeds, #sbPrintCopy .sbNeeds, #sbPrintCopy .place.empty{ display:none; }
+  #sbPrintCopy .sbTag, #sbPrintCopy .sbStat{ background:#fff !important; color:#000 !important; border:1px solid #555; }
+  #sbPrintCopy .sbBan{ border:1px dashed #666; color:#000; background:#f3f3f3 !important; break-inside:avoid; margin:0 0 3px; }
+  #sbPrintCopy .sbOff{ color:#000; border:1px dashed #666; text-align:center; margin:0 0 8px; padding:2px; }
+  #sbPrintCopy .sbEnd{ break-before:avoid; background:#e6e6e6 !important; color:#000; margin:3px 6px 6px; border-radius:0; }
+  #sbPrintCopy .sbEnd b, #sbPrintCopy .sbEnd .over{ color:#000; }
 }
 `; document.head.appendChild(st2); }
 // One tooltip for anything with data-tip on the plan (instant, multi-line; titles were slow and got lost on redraws)

@@ -325,8 +325,9 @@ const css = `
 #bdctl .rp td:first-child{ overflow-wrap:anywhere; }
 #bdctl .rp td:last-child{ color:var(--uiMuted); text-align:right; width:42%; overflow-wrap:anywhere; }
 #bdctl .rp h4{ flex-wrap:wrap; gap:2px 10px; }
-#bdctl .rpDay td:last-child{ white-space:normal; text-align:left; overflow-wrap:anywhere; color:inherit; }
-#bdctl .rpDay td:first-child{ width:1%; }
+#bdctl .rpDay td:last-child{ white-space:normal; text-align:left; overflow-wrap:break-word; color:inherit; width:auto; }
+#bdctl .rpDay td:first-child{ width:1%; white-space:nowrap; overflow-wrap:normal; color:var(--uiMuted); }
+#bdctl .rpDay .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
 @media (max-width:760px){
   #bdctl .bdBody{ padding:0 10px 90px; }
   #bdctl .bdSplit{ grid-template-columns:1fr; }
@@ -701,8 +702,7 @@ function sheetsView(b, can){
       ${s.id && !S.lock ? `<button class="btn sm toStrip${S.fromStrip === s.id ? " back" : ""}" type="button" data-a="tostrip" data-sid="${esc(s.id)}" title="Show this scene on the Stripboard (selected, so you can move it)">${S.fromStrip === s.id ? "← Back to Stripboard" : "Show on Stripboard"}</button>` : ""}
       <span class="sp"></span>
       <label class="tgl"><input type="checkbox" id="bdShowText"${S.showText ? " checked" : ""}> Scene text</label>
-      <label class="tgl"><input type="checkbox" id="bdShowEmpty"${S.showEmpty ? " checked" : ""}> Show empty categories</label>
-      <button class="btn sm" type="button" data-a="print" title="Print this breakdown sheet">Print</button></div>`;
+      <label class="tgl"><input type="checkbox" id="bdShowEmpty"${S.showEmpty ? " checked" : ""}> Show empty categories</label></div>`;
   const tot = E.CATS.reduce((a, c) => a + (s.els[c.id] || []).length, 0);
   const si = shotInfo(s);
   const fld = (label, val, cls) => `<div class="f${cls ? " " + cls : ""}"><span class="lb">${label}</span>${val}</div>`;
@@ -1135,7 +1135,6 @@ function wire(box, pid){
     if(k === "reload"){ loadScript(sid || hub.scriptIds(p)[0], true); return; }
     if(k === "csv"){ const m = model(); if(m) download(((hub.scriptTitle(sid) || "breakdown") + " - breakdown.csv").replace(/[\\/:*?"<>|]/g, "-"), E.csv(m)); return; }
     if(k === "rpby"){ S.rpBy = a.dataset.v; rerender(); return; }
-    if(k === "print"){ window.print(); return; }
     if(k === "dismissnote"){ lsSet(NOTE_KEY, "1"); rerender(); return; }
     if(k === "cat"){ S.cat = a.dataset.c; rerender(); return; }
     if(k === "undo" || k === "redo"){ stepHist(pid, sid, k === "undo"); return; }
@@ -1263,14 +1262,18 @@ function quickAdd(box, sk, ed){
   if(!name){ H().toast("Type a name first.", "err", 1600); if(i) i.focus(); return; }
   if(!E.CAT[cat]) return;
   S.qCat = cat; lsSet("Camp_BD_QCAT_V1", cat);
-  const quote = S.qQuote; S.qQuote = ""; pickClear();
+  const quote = S.qQuote; S.qQuote = "";
+  S.lastTag = S.pick && S.pick.li != null ? { sk, pick: S.pick } : null;   // so Remove straight after Add still knows which words
+  pickClear();
   ed((st) => E.tag(st, sk, cat, name, quote));
   setTimeout(() => { const j = box.querySelector("#bdQuick"); if(j) j.focus(); }, 60);
 }
 // Remove the tag on the highlighted words: only that mention. If the element has other mentions in the scene they keep their underline; if that was the last one the element comes off the scene.
 function quickRemove(box, sk, ed, onlyK){
-  const m = S.model, sc = m && m.scenes.find((x) => x.key === sk), sel = box.querySelector("#bdQCat"), pk = S.pick;
-  const nope = () => H().toast("Highlight the tagged words in the scene text first.", "err", 2000);
+  let pk = S.pick;
+  if((!pk || pk.li == null) && S.lastTag && S.lastTag.sk === sk && S.lastTag.pick.sel === S.sel) pk = S.lastTag.pick;   // Add then Remove with no new highlight: use the words just tagged
+  const m = S.model, sc = m && m.scenes.find((x) => x.key === sk), sel = box.querySelector("#bdQCat");
+  const nope = () => H().toast("Highlight the tagged words in the scene text first, then press Remove.", "err", 3600);
   if(!sc || !pk || pk.li == null){ nope(); return; }
   const el0 = box.querySelector('.sl[data-li="' + pk.li + '"]'); if(!el0){ nope(); return; }
   const muted = sc.mute || [], txt0 = el0.textContent, h0 = pk.off, h1 = pk.off + pk.len;
@@ -1298,7 +1301,7 @@ function quickRemove(box, sk, ed, onlyK){
   const all = muted.concat(cand.filter((x) => x.k === pick.k).map((x) => x.key));
   let left = 0;   // mentions of this element still underlined after this one goes
   box.querySelectorAll(".sl[data-li]").forEach((n) => { const t = n.textContent, li = n.dataset.li; ((sc.hits && sc.hits[pick.k]) || []).forEach((q) => { if(q) findAll(t, q).forEach(([a]) => { if(all.indexOf(pick.k + "|" + li + "|" + a) < 0) left++; }); }); });
-  pickClear(); S.qQuote = ""; const qi = box.querySelector("#bdQuick"); if(qi) qi.value = "";
+  pickClear(); S.lastTag = null; S.qQuote = ""; const qi = box.querySelector("#bdQuick"); if(qi) qi.value = "";
   if(left > 0){ ed((st) => E.setScene(st, sk, "mute", all)); H().toast("Removed that mention of " + pick.name + ". Its other mentions in this scene keep their tag.", "ok", 2600); }
   else { ed((st) => E.untag(st, sk, pick.k)); H().toast("Removed " + pick.name + " from this scene.", "ok", 2200); }
 }

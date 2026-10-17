@@ -268,6 +268,15 @@ let BASE = "";
     await p.click('table.ct tr:has-text("Lantern") [data-a=rm]'); await p.waitForTimeout(300);
     await expect(p, () => !/Lantern/.test(document.querySelector(".bdSheet").innerText), "the prop taken out again");
     await expect(p, () => { const b = __CampHub.project().breakdown, r = b[Object.keys(b)[0]]; return JSON.stringify(r.tags || {}).indexOf("lantern") < 0; }, "the removal shared too");
+    // highlight words, tag them, then Remove straight away (and again after highlighting once more)
+    const pickWord = () => p.evaluate(() => { for(const sl of document.querySelectorAll(".shText .sl[data-li]")){ const w = document.createTreeWalker(sl, NodeFilter.SHOW_TEXT); let n; while((n = w.nextNode())){ if(n.parentElement.closest("mark")) continue; const m = /[a-z]{5,}/i.exec(n.nodeValue); if(m){ const r = document.createRange(); r.setStart(n, m.index); r.setEnd(n, m.index + m[0].length); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); sl.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })); return m[0]; } } } return ""; });
+    const word = await pickWord(); await expect(p, () => true, "a word to pick");
+    if(word){
+      await p.selectOption("#bdQCat", "props"); await p.click("[data-a=qadd]"); await p.waitForTimeout(300);
+      await expect(p, () => { const b = __CampHub.project().breakdown, r = b[Object.keys(b)[0]]; return JSON.stringify(r.tags || {}).indexOf("props|") >= 0; }, "the highlighted words tagged");
+      await p.click("[data-a=qrem]"); await p.waitForTimeout(300);
+      await expect(p, () => { const b = __CampHub.project().breakdown, r = b[Object.keys(b)[0]]; return JSON.stringify(r.tags || {}).indexOf("props|") < 0; }, "Remove straight after Add takes the tag off");
+    }
     // a teammate's change arrives through the project and shows up
     await p.evaluate(() => { const b = __CampHub.project().breakdown, sid = Object.keys(b)[0]; const st = CampElements.fromRemote(b[sid]); const k = doc.lines.find((l) => l.type === "scene").id; b[sid] = CampElements.toRemote(CampElements.tag(st, k, "animals", "Goose")); CampBdPanel.render("p1"); });
     await p.waitForTimeout(300);
