@@ -481,5 +481,10 @@ test("versions: save, compare, restore (keeping everything else), cap at 10, and
   assert.ok(back.versions.some((x) => x.name === "late"));
 });
 
+test("banner: kept, takes no time even if minutes are given", () => {
+  const n = P.normalize({ days: [{ scenes: [], extras: [{ id: "b1", k: "banner", min: 45, label: "  Farmhouse   interiors " }] }] });
+  assert.deepStrictEqual(n.days[0].extras[0].k, "banner"); assert.strictEqual(n.days[0].extras[0].min, 0); assert.strictEqual(n.days[0].extras[0].label, "Farmhouse interiors");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

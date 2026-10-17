@@ -667,13 +667,13 @@ function castIds(s, cast){
 }
 
 // ---------- extra banners on a day: breaks, company moves and notes added by hand ----------
-// day.extras = [{ id, after: sceneId ("" = start of day), k: "break" | "move" | "note", min, label }]. A break or move adds its
+// day.extras = [{ id, after: sceneId ("" = start of day), k: "break" | "move" | "note" | "banner", min, label }]. A break or move adds its
 // minutes to the day; a note is just a line. One that sits after a scene no longer on the day goes to the end.
-const EXTRA_KINDS = ["break", "move", "note"];
+const EXTRA_KINDS = ["break", "move", "note", "banner"];   // banner: a neutral heading strip, no time
 function cleanExtras(v){
   const a = Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).sort((x, y) => x - y).map((k) => v[k]) : []);
   return a.filter((x) => x && EXTRA_KINDS.indexOf(x.k) >= 0).slice(0, 40).map((x) => ({ id: String(x.id || uid()).slice(0, 40), after: String(x.after || "").slice(0, 80), k: x.k,
-    min: x.k === "note" ? 0 : clampInt(x.min, 0, 600, 30), label: String(x.label || "").replace(/\s+/g, " ").trim().slice(0, 60) }));
+    min: x.k === "note" || x.k === "banner" ? 0 : clampInt(x.min, 0, 600, 30), label: String(x.label || "").replace(/\s+/g, " ").trim().slice(0, 60) }));
 }
 function extrasAfter(day, sceneId){ const ids = (day && day.scenes) || []; return ((day && day.extras) || []).filter((x) => sceneId === null ? (x.after && ids.indexOf(x.after) < 0) : x.after === sceneId); }
 
