@@ -230,5 +230,21 @@ test("grouped locations follow a chain to the real place, as sets of it", () => 
   assert.strictEqual(r.locs.length, 2);
 });
 
+test("locked scene numbers: the breakdown uses the script's numbers (12A), unlocked counts 1, 2, 3", () => {
+  const d = doc([["scene", "INT. A - DAY"], ["action", "x"], ["scene", "INT. B - DAY"], ["action", "x"], ["scene", "INT. NEW - DAY"], ["action", "x"], ["scene", "INT. C - DAY"], ["action", "x"]]);
+  assert.deepStrictEqual(B.analyze(d).scenes.map((s) => s.sno), ["1", "2", "3", "4"]);
+  d.pageSettings.sceneLock = { on: true, map: { l0: "1", l2: "2", l6: "3" } };
+  const r = B.analyze(d);
+  assert.deepStrictEqual(r.scenes.map((s) => s.sno), ["1", "2", "2A", "3"]);
+  assert.deepStrictEqual(r.scenes.map((s) => s.n), [1, 2, 3, 4]);           // positions stay for sorting and links
+  assert.deepStrictEqual(r.nos, ["1", "2", "2A", "3"]);
+  assert.strictEqual(B.sceneList([1, 2, 3, 4], r.nos), "1, 2, 2A, 3");
+  assert.strictEqual(B.sceneList([1, 2, 3, 5, 6, 7], null), "1–3, 5–7");
+  // a new scene before scene 1 is A1; text before the first heading isn't numbered
+  const d2 = doc([["action", "Cold open text."], ["scene", "INT. X - DAY"], ["action", "x"], ["scene", "INT. A - DAY"], ["action", "x"]]);
+  d2.pageSettings.sceneLock = { on: true, map: { l3: "1" } };
+  assert.deepStrictEqual(B.analyze(d2).scenes.map((s) => s.sno), ["–", "A1", "1"]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

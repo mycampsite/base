@@ -7,6 +7,8 @@
 (function(){
 "use strict";
 const P = window.CampProduction, B = window.CampBreakdown;
+// a scene's number as the script shows it (locked numbers like 12A), else its position
+const SN = (s) => s ? (s.sno || s.n) : "";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 const OPEN_KEY = "Camp_PROD_PANEL_OPEN_V1", DOOD_KEY = "Camp_PROD_DOOD_OPEN_V1", SHOTS_KEY = "Camp_PROD_SHOTS_OPEN_V1";
 const lsGet = (k) => { try{ return localStorage.getItem(k); }catch(_e){ return null; } };
@@ -599,14 +601,14 @@ function draw(pid){
   const hasDocs = hub.hasSheets(pid);
   const docsNudge = hasDocs === false ? `<div class="ctlDocs">No production docs yet.${hub.isOwner(p) ? ` <button class="btn sm" type="button" data-a="create">Create production docs…</button>` : " The owner can create them."}</div>` : "";
   const n = S.notice[pid];
-  const sceneName = (id) => { const s = byId[id]; return s ? "Sc " + s.n : "a deleted scene"; };
+  const sceneName = (id) => { const s = byId[id]; return s ? "Sc " + SN(s) : "a deleted scene"; };
   const notice = n ? `<div class="ctlNote"><div><b>The script changed</b><ul>
       ${n.added.length ? `<li>${n.added.length} new scene${n.added.length === 1 ? "" : "s"} (${n.added.map(sceneName).join(", ")}) ${n.added.length === 1 ? "is" : "are"} in Unscheduled.${canEdit ? ` <button class="btn sm" type="button" data-a="placeNew">Place on suggested days</button>` : ""}</li>` : ""}
       ${n.removed.length ? `<li>${n.removed.length} deleted scene${n.removed.length === 1 ? " was" : "s were"} taken off ${Array.from(new Set(n.removed.map((r) => "Day " + r.day))).join(", ")}.</li>` : ""}
       ${(n.moved || []).length ? `<li>${n.moved.length} scene${n.moved.length === 1 ? "" : "s"} from removed days ${n.moved.length === 1 ? "is" : "are"} back in Unscheduled.</li>` : ""}
     </ul></div><button class="iconBtn x" type="button" data-a="dismiss" aria-label="Dismiss">✕</button></div>` : "";
   const revBox = rec.changed.length ? `<div class="ctlNote rev"><div><b>Script revisions on scheduled days</b>${canEdit && rec.changed.length > 1 ? `<button class="btn sm" type="button" data-a="acceptAll">Accept all</button>` : ""}<ul>
-      ${rec.changed.map((c) => `<li>Sc ${byId[c.id] ? byId[c.id].n : "?"} (Day ${c.day}): ${esc(revText(c))}${canEdit ? `<button class="btn sm" type="button" data-a="accept" data-id="${esc(c.id)}">Accept</button>` : ""}</li>`).join("")}
+      ${rec.changed.map((c) => `<li>Sc ${byId[c.id] ? esc(SN(byId[c.id])) : "?"} (Day ${c.day}): ${esc(revText(c))}${canEdit ? `<button class="btn sm" type="button" data-a="accept" data-id="${esc(c.id)}">Accept</button>` : ""}</li>`).join("")}
     </ul><div style="color:var(--uiMuted);margin-top:4px">Check each day still works, then accept. Call sheets update on the next Sync.</div></div></div>` : "";
   const warnBox = warns.length && S.warnOpen ? `<div class="ctlWarn">${warns.map((w) => `<div class="${w.level}">${w.level === "warn" ? "⚠ " : "• "}${esc(w.text)}</div>`).join("")}</div>` : "";
 
@@ -616,7 +618,7 @@ function draw(pid){
     const isNew = n && n.added.indexOf(id) >= 0;
     const rv = revOf[id];
     return `<button class="strip${S.pick === id ? " pick" : ""}${isNew ? " new" : ""}${rv ? " rev" : ""}${S.landed && S.landed.id === id ? " landed" : ""}" type="button" data-sid="${esc(id)}" draggable="${canEdit}" style="--sc:${stripColor(s)}" title="${esc(s.heading)}">
-      <div class="t">Sc ${s.n} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}${stat !== "Scheduled" ? `<em class="stat s-${stat.replace(/[^a-z]/gi, "").toLowerCase()}">${esc(stat)}</em>` : ""}<span>${shotMap[id] ? shotMap[id].length + " sh · " : ""}${P.fmtEighths(s.eighths)} pg</span></div>
+      <div class="t">Sc ${esc(SN(s))} · ${esc(s.ie || "")} ${esc(DN[s.dn] || "")}${stat !== "Scheduled" ? `<em class="stat s-${stat.replace(/[^a-z]/gi, "").toLowerCase()}">${esc(stat)}</em>` : ""}<span>${shotMap[id] ? shotMap[id].length + " sh · " : ""}${P.fmtEighths(s.eighths)} pg</span></div>
       <div class="l">${esc(s.set || s.loc || "")}</div>
       <div class="c">${s.cast && s.cast.length ? esc(s.cast.join(", ")) : "No cast"}</div>${needDots(s.needs)}${tr ? `<div class="tm" title="Call ${esc(fmtTime(tr.call))} · shoot ${esc(fmtTime(tr.shoot))} · wrap ${esc(fmtTime(tr.wrap))} (${fmtMins(tr.est)} of shooting)">${esc(fmtTime(tr.shoot))} – ${esc(fmtTime(tr.wrap))}<span>${fmtMins(tr.est)}</span></div>` : ""}${rv ? `<div class="revTag" title="${esc(revText(rv))}">⚠ Revised: ${esc(rv.what.join(", "))}</div>` : ""}</button>`;
   };
@@ -653,7 +655,7 @@ function draw(pid){
     </div>`;
   const moveBar = S.pick && byId[S.pick] && canEdit ? (() => {
     const cur = pl.days.findIndex((d) => d.scenes.indexOf(S.pick) >= 0), sug = cur < 0 ? P.suggestDay(S.pick, pl, bd) : -1;
-    return `<div class="moveBar"><b>Sc ${byId[S.pick].n}</b> ${esc(byId[S.pick].heading)} → <select data-move="${esc(S.pick)}">
+    return `<div class="moveBar"><b>Sc ${esc(SN(byId[S.pick]))}</b> ${esc(byId[S.pick].heading)} → <select data-move="${esc(S.pick)}">
       <option value="-1"${cur < 0 ? " selected" : ""}>Unscheduled</option>
       ${pl.days.map((d, i) => `<option value="${i}"${i === cur ? " selected" : ""}>Day ${i + 1}${dates[i] ? " · " + esc(fmtDate(dates[i])) : ""} (${P.fmtEighths(stats[i].eighths)} pg)${i === sug ? " ★ suggested" : ""}</option>`).join("")}
       </select>
@@ -673,8 +675,8 @@ function draw(pid){
   const shotRows = pl.days.map((d, i) => {
     const ds = P.dayShots(d, shotMap); if(!ds.scenes.length) return "";
     return `<tr><td class="shotDay" colspan="7">Day ${i + 1}<span>${esc(fmtDate(dates[i]) || "no date")} · ${ds.total} shot${ds.total === 1 ? "" : "s"}</span></td></tr>` +
-      ds.scenes.map((x) => x.shots.length ? x.shots.map((sh) => `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td>${esc(sh.shot)}</td><td>${esc(sh.size)}</td><td>${esc(sh.angle)}</td><td>${esc(sh.move)}</td><td class="desc">${esc(sh.desc)}</td><td class="st${sh.status === "Shot" ? " shot" : sh.status === "Needs reshoot" ? " reshoot" : ""}">${esc(sh.status || "Not shot")}</td></tr>`).join("")
-        : `<tr><td>${byId[x.id] ? byId[x.id].n : ""}</td><td colspan="6" class="desc" style="color:var(--uiMuted)">No shots on the storyboard yet</td></tr>`).join("");
+      ds.scenes.map((x) => x.shots.length ? x.shots.map((sh) => `<tr><td>${byId[x.id] ? esc(SN(byId[x.id])) : ""}</td><td>${esc(sh.shot)}</td><td>${esc(sh.size)}</td><td>${esc(sh.angle)}</td><td>${esc(sh.move)}</td><td class="desc">${esc(sh.desc)}</td><td class="st${sh.status === "Shot" ? " shot" : sh.status === "Needs reshoot" ? " reshoot" : ""}">${esc(sh.status || "Not shot")}</td></tr>`).join("")
+        : `<tr><td>${byId[x.id] ? esc(SN(byId[x.id])) : ""}</td><td colspan="6" class="desc" style="color:var(--uiMuted)">No shots on the storyboard yet</td></tr>`).join("");
   }).join("");
   const nShots = Object.keys(shotMap).reduce((a, k) => a + shotMap[k].length, 0);
   const shots = `<details class="dood fx" data-sec="shots"${lsGet(SHOTS_KEY) === "1" ? " open" : ""}><summary>Shot list by day · ${shSt.state === "loading" && !shotsOn ? "loading…" : nShots + " shot" + (nShots === 1 ? "" : "s")}${shSt.state === "error" ? " · couldn't refresh" : ""}</summary>
@@ -955,16 +957,16 @@ function sbView(c){
       + (isNew ? `<em class="sbTag new"${tipAttr("New in the script")}>New</em>` : "")
       + (s.estSrc === "shots" ? `<em class="sbTag sh"${tipAttr("Time from the shot list: " + s.shotN + " shot" + (s.shotN === 1 ? "" : "s") + " (" + s.shotTimed + " with EST. MIN typed, the rest suggested)" + (s.shotRes && s.shotRes.prep ? " plus " + s.shotRes.prep + " min prep" : "") + " = " + fmtMins(s.est) + (s.estBd ? ". The breakdown's estimate was " + fmtMins(s.estBd) : ""))}>${s.shotN} shot${s.shotN === 1 ? "" : "s"}</em>` : "")
       + (kidNight ? `<em class="sbTag warn"${tipAttr("Night scene with a cast member under 18: check work-hour limits, permit and chaperone")}>⚠ Minor</em>` : "");
-    return `<div class="${cls}" role="row" tabindex="0" data-sid="${esc(id)}" data-day="${day}" style="--sc:${stripColor(s)}" aria-selected="${sel.has(id)}" aria-label="${esc("Scene " + s.n + ", " + s.heading + ". Double-click for its breakdown sheet")}">
+    return `<div class="${cls}" role="row" tabindex="0" data-sid="${esc(id)}" data-day="${day}" style="--sc:${stripColor(s)}" aria-selected="${sel.has(id)}" aria-label="${esc("Scene " + SN(s) + ", " + s.heading + ". Double-click for its breakdown sheet")}">
       ${canEdit ? `<span class="sbGrip"${tipAttr("Drag to move")} aria-hidden="true">⋮⋮</span>` : `<span class="sbGrip off"></span>`}
-      <span class="sbNo">${s.n}</span>
+      <span class="sbNo">${esc(SN(s))}</span>
       <span class="sbIE">${esc(IE_SHORT(s.ie))}</span>
       <span class="sbMain"><span class="sbL1"><span class="sbPlace">${esc(placeOf(s))}</span>${tags}</span><span class="sbSyn${s.syn ? "" : " none"}">${s.syn ? esc(s.syn) : "No description yet"}</span></span>
       <span class="sbDN">${esc(DN_SHORT[s.dn] || "")}</span>
       <span class="sbPg">${P.fmtEighths(s.eighths)}</span>
       <span class="sbCast"${tipAttr((s.cast || []).length ? (s.cast || []).map((nm) => (noOf[nm] ? noOf[nm] + ". " : "") + nm).join(", ") : "No cast")}>${ids.length ? ids.join(", ") : "—"}</span>
       <span class="sbTm"${tipAttr((tr ? "Shoots about " + fmtTime(tr.shoot) + ", " + fmtMins(tr.est) + " of shooting" : "About " + fmtMins(P.estOf(s)) + " to shoot") + (s.estSrc === "shots" ? " (from " + s.shotN + " shot" + (s.shotN === 1 ? "" : "s") + ")" : s.estSrc === "manual" ? " (Est. typed on the breakdown sheet)" : " (breakdown estimate)"))}>${tr ? esc(fmtTime(tr.shoot)) : fmtMins(P.estOf(s))}</span>
-      ${canEdit ? `<button type="button" class="sbMore" data-sb="more" data-sid="${esc(id)}" data-day="${day}" aria-haspopup="listbox" aria-expanded="false" aria-label="Move or unschedule Sc ${s.n}">⋯</button>` : ""}
+      ${canEdit ? `<button type="button" class="sbMore" data-sb="more" data-sid="${esc(id)}" data-day="${day}" aria-haspopup="listbox" aria-expanded="false" aria-label="Move or unschedule Sc ${esc(SN(s))}">⋯</button>` : ""}
     </div>`;
   };
   const DAYMS = 864e5, fmtShort = (iso) => { try{ return new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }); }catch(_e){ return iso; } };
@@ -976,7 +978,7 @@ function sbView(c){
     const w = P.whereOf(pl, i), sun = sunFor(w, dates[i]), wx = weatherFor(w, dates[i]), dw = warns.filter((y) => y.day === i + 1), bad = dw.some((y) => y.level === "warn");
     const rows = tt.rows.map((r) => r.type === "scene" ? strip(r.id, r, i)
       : r.type === "extra" ? (SB.xform && SB.xform.day === i && SB.xform.id === r.id ? xForm(i, d, r) : `<button type="button" class="sbBan x-${r.k}" data-sb="xedit"${canEdit ? ` data-bk="x"` : ""} data-day="${i}" data-id="${esc(r.id)}"${canEdit ? "" : " disabled"}${tipAttr((r.k === "note" ? "Note" : r.k === "move" ? "Company move" : "Break") + " added by hand" + (r.min ? ": " + fmtTime(r.start) + " – " + fmtTime(r.end) : "") + (canEdit ? ". Click to change or remove, drag to move" : ""))}>${canEdit ? BGRIP : ""}${r.k === "note" ? "Note · " : r.k === "move" ? "Company move · " : "Break · "}${esc(r.label || (r.k === "move" ? "Travel" : r.k === "break" ? "Break" : ""))}${r.min ? " · " + esc(fmtTime(r.start)) + " – " + esc(fmtTime(r.end)) : ""}</button>`)
-      : r.type === "meal" ? (SB.mform === i ? mealForm(i, d, r, st) : `<button type="button" class="sbBan meal${r.late ? " late" : ""}" data-sb="meal"${canEdit ? ` data-bk="meal"` : ""} data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr((r.late ? "More than six hours after call: a meal penalty may apply. " : "") + (r.pinned ? "Meal pinned after Sc " + (byId[d.mealAfter] ? byId[d.mealAfter].n : "") : d.lunch ? "Meal set to " + fmtTime(d.lunch) : "Placed automatically") + (canEdit ? ". Click to change its time or length, or remove it. Drag to put it after another scene" : ""))}>${canEdit ? BGRIP : ""}Meal · ${esc(fmtTime(r.start))} – ${esc(fmtTime(r.end))}${r.pinned ? " · after Sc " + (byId[d.mealAfter] ? byId[d.mealAfter].n : "") : d.lunch ? "" : " · auto"}</button>`)
+      : r.type === "meal" ? (SB.mform === i ? mealForm(i, d, r, st) : `<button type="button" class="sbBan meal${r.late ? " late" : ""}" data-sb="meal"${canEdit ? ` data-bk="meal"` : ""} data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr((r.late ? "More than six hours after call: a meal penalty may apply. " : "") + (r.pinned ? "Meal pinned after Sc " + (byId[d.mealAfter] ? SN(byId[d.mealAfter]) : "") : d.lunch ? "Meal set to " + fmtTime(d.lunch) : "Placed automatically") + (canEdit ? ". Click to change its time or length, or remove it. Drag to put it after another scene" : ""))}>${canEdit ? BGRIP : ""}Meal · ${esc(fmtTime(r.start))} – ${esc(fmtTime(r.end))}${r.pinned ? " · after Sc " + (byId[d.mealAfter] ? SN(byId[d.mealAfter]) : "") : d.lunch ? "" : " · auto"}</button>`)
       : canEdit ? `<button type="button" class="sbBan move" data-bk="amove" data-day="${i}" data-before="${esc(r.before || "")}" data-to="${esc(r.to)}"${tipAttr("Company move: " + r.from + " → " + r.to + ". Added automatically; drag to move it")}>${BGRIP}Company move to ${esc(r.to)} · ${r.min} min</button>`
       : `<div class="sbBan move"${tipAttr("Company move: " + r.from + " → " + r.to)}>Company move to ${esc(r.to)} · ${r.min} min</div>`).join("");
     return offBefore(i) + `<section class="sbDayWrap${x.over ? " over" : ""}${folded ? " folded" : ""}" data-day="${i}">
@@ -1014,7 +1016,7 @@ function sbView(c){
       ${canEdit && un.length ? `<button type="button" class="btn sm" data-a="auto"${tipAttr("Put unscheduled scenes on days with room")}>Auto-schedule</button>` : ""}</div></div>
     <div class="sbRows" data-day="-1">${un.length ? un.map((id) => strip(id, null, -1)).join("") : `<div class="sbEmpty">Every scene has a day ✓${canEdit ? " Drag a strip here to take it off the schedule." : ""}</div>`}</div></section>`;
   const selIds = SB.sel.filter((id) => byId[id]);
-  const selBar = canEdit && selIds.length ? `<div class="sbSelBar" role="region" aria-label="Selected scenes"><b>${selIds.length} selected</b><span>Sc ${selIds.map((id) => byId[id].n).sort((a, b) => a - b).join(", ")} · ${P.fmtEighths(selIds.reduce((a, id) => a + byId[id].eighths, 0))} pg</span>
+  const selBar = canEdit && selIds.length ? `<div class="sbSelBar" role="region" aria-label="Selected scenes"><b>${selIds.length} selected</b><span>Sc ${selIds.slice().sort((a, b) => byId[a].n - byId[b].n).map((id) => esc(SN(byId[id]))).join(", ")} · ${P.fmtEighths(selIds.reduce((a, id) => a + byId[id].eighths, 0))} pg</span>
       <label>Move to<select data-sbmove="1"><option value="">Choose a day…</option><option value="-1">Unscheduled</option>${pl.days.map((d, i) => `<option value="${i}">Day ${i + 1}${dates[i] ? " · " + esc(fmtDate(dates[i])) : ""} (${P.fmtEighths(stats[i].eighths)} pg)</option>`).join("")}</select></label>
       ${selIds.length === 1 ? `<label>Status<select data-status="${esc(selIds[0])}">${P.STATUSES.map((x) => `<option${x === P.statusOf(pl, selIds[0]) ? " selected" : ""}>${x}</option>`).join("")}</select></label><button type="button" class="btn sm" data-sb="openbd" data-n="${byId[selIds[0]].n}">Breakdown sheet</button>` : ""}
       <span class="sbSp"></span><button type="button" class="btn sm" data-sb="clear">Clear</button></div>` : "";
@@ -1064,7 +1066,7 @@ function mealSave(pid, mode){
 function xForm(i, d, r){
   const x = r ? ((d.extras || []).find((y) => y.id === r.id) || {}) : { k: "break", min: 15, label: "", after: d.scenes[d.scenes.length - 1] || "" };
   const byId = S.lastBd ? P.sceneMap(S.lastBd) : {};
-  const where = [["", "Start of the day"]].concat(d.scenes.filter((id) => byId[id]).map((id) => [id, "After Sc " + byId[id].n + " · " + placeOf(byId[id])]));
+  const where = [["", "Start of the day"]].concat(d.scenes.filter((id) => byId[id]).map((id) => [id, "After Sc " + SN(byId[id]) + " · " + placeOf(byId[id])]));
   return `<div class="sbXForm" data-day="${i}">
     <label>Type<select data-xf="k"><option value="break"${x.k === "break" ? " selected" : ""}>Break</option><option value="move"${x.k === "move" ? " selected" : ""}>Company move</option><option value="note"${x.k === "note" ? " selected" : ""}>Note (no time)</option></select></label>
     <label>Minutes<input type="number" min="0" max="600" step="5" data-xf="min" value="${x.k === "note" ? 0 : (x.min == null ? 15 : x.min)}"${x.k === "note" ? " disabled" : ""}></label>
@@ -1092,7 +1094,7 @@ function xSave(pid, del){
 function addForm(i, un, byId){
   const ids = un.filter((id) => byId[id]).sort((a, b) => byId[a].n - byId[b].n);
   return `<div class="sbAddF" data-day="${i}"><b>Add to the end of Day ${i + 1}</b><div class="sbAddL">${ids.map((id) => { const s = byId[id];
-    return `<label style="--sc:${stripColor(s)}"><input type="checkbox" data-af="${esc(id)}"><b>${s.n}</b><span class="pl">${esc(IE_SHORT(s.ie))} ${esc(placeOf(s))}</span><span class="pg">${P.fmtEighths(s.eighths)}</span></label>`; }).join("")}</div>
+    return `<label style="--sc:${stripColor(s)}"><input type="checkbox" data-af="${esc(id)}"><b>${esc(SN(s))}</b><span class="pl">${esc(IE_SHORT(s.ie))} ${esc(placeOf(s))}</span><span class="pg">${P.fmtEighths(s.eighths)}</span></label>`; }).join("")}</div>
     <span class="sbXBtns"><span class="sbAddN">0 ticked</span><span class="sbSp"></span><button type="button" class="btn sm" data-sb="addcancel">Cancel</button><button type="button" class="btn sm primary" data-sb="addgo">Add</button></span></div>`;
 }
 // The ⋯ menu (or right-click) on a strip: unschedule, or send it (or the selected strips) to a day.
@@ -1101,7 +1103,7 @@ function sbActMenu(pid, btn){
   if(SBM.btn === btn){ sbMenuClose(); return; }
   const id = btn.dataset.sid, day = Number(btn.dataset.day), plan = planOf(pid), byId = S.lastBd ? P.sceneMap(S.lastBd) : {};
   const ord = sbOrder(document.getElementById("ctl")), ids = SB.sel.length > 1 && SB.sel.indexOf(id) >= 0 ? ord.filter((x) => SB.sel.indexOf(x) >= 0) : [id];
-  const dates = P.planDates(plan), what = ids.length > 1 ? ids.length + " scenes" : "Sc " + (byId[id] ? byId[id].n : "");
+  const dates = P.planDates(plan), what = ids.length > 1 ? ids.length + " scenes" : "Sc " + (byId[id] ? SN(byId[id]) : "");
   const opts = [["", what, true], ["bd", "Open breakdown sheet", ids.length > 1]];
   if(day >= 0) opts.push(["un", "Unschedule"]);
   plan.days.forEach((d, k) => { if(k !== day) opts.push(["end:" + k, "→ Day " + (k + 1) + (dates[k] ? " · " + fmtDate(dates[k]) : "")]); });
@@ -1127,7 +1129,7 @@ function sbMove(pid, ids, toDay, beforeId){
   const { plan, from } = P.moveManyIn(planOf(pid), ids, toDay, beforeId);
   save(pid, plan);
   SB.landed = ids.slice(); clearTimeout(sbMove.t); sbMove.t = setTimeout(() => { SB.landed = []; rerender(); }, 1100);
-  const byId = S.lastBd ? P.sceneMap(S.lastBd) : {}, what = ids.length === 1 ? "Sc " + (byId[ids[0]] ? byId[ids[0]].n : "") : ids.length + " scenes";
+  const byId = S.lastBd ? P.sceneMap(S.lastBd) : {}, what = ids.length === 1 ? "Sc " + (byId[ids[0]] ? SN(byId[ids[0]]) : "") : ids.length + " scenes";
   if(toDay < 0) H().toast(what + " moved to Unscheduled", "ok", 1800);
   else{ const stt = S.lastBd ? P.dayStats(plan.days[toDay], byId, plan.settings.maxEighths) : null;
     H().toast(what + (ids.every((id) => from[id] === toDay) ? " reordered on Day " : " → Day ") + (toDay + 1) + (stt ? " · " + P.fmtEighths(stt.eighths) + " / " + P.fmtEighths(plan.settings.maxEighths) + " pg" + (stt.over ? " ⚠ over the limit" : "") : ""), stt && stt.over ? "err" : "ok", 2000); }
@@ -1264,7 +1266,7 @@ function sbDragEnd(cancel){
 // A break, move, note or the meal dropped in a new place. `after` = the scene it now follows ("" = start of the day).
 // ⚠ Writes the shared plan; the times follow (the timetable is worked out from the plan and sent with Sync).
 function sbBanDrop(pid, ban, day, after){
-  const plan = planOf(pid), byId = S.lastBd ? P.sceneMap(S.lastBd) : {}, nOf = (id) => byId[id] ? byId[id].n : "";
+  const plan = planOf(pid), byId = S.lastBd ? P.sceneMap(S.lastBd) : {}, nOf = (id) => byId[id] ? SN(byId[id]) : "";
   const no = (msg) => { H().toast(msg, "err", 2200); rerender(); };
   if(day < 0 || !plan.days[day]) return no("Breaks, moves and meals stay on a shoot day.");
   const d = plan.days[day];
@@ -1403,7 +1405,7 @@ function flagsView(pl, bd, canEdit){
       const g = glob[f.id] || "keep", all = f.scenes.concat(f.ignored || []).sort((a, b) => a - b);
       return `<div class="fxRow${g === "ignore" ? " ign" : g === "watch" ? " wat" : ""}">
         <div class="fxName"><b>${esc(f.label)}</b><span>${esc(f.use || "")}${f.words && f.words.length ? " · found: " + esc(f.words.slice(0, 4).join(", ")) : ""}</span></div>
-        <div class="fxScenes">${all.map((n) => { const off = (f.ignored || []).indexOf(n) >= 0; return `<button type="button" class="fxSc${off ? " off" : ""}" data-a="fxsc" data-f="${esc(f.id)}" data-s="${esc(sid(n))}" data-on="${off ? 0 : 1}" title="${off ? "Ignored here: click to keep" : "Click to ignore in this scene"}"${canEdit ? "" : " disabled"}>Sc ${n}</button>`; }).join("")}</div>
+        <div class="fxScenes">${all.map((n) => { const off = (f.ignored || []).indexOf(n) >= 0; return `<button type="button" class="fxSc${off ? " off" : ""}" data-a="fxsc" data-f="${esc(f.id)}" data-s="${esc(sid(n))}" data-on="${off ? 0 : 1}" title="${off ? "Ignored here: click to keep" : "Click to ignore in this scene"}"${canEdit ? "" : " disabled"}>Sc ${esc(SN(bd.scenes[n - 1]) || n)}</button>`; }).join("")}</div>
         <div class="seg fxSeg">${["keep", "watch", "ignore"].map((v) => `<button type="button" class="${g === v ? "on" : ""}" data-a="fx" data-f="${esc(f.id)}" data-v="${v}"${canEdit ? "" : " disabled"}>${v[0].toUpperCase() + v.slice(1)}</button>`).join("")}</div>
       </div>`;
     }).join("")}</details>`;
@@ -1623,7 +1625,7 @@ function wire(box, pid, ctx){
     if(t.dataset.lunch != null){ update((plan) => { const d = plan.days[Number(t.dataset.lunch)]; if(d){ delete d.mealAfter; if(t.value === "none"){ d.noMeal = true; delete d.lunch; } else { delete d.noMeal; if(t.value) d.lunch = t.value; else delete d.lunch; } } }); return; }
     if(t.dataset.wrapat != null){ update((plan) => { const d = plan.days[Number(t.dataset.wrapat)]; if(d){ if(t.value) d.wrapAt = t.value; else delete d.wrapAt; } }); return; }
     if(t.dataset.call != null){ update((plan) => { const d = plan.days[Number(t.dataset.call)]; if(d) d.call = t.value === plan.settings.call ? "" : t.value; }); return; }
-    if(t.dataset.status != null){ const id = t.dataset.status, v = t.value; update((plan) => { P.setStatus(plan, id, v); }); H().toast("Sc " + ((ctx.bd && P.sceneMap(ctx.bd)[id] || {}).n || "") + ": " + v, "ok", 1400); return; }
+    if(t.dataset.status != null){ const id = t.dataset.status, v = t.value; update((plan) => { P.setStatus(plan, id, v); }); H().toast("Sc " + (SN(ctx.bd && P.sceneMap(ctx.bd)[id]) || "") + ": " + v, "ok", 1400); return; }
     if(t.dataset.t != null){ const k = t.dataset.t, v = Number(t.value); update((plan) => { const T = Object.assign({}, plan.settings.times || {}); const val = k === "mealBy" ? Math.round(v * 60) : Math.round(v);
       if(t.value === "" || !isFinite(v) || val === P.TIME_DEFAULTS[k]) delete T[k]; else T[k] = Math.max(0, Math.min(1440, val)); if(Object.keys(T).length) plan.settings.times = T; else delete plan.settings.times; }); return; }
     if(t.dataset.s === "where"){ setWhere(pid, -1, t.value); return; }
@@ -1688,7 +1690,7 @@ function moveScene(pid, id, toDay, at){
   save(pid, plan);
   // feedback: the strip flashes where it landed, the day lights up, and a line says what happened
   S.landed = { id, day: toDay }; clearTimeout(moveScene.t); moveScene.t = setTimeout(() => { S.landed = null; }, 900);
-  const sc = S.lastBd ? P.sceneMap(S.lastBd)[id] : null, name = sc ? "Sc " + sc.n : "Scene";
+  const sc = S.lastBd ? P.sceneMap(S.lastBd)[id] : null, name = sc ? "Sc " + SN(sc) : "Scene";
   if(toDay < 0) H().toast(name + " moved to Unscheduled", "ok", 1800);
   else if(from === toDay) H().toast(name + " reordered on Day " + (toDay + 1), "ok", 1800);
   else if(S.lastBd){ const st = P.dayStats(plan.days[toDay], P.sceneMap(S.lastBd), plan.settings.maxEighths); H().toast(name + " → Day " + (toDay + 1) + " · " + P.fmtEighths(st.eighths) + " / " + P.fmtEighths(plan.settings.maxEighths) + " pg" + (st.over ? " (over the limit)" : ""), "ok", 1800); }

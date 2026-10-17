@@ -242,6 +242,49 @@ function bgKidCue_(name) {
 //   flags: { "weapons": "ignore", "drone@<sceneId>": "keep", "stunts": "watch" }  keep / watch / ignore, for a flag
 //          everywhere or for one scene (a scene's own choice wins)
 //   types: { "ANA": "Lead" }  a cast type someone chose (wins over the automatic one; autoType keeps what the script suggests)
+// Scene numbers as the script shows them. When the writer locks scene numbers (editor menu), every scene keeps
+// the number it had and new ones get letters (12A, 12B… or A1 before scene 1): the same rule as the editor, so the
+// breakdown, stripboard and Sheets match the pages. Unlocked: 1, 2, 3… Returns { lineId: "12A" }.
+function bgSceneLabels_(doc) {
+  const lines = (doc && Array.isArray(doc.lines)) ? doc.lines : [];
+  const ps = (doc && doc.pageSettings) || {}, lock = ps.sceneLock && typeof ps.sceneLock === "object" ? ps.sceneLock : null;
+  const ids = lines.filter(function (l) { return l && l.type === "scene"; }).map(function (l) { return String(l.id || ""); });
+  const out = {};
+  if (!lock || !lock.on) { ids.forEach(function (id, i) { if (id) out[id] = String(i + 1); }); return out; }
+  const map = {}; Object.keys(lock.map || {}).forEach(function (k) { if (lock.map[k] != null && String(lock.map[k]).trim()) map[k] = String(lock.map[k]).trim().toUpperCase(); });
+  const used = {}; Object.keys(map).forEach(function (k) { used[map[k]] = true; });
+  const L = function (k) { let s = ""; k++; while (k > 0) { const m = (k - 1) % 26; s = String.fromCharCode(65 + m) + s; k = Math.floor((k - 1) / 26); } return s; };
+  const firstLocked = ids.filter(function (id) { return map[id]; })[0];
+  const firstRoot = firstLocked ? map[firstLocked].replace(/[A-Z]+$/, "") : "1";
+  let base = null, beforeK = 0;
+  ids.forEach(function (id, i) {
+    if (id && map[id]) { out[id] = map[id]; base = map[id]; return; }
+    let label = "";
+    if (base == null) { do { label = L(beforeK++) + firstRoot; } while (used[label]); }
+    else {
+      const root = base.replace(/[A-Z]+$/, ""), tail = base.slice(root.length);
+      let k = 0; for (let c = 0; c < tail.length; c++) k = k * 26 + (tail.charCodeAt(c) - 64);
+      do { label = root + L(k++); } while (used[label]);
+    }
+    used[label] = true; base = label;
+    out[id || ("#" + i)] = label;
+  });
+  return out;
+}
+// Scene numbers for a list of scene positions (s.n): "3–7" when the numbers run on, else "3, 4A, 5".
+function bgSceneList_(ns, nos) {
+  ns = (ns || []).slice().sort(function (a, b) { return a - b; });
+  const lab = function (n) { return (nos && nos[n - 1]) || String(n); };
+  const plain = function (n) { return /^\d+$/.test(lab(n)) ? Number(lab(n)) : null; };
+  const out = [];
+  for (let i = 0; i < ns.length; i++) {
+    let j = i;
+    while (j + 1 < ns.length && ns[j + 1] === ns[j] + 1 && plain(ns[j]) != null && plain(ns[j + 1]) === plain(ns[j]) + 1) j++;
+    out.push(j > i + 1 ? lab(ns[i]) + "–" + lab(ns[j]) : (j === i + 1 ? lab(ns[i]) + ", " + lab(ns[j]) : lab(ns[i])));
+    i = j;
+  }
+  return out.join(", ");
+}
 function budgetAnalyze_(doc, opts) {
   doc = (doc && typeof doc === "object") ? doc : {};
   opts = (opts && typeof opts === "object") ? opts : {};
@@ -253,12 +296,15 @@ function budgetAnalyze_(doc, opts) {
   const intros = {};   // silent-role introductions: NAME (30s)
   const kidRaw = [];   // names written in normal case next to a child description: checked against the cast once it's known
   let cur = null, lastT = "D", speaker = null;
+  const LBL = bgSceneLabels_(doc);
+  let realN = 0;
 
   const startScene = function (heading, id, pseudo) {
     const h = pseudo ? { ie: "", set: "(BEFORE THE FIRST SCENE HEADING)", primary: "(NO SCENE HEADING)", time: "", tcls: "" } : bgParseHeading_(heading);
     let dn = h.tcls;
     if (!dn || dn === "C") dn = lastT; else lastT = dn;
-    cur = { n: scenes.length + 1, id: String(id || ""), heading: pseudo ? "" : bgClean_(heading).toUpperCase(), ie: h.ie, set: h.set, loc: h.primary,
+    if (!pseudo) realN++;
+    cur = { n: scenes.length + 1, sno: pseudo ? "–" : (LBL[String(id || "")] || LBL["#" + (realN - 1)] || String(realN)), id: String(id || ""), heading: pseudo ? "" : bgClean_(heading).toUpperCase(), ie: h.ie, set: h.set, loc: h.primary,
       time: h.time, dn: dn, rows: 0, cast: [], castSeen: {}, action: "", eighths: 0 };
     scenes.push(cur);
     speaker = null;
@@ -612,13 +658,13 @@ function budgetAnalyze_(doc, opts) {
 
   return {
     title: title, writer: writer, pageSize: pageSize,
-    scenes: scenes.map(function (s) { return { n: s.n, id: s.id, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, oloc: s.oloc || s.loc, dn: s.dn, eighths: s.eighths, cast: s.cast, bg: s.bg, flags: s.flags, fw: s.fw || {}, syn: bgOneLiner_(s.action) }; }),
-    cast: cast, locs: locs, flags: flags,
+    scenes: scenes.map(function (s) { return { n: s.n, sno: s.sno, id: s.id, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, oloc: s.oloc || s.loc, dn: s.dn, eighths: s.eighths, cast: s.cast, bg: s.bg, flags: s.flags, fw: s.fw || {}, syn: bgOneLiner_(s.action) }; }),
+    cast: cast, locs: locs, flags: flags, nos: scenes.map(function (s) { return s.sno; }),
     totals: { eighths: scenes.reduce(function (a, s) { return a + s.eighths; }, 0), scenes: scenes.length }
   };
 }
 
-const api = { analyze: budgetAnalyze_, cols: BG_COLS_, mentions: bgMentionTest_ };
+const api = { analyze: budgetAnalyze_, cols: BG_COLS_, mentions: bgMentionTest_, sceneLabels: bgSceneLabels_, sceneList: bgSceneList_ };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.CampBreakdown = api;
 })(typeof window !== "undefined" ? window : this);

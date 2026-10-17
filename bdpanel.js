@@ -646,7 +646,7 @@ function scMatch(x){
   if(f === "int" && !/INT/.test(ie)) return false;
   if(f === "ext" && !/EXT/.test(ie)) return false;
   if((f === "D" || f === "N") && x.dn !== f) return false;
-  return !q || String(x.n) === q || (x.heading || "").toLowerCase().indexOf(q) >= 0 || (x.syn || "").toLowerCase().indexOf(q) >= 0;
+  return !q || String(x.n) === q || String(x.sno || "").toLowerCase() === q || (x.heading || "").toLowerCase().indexOf(q) >= 0 || (x.syn || "").toLowerCase().indexOf(q) >= 0;
 }
 function sheetsView(b, can){
   const s = b.scenes[S.sel - 1];
@@ -655,7 +655,7 @@ function sheetsView(b, can){
   const list = shown.map((x) => {
     const cats = E.CATS.filter((c) => (x.els[c.id] || []).length), cn = castNos(x);
     return `<button type="button" class="bdSc${x.n === S.sel ? " on" : ""}" data-a="pick" data-n="${x.n}" style="--sc:${stripColor(x)}" title="${esc(x.heading || "")}">
-      <span class="no">${x.n}</span>
+      <span class="no">${esc(x.sno || x.n)}</span>
       <span class="mid"><span class="l">${esc(x.set || x.loc || x.heading)}</span><span class="m">${esc(x.ie || "")} · ${esc(DN[x.dn] || "")}${cn.length ? ` · <span class="cn">${cn.join(", ")}</span>` : ""}</span>
         <span class="dots" title="${x.count} elements">${cats.map((c) => `<i style="background:${c.color}"></i>`).join("")}</span></span>
       <span class="pg">${E.fmtEighths(x.eighths)}</span></button>`;
@@ -671,7 +671,7 @@ function sheetsView(b, can){
     if(!keys.length && adding !== c.id && !S.showEmpty) return "";   // empty categories stay hidden unless "Show empty" is on
     const isCast = c.id === "cast";
     const rows = keys.map((k) => {
-      const e = b.elements[k], tip = (e.auto ? "Found in the script: " + e.why.join(", ") : "Added by hand") + (e.scenes.length > 1 ? " · in scenes " + e.scenes.join(", ") : "");
+      const e = b.elements[k], tip = (e.auto ? "Found in the script: " + e.why.join(", ") : "Added by hand") + (e.scenes.length > 1 ? " · in scenes " + E.sceneNos(b, e.scenes) : "");
       return `<tr class="${e.manual && !e.auto ? "man" : ""}" title="${esc(tip)}">
         <td class="c-no">${isCast && e.no ? `<span class="cno">${e.no}</span>` : `<span class="dot" style="background:${c.color}"></span>`}</td>
         <td class="c-nm"><b data-a="edit" data-k="${esc(k)}">${esc(e.name)}</b><button type="button" class="goText" data-a="opentext" data-sk="${esc(s.key)}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in the scene text" title="Show in the scene text">↗</button></td>
@@ -695,7 +695,7 @@ function sheetsView(b, can){
   const cats = E.CATS.map(catBox).join("");
   const idx = shown.findIndex((x) => x.n === s.n);
   const pv = idx > 0 ? shown[idx - 1].n : 0, nx = idx >= 0 && idx < shown.length - 1 ? shown[idx + 1].n : 0;
-  const jump = `<select id="bdJump" class="jump" aria-label="Go to scene">${b.scenes.map((x) => `<option value="${x.n}"${x.n === s.n ? " selected" : ""}>Scene ${x.n} – ${esc(x.heading || "")}</option>`).join("")}</select>`;
+  const jump = `<select id="bdJump" class="jump" aria-label="Go to scene">${b.scenes.map((x) => `<option value="${x.n}"${x.n === s.n ? " selected" : ""}>Scene ${esc(x.sno || x.n)} – ${esc(x.heading || "")}</option>`).join("")}</select>`;
   const bar = `<div class="shBar">
       <button class="btn sm" type="button" data-a="pick" data-n="${pv}" aria-label="Previous scene" title="Previous scene (K)"${pv ? "" : " disabled"}>←</button>${jump}<button class="btn sm" type="button" data-a="pick" data-n="${nx}" aria-label="Next scene" title="Next scene (J)"${nx ? "" : " disabled"}>→</button>
       <span class="pos">${s.n} / ${b.scenes.length}</span>
@@ -707,7 +707,7 @@ function sheetsView(b, can){
   const si = shotInfo(s);
   const fld = (label, val, cls) => `<div class="f${cls ? " " + cls : ""}"><span class="lb">${label}</span>${val}</div>`;
   const fields = `<div class="shFields" style="--sc:${stripColor(s)}">
-      ${fld("Scene", `<span class="big">${s.n}</span>`, "fn")}
+      ${fld("Scene", `<span class="big">${esc(s.sno || s.n)}</span>`, "fn")}
       ${fld("INT / EXT", `<b>${esc(s.ie || "—")}</b>`)}
       ${fld("Set / location", `<b class="ell" title="${esc(s.set || s.loc || "")}">${esc(s.set || s.loc || "—")}</b>`, "fw")}
       ${fld("Day / Night", `<b>${esc(DN[s.dn] || "—")}</b>`)}
@@ -943,7 +943,7 @@ function elementsView(b, can){
         <button class="btn sm" type="button" data-a="edcancel">Cancel</button></div></td></tr>` : "";
     return `${grp}<tr class="er${S.edit === k ? " on" : ""}" style="--cc:${c.color}"><td>${e.no && e.cat === "cast" ? (can ? `<button type="button" class="cno" data-a="edit" data-k="${esc(k)}" data-focus="edNo" aria-label="Change ${esc(e.name)}'s ID number">${e.no}</button>` : `<span class="cno">${e.no}</span>`) : `<span class="dot" style="background:${c.color}"></span>`}<b>${esc(e.name)}</b>${can ? `<button type="button" class="star${e.hero ? " on" : ""}" data-a="hero" data-k="${esc(k)}" data-on="${e.hero ? 0 : 1}" aria-pressed="${e.hero}" aria-label="${e.hero ? "Remove hero from " : "Make "}${esc(e.name)}${e.hero ? "" : " a hero"}" title="${e.hero ? "Hero: plan doubles and continuity. Click to turn off" : "Make this a hero"}" style="margin-left:6px">${e.hero ? "★" : "☆"}</button>` : e.hero ? `<span class="tag" style="color:#f1c76b;border-color:rgba(241,199,107,.45)">★ hero</span>` : ""}${e.hero && !e.heroSet ? `<span class="tag" title="Found automatically: written in CAPS or handled in several scenes">auto</span>` : ""}${e.manual && !e.auto ? `<span class="tag">by hand</span>` : ""}${e.note ? `<span class="nt">${esc(e.note)}</span>` : ""}</td>
       ${grouped ? "" : `<td><span class="cpill">${esc(c.short)}</span></td>`}
-      <td><div class="scBtns">${e.scenes.map((n) => `<span class="scGo"><button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${n}'s sheet">${n}</button><button type="button" class="goText" data-a="opentext" data-n="${n}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in scene ${n}'s text" title="Show in scene ${n}'s text">↗</button></span>`).join("")}</div></td>
+      <td><div class="scBtns">${e.scenes.map((n) => `<span class="scGo"><button type="button" class="scBtn" data-a="goto" data-n="${n}" title="Open scene ${esc(E.sceneNo(b, n))}'s sheet">${esc(E.sceneNo(b, n))}</button><button type="button" class="goText" data-a="opentext" data-n="${n}" data-k="${esc(k)}" aria-label="Show ${esc(e.name)} in scene ${esc(E.sceneNo(b, n))}'s text" title="Show in scene ${esc(E.sceneNo(b, n))}'s text">↗</button></span>`).join("")}</div></td>
       <td class="num">${E.fmtEighths(e.eighths)}</td>
       <td class="act">${can ? `<button class="edBtn" type="button" data-a="edit" data-k="${esc(k)}" aria-label="Edit ${esc(e.name)}" title="Rename, recategorise, merge or ignore">Edit</button>` : ""}</td></tr>${form}`;
   }).join("");
@@ -977,7 +977,7 @@ function stripsView(b, p){
     const cast = (s.els.cast || []).map(castNo).filter(Boolean).sort((x, y) => x - y);
     const marks = needCatsOf(s);
     return `<button type="button" class="stp" data-a="goto" data-n="${s.n}"${drag && s.id ? ` draggable="true" data-sid="${esc(s.id)}" data-day="${day}"` : ""} style="--sc:${stripColor(s)}" title="${esc(s.heading)}${s.syn ? " — " + esc(s.syn) : ""}">
-      <span class="n">${s.n}</span><span class="ie">${esc(s.ie || "")}</span><span class="set">${esc(s.set || s.loc || "")}<small>${esc(s.syn || "")}</small></span>
+      <span class="n">${esc(s.sno || s.n)}</span><span class="ie">${esc(s.ie || "")}</span><span class="set">${esc(s.set || s.loc || "")}<small>${esc(s.syn || "")}</small></span>
       <span class="dn">${esc(DN[s.dn] || "")}</span><span class="pg">${E.fmtEighths(s.eighths)}</span><span class="sd">${esc(s.day || "")}</span>
       <span class="cast">${cast.join(", ")}</span><span class="mk">${marks.map((c) => `<i title="${esc(c.label + ": " + s.els[c.id].map((k) => b.elements[k].name).join(", "))}" style="background:${c.color}"></i>`).join("")}</span></button>`;
   };
@@ -1006,13 +1006,13 @@ function reportsView(b, p){
         if(!ks.length) return "";
         return `<tr><td><span class="dot" style="background:${c.color}"></span>${esc(c.short)}</td><td>${ks.map((k) => esc((b.elements[k].no && c.id === "cast" ? b.elements[k].no + ". " : "") + b.elements[k].name)).join(", ")}</td></tr>`;
       }).join("");
-      return `<div class="rp rpDay" style="--cc:#8a8f98"><h4><span>Day ${d.n}${d.date ? " · " + esc(fmtDate(d.date)) : ""}</span><span>Sc ${d.scenes.map((s) => s.n).join(", ")}</span></h4><table>${rows}</table></div>`;
+      return `<div class="rp rpDay" style="--cc:#8a8f98"><h4><span>Day ${d.n}${d.date ? " · " + esc(fmtDate(d.date)) : ""}</span><span>Sc ${esc(E.sceneNos(b, d.scenes.map((s) => s.n)))}</span></h4><table>${rows}</table></div>`;
     }).join("");
     return seg + `<div class="rpGrid">${cards || `<div class="bdEmpty">No scenes on shoot days yet.</div>`}</div>`;
   }
   const cards = E.CATS.map((c) => {
     const r = E.report(b, c.id); if(!r.length) return "";
-    return `<div class="rp" style="--cc:${c.color}"><h4><span>${catIcon(c.id)}${esc(c.label)}</span><span>${r.length}</span></h4><table>${r.map((x) => `<tr><td><b>${x.no ? x.no + ". " : ""}${esc(x.name)}</b>${b.elements[x.key] && b.elements[x.key].hero ? ` <span style="color:#f1c76b" title="Hero prop">★</span>` : ""}${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</td><td>Sc ${x.scenes.join(", ")}</td></tr>`).join("")}</table></div>`;
+    return `<div class="rp" style="--cc:${c.color}"><h4><span>${catIcon(c.id)}${esc(c.label)}</span><span>${r.length}</span></h4><table>${r.map((x) => `<tr><td><b>${x.no ? x.no + ". " : ""}${esc(x.name)}</b>${b.elements[x.key] && b.elements[x.key].hero ? ` <span style="color:#f1c76b" title="Hero prop">★</span>` : ""}${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</td><td>Sc ${esc(E.sceneNos(b, x.scenes))}</td></tr>`).join("")}</table></div>`;
   }).join("");
   return seg + `<div class="rpGrid">${cards || `<div class="bdEmpty">No elements yet.</div>`}</div>`;
 }
@@ -1052,7 +1052,7 @@ function openReset(pid, sid){
       <p>Clears the tagging done by hand so the automatic tags are rebuilt from the script as it is now. Everyone on the project sees the change straight away.</p>
       <div class="bdRScope">
         <label class="msRow"><input type="radio" name="scope" value="all"${one ? "" : " checked"}><span><b>Whole script</b> · ${esc(hub.scriptTitle(sid) || "")}</span></label>
-        <label class="msRow"><input type="radio" name="scope" value="scene"${one ? " checked" : ""}><span><b>Only scene ${cur.n}</b> · ${esc(cur.heading || "")}</span></label>
+        <label class="msRow"><input type="radio" name="scope" value="scene"${one ? " checked" : ""}><span><b>Only scene ${esc(cur.sno || cur.n)}</b> · ${esc(cur.heading || "")}</span></label>
       </div>
       <div class="fl" style="margin-top:12px">Also clear</div>
       ${box("names", "Renames and merges")}${box("notes", "Element notes")}${box("heroes", "Hero settings")}${box("scene", "Scene fields (synopsis, story day, time estimate, unit)")}

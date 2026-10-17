@@ -380,7 +380,7 @@ function validate(plan, breakdown){
     const sc = (d.scenes || []).map((id) => byId[id]).filter(Boolean);
     const who = Array.from(new Set([].concat(...sc.map((s) => (s.cast || []).filter((n) => kids[n])))));
     if(!who.length) return;
-    const night = sc.filter((s) => s.dn === "N" && (s.cast || []).some((n) => kids[n])).map((s) => s.n);
+    const night = sc.filter((s) => s.dn === "N" && (s.cast || []).some((n) => kids[n])).map((s) => s.sno || s.n);
     const label = who.map((n) => n + (kids[n].age != null ? " (" + kids[n].age + ")" : " (age?)")).join(", ");
     out.push({ level: night.length ? "warn" : "info", code: "MINOR", day: i + 1, text: "Day " + (i + 1) + ": " + label + " under 18. Check permit, chaperone and work-hour limits" + (night.length ? ". Night scene" + (night.length > 1 ? "s " : " ") + night.join(", ") + " with a minor" : "") });
   });
@@ -487,7 +487,7 @@ function stripMatch(s, f){
   if(f.cast && (s.cast || []).indexOf(f.cast) < 0) return false;
   const q = String(f.q || "").trim().toLowerCase();
   if(q){
-    const hay = [s.n, s.heading, s.set, s.loc, s.syn, (s.cast || []).join(" "), s.storyDay, s.note].join(" ").toLowerCase();
+    const hay = [s.n, s.sno, s.heading, s.set, s.loc, s.syn, (s.cast || []).join(" "), s.storyDay, s.note].join(" ").toLowerCase();
     if(q.split(/\s+/).some((w) => hay.indexOf(w) < 0)) return false;
   }
   return true;

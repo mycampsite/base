@@ -772,7 +772,7 @@ function build(doc, bd, store) {
     const d = days[i] || {};
     const estAuto = estimate(s);
     return {
-      n: s.n, id: s.id, key: sk, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, dn: s.dn, eighths: s.eighths, bg: s.bg, flags: s.flags || [],
+      n: s.n, sno: s.sno || String(s.n), id: s.id, key: sk, heading: s.heading, ie: s.ie, set: s.set, loc: s.loc, dn: s.dn, eighths: s.eighths, bg: s.bg, flags: s.flags || [],
       syn: clean(meta.syn), synAuto: !clean(meta.syn),   // only what someone typed: no summary is made up from the script
       day: clean(meta.day) || d.label || "", dayAuto: !clean(meta.day), storyDay: d.day || 1, flash: !!d.flash,
       est: Number(meta.est) > 0 ? Math.round(Number(meta.est)) : estAuto, estAuto: !(Number(meta.est) > 0),
@@ -806,7 +806,7 @@ function build(doc, bd, store) {
   // the script's character name -> its ID number, for the Sheets (Budget, Day Out of Days, call sheets)
   const castNos = {};
   (bd.cast || []).forEach(function (c) { const k0 = key("cast", c.name), e = els[resolve(alias, k0)]; const n = (e && e.cat === "cast" && e.no) || castNo[k0]; if (n) castNos[c.name] = n; });
-  return { cats: CATS, scenes: scenes, elements: els, byCat: byCat, castNos: castNos,
+  return { cats: CATS, scenes: scenes, elements: els, byCat: byCat, castNos: castNos, nos: scenes.map(function (s) { return s.sno; }),
     totals: { scenes: scenes.length, elements: Object.keys(els).length, eighths: scenes.reduce(function (a, s) { return a + (s.eighths || 0); }, 0), est: scenes.reduce(function (a, s) { return a + s.est; }, 0) } };
 }
 
@@ -869,7 +869,7 @@ function sheetPayload(model) {
         return o;
       });
     });
-    scenes[m.key] = { n: m.n, syn: m.syn, day: m.day, est: m.est, unit: m.unit, note: m.note, e: e };
+    scenes[m.key] = { n: m.n, sno: m.sno, syn: m.syn, day: m.day, est: m.est, unit: m.unit, note: m.note, e: e };
   });
   Object.keys(model.elements).forEach(function (k) {
     const x = model.elements[k];
@@ -1142,6 +1142,21 @@ function resetCounts(st, o) {
 }
 
 // ---------- Reports ----------
+// Scene numbers as the script shows them (locked numbers like 12A) for a list of scene positions
+function sceneNos(b, ns) {
+  const nos = (b && b.nos) || [], lab = function (n) { return nos[n - 1] || String(n); };
+  ns = (ns || []).slice().sort(function (a, c) { return a - c; });
+  const plain = function (n) { return /^\d+$/.test(lab(n)) ? Number(lab(n)) : null; };
+  const out = [];
+  for (let i = 0; i < ns.length; i++) {
+    let j = i;
+    while (j + 1 < ns.length && ns[j + 1] === ns[j] + 1 && plain(ns[j]) != null && plain(ns[j + 1]) === plain(ns[j]) + 1) j++;
+    out.push(j > i + 1 ? lab(ns[i]) + "–" + lab(ns[j]) : (j === i + 1 ? lab(ns[i]) + ", " + lab(ns[j]) : lab(ns[i])));
+    i = j;
+  }
+  return out.join(", ");
+}
+function sceneNo(b, n) { const nos = (b && b.nos) || []; return nos[n - 1] || String(n); }
 function fmtEighths(n) { n = Math.round(Number(n) || 0); const p = Math.floor(n / 8), r = n % 8; return p ? (r ? p + " " + r + "/8" : String(p)) : r + "/8"; }
 // One row per element: what it is, which scenes, how many pages — the list each department works from
 function report(b, cat) {
@@ -1151,7 +1166,7 @@ function csv(b) {
   const q = function (v) { v = String(v == null ? "" : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   const head = ["Scene", "Heading", "I/E", "D/N", "Story day", "Pages", "Est. min", "Synopsis"].concat(CATS.map(function (c) { return c.label; }));
   const rows = b.scenes.map(function (s) {
-    return [s.n, s.heading, s.ie, s.dn, s.day, fmtEighths(s.eighths), s.est, s.syn].concat(CATS.map(function (c) {
+    return [s.sno || s.n, s.heading, s.ie, s.dn, s.day, fmtEighths(s.eighths), s.est, s.syn].concat(CATS.map(function (c) {
       return (s.els[c.id] || []).map(function (k) { const e = b.elements[k]; return (e.no ? e.no + ". " : "") + e.name + (s.qty && s.qty[k] ? " x" + s.qty[k] : "") + (e.hero ? " (hero)" : ""); }).join("; ");
     }));
   });
@@ -1161,7 +1176,7 @@ function csv(b) {
 const api = { CATS: CATS, CAT: CAT, build: build, enrich: enrich, sheetPayload: sheetPayload, suggestScene: suggestScene, sceneTexts: sceneTexts, storyDays: storyDays, estimate: estimate,
   key: key, norm: norm, display: display, sceneKey: sceneKey, resolve: resolve,
   tag: tag, untag: untag, drop: dropEl, undrop: undrop, rename: rename, merge: merge, unmerge: unmerge, setNote: setNote, setHero: setHero, setCastNo: setCastNo, clearCastNos: clearCastNos, setScene: setScene,
-  report: report, csv: csv, fmtEighths: fmtEighths,
+  report: report, csv: csv, fmtEighths: fmtEighths, sceneNos: sceneNos, sceneNo: sceneNo,
   encKey: encKey, decKey: decKey, toRemote: toRemote, fromRemote: fromRemote, diff: diff, mergeStores: mergeStores, applyOps: applyOps, resetStore: resetStore, resetCounts: resetCounts };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.CampElements = api;

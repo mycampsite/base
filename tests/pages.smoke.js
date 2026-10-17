@@ -163,6 +163,10 @@ let BASE = "";
     await expect(p, () => document.querySelectorAll(".sbRow.sbHide").length >= 1 && !!document.querySelector(".sbFiltNote"), "night filter hides day strips");
     await p.click("[data-sb=unfilter]"); await p.waitForTimeout(300);
     await expect(p, () => !document.querySelector(".sbRow.sbHide"), "Show all brings them back");
+    // locked scene numbers: a scene added after the lock shows as 2A on its strip, not as its position
+    await p.evaluate(() => { const sc = doc.lines.filter((l) => l.type === "scene"); doc.pageSettings.sceneLock = { on: true, map: { [sc[0].id]: "1", [sc[1].id]: "2", [sc[3].id]: "3" } }; });
+    await p.click("[data-a=reload]"); await p.waitForTimeout(900); await p.evaluate(() => CampProdPanel.render("p1")); await p.waitForTimeout(300);
+    await expect(p, () => Array.from(document.querySelectorAll(".sbRow .sbNo")).map((x) => x.textContent).sort().join(",") === "1,2,2A,3", "strips numbered 1, 2, 2A, 3 from the locked script");
     // sort a day and the other plan views
     await p.click('[data-sb=sec][data-v=dood]'); await p.waitForTimeout(300);
     await expect(p, () => !!document.querySelector(".sbSec details[open] table"), "the Day Out of Days tab");
