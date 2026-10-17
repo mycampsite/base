@@ -427,5 +427,31 @@ test("auto-schedule: an hours limit cuts days, and the tidy pass keeps limits an
   assert.deepStrictEqual(pl2.days.map((d) => d.scenes), [["x"], ["y"], ["z"]]);
 });
 
+test("versions: save, compare, restore (keeping everything else), cap at 10, and undo leaves them alone", () => {
+  const b = { scenes: [{ id: "a", n: 1, loc: "HOUSE", dn: "D", eighths: 8, cast: ["ANA"] }, { id: "b", n: 2, loc: "PARK", dn: "D", eighths: 8, cast: ["ANA"] }], cast: [{ name: "ANA" }] };
+  const plan = P.normalize({ settings: { days: 3, maxEighths: 40 }, days: [{ scenes: ["a"] }, { scenes: [] }, { scenes: ["b"] }], castType: [{ name: "ANA", t: "Lead" }] });
+  P.saveVersion(plan, "Spread", "me@x", 1000);
+  assert.strictEqual(plan.versions.length, 1);
+  const v = plan.versions[0];
+  plan.days = [{ scenes: ["a", "b"] }, { scenes: [] }, { scenes: [] }].map((d, i) => Object.assign({}, plan.days[i], d));
+  const c = P.compareVersion(plan, v, b);
+  assert.strictEqual(c.moved, 1);
+  assert.strictEqual(c.now.castDays, 1); assert.strictEqual(c.then.castDays, 3);   // two work days and a hold
+  P.saveVersion(plan, "auto 1", "", 2000, true); P.saveVersion(plan, "auto 2", "", 3000, true);
+  assert.deepStrictEqual(plan.versions.map((x) => x.name), ["Spread", "auto 2"], "one auto version at a time");
+  P.restoreVersion(plan, v.id);
+  assert.deepStrictEqual(plan.days.map((d) => d.scenes), [["a"], [], ["b"]]);
+  assert.deepStrictEqual(plan.castType, [{ name: "ANA", t: "Lead" }]);
+  assert.strictEqual(P.normalize(plan).versions.length, 2, "kept through normalize");
+  for(let i = 0; i < 12; i++) P.saveVersion(plan, "v" + i, "", 5000 + i);
+  assert.strictEqual(plan.versions.length, P.VERSION_MAX);
+  assert.ok(!plan.versions.some((x) => x.name === "Spread"), "the oldest goes first");
+  // undo doesn't undo a saved version
+  const h = P.histNew(); P.histRemember(h, plan, 10000);
+  P.saveVersion(plan, "late", "", 9000); plan.days[1].scenes = ["a"];
+  const back = P.histStep(h, plan, true);
+  assert.ok(back.versions.some((x) => x.name === "late"));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);

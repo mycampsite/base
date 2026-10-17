@@ -215,6 +215,22 @@ let BASE = "";
     await expect(p, () => Array.from(document.querySelectorAll('.sbDayWrap[data-day="0"] .sbTag.warn')).some((x) => /Unavailable/.test(x.textContent)), "the strip tagged Unavailable");
     await expect(p, () => /to check/.test((document.querySelector('.sbDayWrap[data-day="0"] .sbDW') || {}).textContent || ""), "Day 1 flagged");
   });
+  await page(browser, "versions: save, change, compare and restore", "/tests/fixtures/plan.html?popout=1", async (p) => {
+    await p.evaluate(() => { localStorage.clear(); CampProdPanel.render("p1"); });
+    await p.waitForTimeout(800); await p.evaluate(() => CampProdPanel.render("p1")); await p.waitForTimeout(300);
+    await p.evaluate(() => { const pr = __CampHub.project().production, sc = doc.lines.filter((l) => l.type === "scene"); pr.days[0].scenes = [sc[0].id, sc[1].id]; pr.days[1].scenes = [sc[2].id]; CampProdPanel.render("p1"); });
+    await p.waitForTimeout(400);
+    await p.click('[data-sb=sec][data-v=versions]'); await p.waitForTimeout(300);
+    await p.click('.sbSec [data-a=vsave]'); await p.waitForTimeout(700);
+    await expect(p, () => ((__CampHub.project().production.versions || [])[0] || {}).name === "FARM", "the version saved with its name");
+    // change the plan, then the version shows what moved
+    await p.evaluate(() => { const pr = __CampHub.project().production; pr.days[1].scenes = pr.days[1].scenes.concat(pr.days[0].scenes); pr.days[0].scenes = []; CampProdPanel.render("p1"); });
+    await p.waitForTimeout(400);
+    await expect(p, () => /2 scenes on other days/.test(document.querySelector(".sbSec").innerText) && document.querySelectorAll(".vrStat").length >= 4, "the comparison with now");
+    await p.click('.sbSec [data-a=vrestore]'); await p.waitForTimeout(700);
+    await expect(p, () => { const pr = __CampHub.project().production; return pr.days[0].scenes.length === 2 && pr.days[1].scenes.length === 1; }, "the version restored");
+    await expect(p, () => (__CampHub.project().production.versions || []).some((v) => v.auto), "the plan before the restore kept as an auto version");
+  });
   await page(browser, "layouts: new board, draw, kit piece, move, undo, note", "/tests/fixtures/layouts.html", async (p) => {
     await p.click("[data-ly=new]"); await p.waitForTimeout(300);
     await expect(p, () => Object.keys(__CampHub.project().layouts).length === 1 && !!document.querySelector(".lyCard.on"), "a new layout, selected");

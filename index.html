@@ -1681,7 +1681,7 @@ async function exportDoc(kind, fileId, retried) {
   try {
     const r = await fetch(RIP.ep, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, cache: "no-store", signal: ctl.signal,
       // The Production plan travels with every export, so the schedule and budget follow the panel
-      body: JSON.stringify({ key: lsGet(KEY_KEY) || "", ...(await tokObj()), action: kind, fileId, folderId: p.folderId, tz, plan: (p && p.production && p.production.scriptId === fileId) ? p.production : null, breakdown,
+      body: JSON.stringify({ key: lsGet(KEY_KEY) || "", ...(await tokObj()), action: kind, fileId, folderId: p.folderId, tz, plan: (p && p.production && p.production.scriptId === fileId) ? Object.assign({}, p.production, { versions: undefined }) : null, breakdown,
         // call / shoot / wrap per scene, the meal and company moves, worked out in the hub (the Schedule sheet lays them out)
         times, shotMins, castNos }) });
     res = await r.json();

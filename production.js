@@ -137,6 +137,53 @@ function unavailOn(plan, s, iso){
   const off = (k, n) => availOff(plan, k, n).indexOf(iso) >= 0;
   return { cast: (s.cast || []).filter((n) => off("cast", n)), loc: s.loc && off("loc", s.loc) ? s.loc : "" };
 }
+// ---------- versions: named copies of the schedule to try another layout and come back ----------
+const VERSION_MAX = 10;
+const VERSION_FIELDS = ["settings", "days", "status", "avail"];
+function cleanVersions(v){
+  const arr = Array.isArray(v) ? v : (v && typeof v === "object" ? Object.keys(v).map((k) => v[k]) : []);
+  return arr.filter((x) => x && x.id && x.days).slice(-VERSION_MAX - 1).map((x) => {
+    const n = normalize({ settings: x.settings, days: x.days, status: x.status, avail: x.avail });
+    const o = { id: String(x.id).slice(0, 40), name: String(x.name || "Version").trim().slice(0, 60) || "Version", at: Number(x.at) || 0, by: String(x.by || "").slice(0, 80) };
+    if(x.auto) o.auto = true;
+    VERSION_FIELDS.forEach((f) => { o[f] = n[f]; });
+    return o;
+  });
+}
+// Save the schedule as it is now. `auto` versions (made before a restore) replace the last auto one. Mutates and returns the plan.
+function saveVersion(plan, name, by, now, auto){
+  const snap = { id: "v" + (now || Date.now()).toString(36) + Math.random().toString(36).slice(2, 5), name, at: now || Date.now(), by: by || "" };
+  if(auto) snap.auto = true;
+  VERSION_FIELDS.forEach((f) => { snap[f] = JSON.parse(JSON.stringify(plan[f] == null ? [] : plan[f])); });
+  let list = cleanVersions(plan.versions);
+  if(auto) list = list.filter((x) => !x.auto);
+  list.push(snap);
+  while(list.length > VERSION_MAX){ const i = list.findIndex((x) => x.auto); list.splice(i >= 0 && list.length - 1 !== i ? i : 0, 1); }
+  plan.versions = cleanVersions(list);
+  return plan;
+}
+// Put a saved version back. Everything else (script, groupings, cast types, call sheet links, the versions) stays.
+function restoreVersion(plan, id){
+  const v = cleanVersions(plan.versions).find((x) => x.id === id); if(!v) return null;
+  VERSION_FIELDS.forEach((f) => { plan[f] = JSON.parse(JSON.stringify(v[f])); });
+  return plan;
+}
+function deleteVersion(plan, id){ plan.versions = cleanVersions(plan.versions).filter((x) => x.id !== id); return plan; }
+// The numbers that matter for comparing two layouts
+function scheduleFacts(plan, breakdown){
+  const pl = normalize(plan), byId = sceneMap(breakdown), st = pl.days.map((d) => dayStats(d, byId, pl.settings.maxEighths));
+  const castDays = dood(pl, breakdown).reduce((a, r) => a + r.total, 0);
+  const used = st.filter((x) => x.scenes).length, last = st.map((x) => x.scenes > 0).lastIndexOf(true) + 1;
+  return { days: last, used, scenes: st.reduce((a, x) => a + x.scenes, 0), castDays, moves: st.reduce((a, x) => a + x.moves, 0),
+    warns: validate(pl, breakdown).filter((w) => w.level === "warn").length, dayOf: (() => { const m = {}; pl.days.forEach((d, i) => d.scenes.forEach((id) => { m[id] = i; })); return m; })() };
+}
+function compareVersion(plan, version, breakdown){
+  const a = scheduleFacts(plan, breakdown), b = scheduleFacts(Object.assign({}, plan, { settings: version.settings, days: version.days, status: version.status, avail: version.avail }), breakdown);
+  const ids = new Set(Object.keys(a.dayOf).concat(Object.keys(b.dayOf)));
+  let moved = 0; ids.forEach((id) => { if(a.dayOf[id] !== b.dayOf[id]) moved++; });
+  delete a.dayOf; delete b.dayOf;
+  return { now: a, then: b, moved };
+}
 function normalize(plan){
   plan = (plan && typeof plan === "object") ? plan : {};
   const s = Object.assign({}, DEFAULTS, plan.settings || {});
@@ -181,6 +228,8 @@ function normalize(plan){
   out.status = arr(plan.status).filter((x) => x && x.id && STATUSES.indexOf(x.s) > 0).map((x) => ({ id: String(x.id), s: x.s }));
   // dates a cast member or a place can't be used: [{ k: "cast" | "loc", name, off: ["YYYY-MM-DD", …] }] (a list: names may not suit keys)
   out.avail = cleanAvail(plan.avail);
+  // saved versions of the schedule (Save version… / Restore): days, settings, statuses and days off as they were
+  out.versions = cleanVersions(plan.versions);
   // links to the call sheets made by the last Sync (kept as they are)
   if(plan.callsheets && typeof plan.callsheets === "object") out.callsheets = plan.callsheets;
   return out;
@@ -690,7 +739,7 @@ function placeScenes(plan, ids, breakdown){
 // Undo history: snapshots exclude call-sheet links and save stamps, which aren't edits.
 // Quick runs of edits (within 700 ms) count as one step; at most 80 steps.
 const HIST_GAP = 700, HIST_MAX = 80;
-function histKey(plan){ const c = Object.assign({}, plan); delete c.callsheets; delete c.updatedAt; delete c.by; return JSON.stringify(c); }
+function histKey(plan){ const c = Object.assign({}, plan); delete c.callsheets; delete c.updatedAt; delete c.by; delete c.versions; return JSON.stringify(c); }
 function histNew(){ return { undo: [], redo: [], at: 0 }; }
 function histRemember(h, plan, now){
   const cur = histKey(plan);
@@ -705,6 +754,7 @@ function histStep(h, plan, back){
   to.push(histKey(plan));
   const next = JSON.parse(from.pop());
   if(plan.callsheets) next.callsheets = plan.callsheets;
+  if(plan.versions) next.versions = plan.versions;   // saved versions aren't undone
   h.at = 0;
   return next;
 }
@@ -793,7 +843,7 @@ function dayShots(day, shotMap){
   return { scenes, total: scenes.reduce((a, s) => a + s.shots.length, 0) };
 }
 
-const api = { dayFits, planCost, improvePlan, cleanAvail, availOff, setAvail, availRuns, unavailOn, DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
+const api = { VERSION_MAX, cleanVersions, saveVersion, restoreVersion, deleteVersion, scheduleFacts, compareVersion, dayFits, planCost, improvePlan, cleanAvail, availOff, setAvail, availRuns, unavailOn, DEFAULTS, MAX_DAYS, CAST_TYPES, locRoot, groupLocs, ungroupLoc, splitPlace, renamePlace, fmtEighths, parseISO, shootDates, planDates, analyzeOpts, normalize, resizeDays, reconcile, sceneMap, dayStats, autoSchedule, stripOrder, fitScore, suggestDay, dood, validate,
   EXTRA_KINDS, cleanExtras, moveSceneIn, moveManyIn, sortDay, stripMatch, castIds, placeScenes, STATUSES, statusOf, setStatus, cleanWhere, whereOf, sunTimes, hmIn, TIME_DEFAULTS, timeSettings, estOf, dayTimes, timetable, toMin, toHM, histKey, histNew, histRemember, histStep, syncWithScript, callsheetsStale, sceneLook, sceneChanges, acceptChanges, shotsBySceneId, dayShots };
 if(typeof module !== "undefined" && module.exports) module.exports = api; else root.CampProduction = api;
 })(typeof window !== "undefined" ? window : this);

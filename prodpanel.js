@@ -196,6 +196,11 @@ const css = `
 .lcChip button{ border:0; background:none; color:var(--uiMuted); cursor:pointer; font-size:11px; width:18px; height:18px; border-radius:50%; padding:0; }
 .lcChip button:hover{ color:var(--uiText); background:rgba(255,255,255,.1); }
 .lcActs{ display:flex; gap:6px; flex-wrap:wrap; }
+.vrStats{ display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
+.vrStat{ font-size:11.5px; padding:1px 8px; border-radius:999px; border:1px solid var(--uiBorder); color:var(--uiText); background:rgba(255,255,255,.04); }
+.vrStat i{ font-style:normal; font-weight:700; color:var(--uiMuted); }
+.vrStat.good i{ color:#8fe3a6; } .vrStat.bad i{ color:#ff8b83; }
+.vrAuto{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:5px; background:rgba(255,255,255,.1); color:var(--uiMuted); vertical-align:1px; }
 .avWrap{ display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:5px; flex:0 1 auto; min-width:0; }
 .avLbl{ font-size:11px; color:var(--uiMuted); margin-right:2px; }
 .lcChip.off{ border-color:rgba(255,139,131,.45); background:rgba(255,139,131,.08); color:#ffb4ae; }
@@ -582,6 +587,7 @@ function draw(pid){
       <span class="ctlMore"><button class="btn sm" type="button" data-a="menu" aria-haspopup="menu" aria-expanded="${S.menu}" title="More">⋯</button>${S.menu ? `<div class="ctlMenu" role="menu">
         <button type="button" data-a="auto"${canEdit ? "" : " disabled"}>Auto-schedule<small>Put unscheduled scenes on days with room (pages, hours and days off)</small></button>
         <button type="button" data-a="reauto"${canEdit ? "" : " disabled"}>Re-plan all<small>Lay out every scene again, keeping cast days and company moves down</small></button>
+        <button type="button" data-a="vsave"${canEdit ? "" : " disabled"}>Save version…<small>Keep this schedule to compare or come back to</small></button>
         <button type="button" data-a="reload">Refresh script<small>Read the latest script and storyboard shots</small></button>
         ${S.popout ? "" : `<button type="button" data-a="pop">Pop out<small>Open the plan in its own window</small></button>`}
       </div>` : ""}</span></div>`;
@@ -694,13 +700,13 @@ function draw(pid){
   // days off set earlier (the old calendar): listed so they can be cleared
   const offs = (st.off || []);
   const cal = offs.length ? `<div class="offRow"><b>Days off</b>${offs.map((iso) => `<button type="button" class="offChip" data-a="cal" data-iso="${esc(iso)}" title="Shoot on this date again"${canEdit ? "" : " disabled"}>${esc(fmtDate(iso))} ✕</button>`).join("")}</div>` : "";
-  const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit), castSec = castView(pl, bd, canEdit);
+  const flagSec = flagsView(pl, bd, canEdit), locSec = locsView(pl, bd, canEdit), castSec = castView(pl, bd, canEdit), verSec = versionsView(pl, bd, canEdit);
   if(S.view === "strips"){
     if(SB.pid !== pid){ SB.pid = pid; SB.sel = []; SB.anchor = null; }
-    const sbHtml = sbView({ pid, pl, bd, byId, st, dates, stats, times, warns, shotMap, canEdit, rec, revOf, n, dood, shots, flagSec, castSec, locSec });
+    const sbHtml = sbView({ pid, pl, bd, byId, st, dates, stats, times, warns, shotMap, canEdit, rec, revOf, n, dood, shots, flagSec, castSec, locSec, verSec });
     box.innerHTML = head(chips, acts) + `<div class="ctlBody sbMode">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${sbHtml}</div>`;
   }
-  else box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${castSec}${locSec}</div>`;
+  else box.innerHTML = head(chips, acts) + `<div class="ctlBody">${settings}${cal}${docsNudge}${notice}${revBox}${warnBox}${moveBar}${dayTabs}<div class="board">${cols}</div>${dood}${shots}${flagSec}${castSec}${locSec}${verSec}</div>`;
   wire(box, pid, { bd, scriptId, plan: pl, dates });
 }
 
@@ -923,7 +929,7 @@ button.sbBan[data-bk]:hover .sbBGrip{ opacity:.9; }
   document.addEventListener("pointerdown", () => show(null), true);
 })();
 const sbPrefs = () => lsSet(SBP_KEY, JSON.stringify({ bone: SB.bone }));
-const SB_SECS = [["strips", "Stripboard"], ["dood", "Day Out of Days"], ["shots", "Shot list"], ["flags", "Script flags"], ["cast", "Cast"], ["locs", "Locations"]];
+const SB_SECS = [["strips", "Stripboard"], ["dood", "Day Out of Days"], ["shots", "Shot list"], ["flags", "Script flags"], ["cast", "Cast"], ["locs", "Locations"], ["versions", "Versions"]];
 const IE_SHORT = (ie) => { const t = String(ie || "").toUpperCase(); return /INT/.test(t) && /EXT/.test(t) ? "I/E" : /EXT/.test(t) ? "EXT" : /INT/.test(t) ? "INT" : ""; };
 const DN_SHORT = { D: "DAY", N: "NIGHT", M: "DUSK" };
 // "INT. HOUSE - SUBURBAN BACKYARD - DAY" -> "HOUSE - SUBURBAN BACKYARD" (the place as the script writes it)
@@ -937,11 +943,11 @@ const openDetails = (h) => String(h || "").replace(/<details([^>]*)>/, (m, a) =>
 const BGRIP = `<span class="sbGrip sbBGrip" aria-hidden="true">⋮⋮</span>`;
 const tipAttr = (t) => t ? ` data-tip="${esc(t)}" aria-label="${esc(t)}"` : "";
 function sbView(c){
-  const { pid, pl, bd, byId, st, dates, stats, times, warns, shotMap, canEdit, rec, revOf, n, dood, shots, flagSec, castSec, locSec } = c;
+  const { pid, pl, bd, byId, st, dates, stats, times, warns, shotMap, canEdit, rec, revOf, n, dood, shots, flagSec, castSec, locSec, verSec } = c;
   const dis = canEdit ? "" : " disabled";
   const secTabs = `<div class="sbSecs" role="tablist" aria-label="Plan views">${SB_SECS.map(([v, l]) => `<button type="button" role="tab" class="${SB.sec === v ? "on" : ""}" data-sb="sec" data-v="${v}" aria-selected="${SB.sec === v}">${l}</button>`).join("")}</div>`;
   if(SB.sec !== "strips"){
-    const body = SB.sec === "dood" ? dood : SB.sec === "shots" ? shots : SB.sec === "flags" ? flagSec : SB.sec === "cast" ? castSec : locSec;
+    const body = SB.sec === "dood" ? dood : SB.sec === "shots" ? shots : SB.sec === "flags" ? flagSec : SB.sec === "cast" ? castSec : SB.sec === "versions" ? verSec : locSec;
     return secTabs + `<div class="sbSec">${openDetails(body) || `<div class="sbEmpty">Nothing here yet.</div>`}</div>`;
   }
   const kids = {}; (bd.cast || []).forEach((x) => { if(x.minor) kids[x.name] = 1; });
@@ -1449,6 +1455,27 @@ function setCastType(pid, name, t, auto){
   save(pid, plan); rerender();
 }
 
+/* ---------- versions: save the schedule, try another layout, compare, come back ---------- */
+const VERS_KEY = "Camp_PROD_VERS_OPEN_V1";
+const meEmail = () => { try{ const m = H().me; return String(typeof m === "function" ? m() : (m || "")); }catch(_e){ return ""; } };
+function versionsView(pl, bd, canEdit){
+  const list = (pl.versions || []).slice().reverse();
+  const when = (t) => t ? new Date(t).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "";
+  const diff = (label, now, then, lowerBetter) => { const d = then - now; const cls = !d ? "" : (d < 0) === lowerBetter ? " good" : " bad";
+    return `<span class="vrStat${cls}"${tipAttr(label + ": " + then + " in this version, " + now + " now")}>${esc(label)} ${then}${d ? ` <i>${d > 0 ? "+" : ""}${d}</i>` : ""}</span>`; };
+  const rows = list.map((v) => {
+    const c = P.compareVersion(pl, v, bd);
+    return `<div class="fxRow"><div class="fxName"><b>${esc(v.name)}${v.auto ? ` <span class="vrAuto">auto</span>` : ""}</b><span>${esc(when(v.at))}${v.by ? " · " + esc(v.by.split("@")[0]) : ""}${c.moved ? " · " + c.moved + " scene" + (c.moved === 1 ? "" : "s") + " on other days than now" : " · same days as now"}</span>
+        <div class="vrStats">${diff("Shoot days", c.now.days, c.then.days, true)}${diff("Cast days", c.now.castDays, c.then.castDays, true)}${diff("Moves", c.now.moves, c.then.moves, true)}${diff("Scheduled", c.now.scenes, c.then.scenes, false)}${diff("To check", c.now.warns, c.then.warns, true)}</div></div>
+      ${canEdit ? `<div class="lcActs"><button type="button" class="btn sm" data-a="vrestore" data-id="${esc(v.id)}">Restore</button><button type="button" class="btn sm" data-a="vdel" data-id="${esc(v.id)}" aria-label="Delete ${esc(v.name)}">Delete</button></div>` : ""}</div>`;
+  }).join("");
+  return `<details class="dood fx" data-sec="versions"${lsGet(VERS_KEY) === "1" ? " open" : ""}><summary>Versions · ${list.length ? list.length + " saved" : "none yet"}</summary>
+    <div class="fxNote">Save the schedule as it is, try another layout, and compare or come back. Shared with the team; up to ${P.VERSION_MAX}. Numbers show the version, with the change from now.
+      ${canEdit ? `<button type="button" class="btn sm" data-a="vsave">Save current version…</button>` : ""}</div>
+    ${rows || `<div class="fxRow"><div class="fxName"><span>No versions yet. Save one before you Re-plan all or try a big change.</span></div></div>`}
+  </details>`;
+}
+
 /* ---------- locations: rooms that are really one place ---------- */
 const ROOM_RE = /^(KITCHEN|LOUNGE|LOUNGE ROOM|LIVING ROOM|SITTING ROOM|DINING ROOM|FAMILY ROOM|BEDROOM|MASTER BEDROOM|.*'S BEDROOM|.*'S ROOM|BATHROOM|ENSUITE|TOILET|LAUNDRY|HALLWAY|HALL|CORRIDOR|STAIRS|STAIRCASE|LANDING|ATTIC|BASEMENT|CELLAR|GARAGE|STUDY|OFFICE|NURSERY|PANTRY|FRONT DOOR|BACK DOOR|PORCH|VERANDAH|VERANDA|BALCONY|BACKYARD|BACK YARD|FRONT YARD|YARD|GARDEN|DRIVEWAY|SHED|ROOFTOP)$/;
 function locsView(pl, bd, canEdit){
@@ -1566,6 +1593,30 @@ function wire(box, pid, ctx){
         H().toast(picked.length + " location" + (picked.length === 1 ? "" : "s") + " now part of " + name + ".", "ok", 2200);
         return;
       }
+      if(k === "vsave" && canEdit){
+        S.menu = false;
+        const n0 = (planOf(pid).versions || []).filter((v) => !v.auto).length;
+        H().prompt("Save this version", "Name", "Version " + (n0 + 1)).then((name) => {
+          if(!name) return;
+          update((plan) => { P.saveVersion(plan, name, meEmail(), Date.now()); });
+          H().toast("Saved \u201c" + name + "\u201d. Find it under Versions.", "ok", 2200);
+        });
+        return;
+      }
+      if(k === "vrestore" && canEdit){
+        const v = (planOf(pid).versions || []).find((x) => x.id === a.dataset.id); if(!v) return;
+        H().confirm("Restore \u201c" + v.name + "\u201d?", "The days, settings, scene statuses and days off go back to this version. The schedule as it is now is kept as an auto version, and Undo works too.", "Restore", false).then((ok) => {
+          if(!ok) return;
+          update((plan) => { P.saveVersion(plan, "Before restoring " + v.name, meEmail(), Date.now(), true); P.restoreVersion(plan, v.id); });
+          H().toast("Restored \u201c" + v.name + "\u201d.", "ok", 2200);
+        });
+        return;
+      }
+      if(k === "vdel" && canEdit){
+        const v = (planOf(pid).versions || []).find((x) => x.id === a.dataset.id); if(!v) return;
+        H().confirm("Delete \u201c" + v.name + "\u201d?", "This saved version is removed for everyone on the project.", "Delete", true).then((ok) => { if(ok) update((plan) => { P.deleteVersion(plan, v.id); }); });
+        return;
+      }
       if(k === "avrm" && canEdit){
         const a0 = P.parseISO(a.dataset.a0), z = P.parseISO(a.dataset.z), list = [];
         for(let t2 = a0 ? a0.getTime() : 0; a0 && z && t2 <= z.getTime() && list.length < 400; t2 += 864e5) list.push(new Date(t2).toISOString().slice(0, 10));
@@ -1670,7 +1721,7 @@ function wire(box, pid, ctx){
   const lcName = box.querySelector("#lcName"); if(lcName){ lcName.oninput = () => { if(S.locForm) S.locForm.name = lcName.value; }; lcName.onkeydown = (e) => { e.stopPropagation(); if(e.key === "Enter"){ e.preventDefault(); const ok = box.querySelector("[data-a=lcok]"); if(ok) ok.click(); } }; if(!lcName.value) lcName.focus({ preventScroll: true }); }
   const tm = box.querySelector("details.tmSet"); if(tm) tm.ontoggle = () => { S.tmOpen = tm.open; };
   const det = box.querySelector("details.dood:not(.fx)"); if(det) det.ontoggle = () => { S.doodOpen = det.open; lsSet(DOOD_KEY, det.open ? "1" : "0"); };
-  box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : d.dataset.sec === "shots" ? SHOTS_KEY : d.dataset.sec === "cast" ? CAST_KEY : LOCS_KEY, d.open ? "1" : "0"); });
+  box.querySelectorAll("details.fx").forEach((d) => { d.ontoggle = () => lsSet(d.dataset.sec === "flags" ? FLAGS_KEY : d.dataset.sec === "shots" ? SHOTS_KEY : d.dataset.sec === "cast" ? CAST_KEY : d.dataset.sec === "versions" ? VERS_KEY : LOCS_KEY, d.open ? "1" : "0"); });
   if(S.view === "strips"){ sbWire(box, pid, canEdit); return; }
   if(!canEdit) return;
   // drag and drop between columns
