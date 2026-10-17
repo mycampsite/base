@@ -384,6 +384,42 @@ function validate(plan, breakdown){
     const label = who.map((n) => n + (kids[n].age != null ? " (" + kids[n].age + ")" : " (age?)")).join(", ");
     out.push({ level: night.length ? "warn" : "info", code: "MINOR", day: i + 1, text: "Day " + (i + 1) + ": " + label + " under 18. Check permit, chaperone and work-hour limits" + (night.length ? ". Night scene" + (night.length > 1 ? "s " : " ") + night.join(", ") + " with a minor" : "") });
   });
+  // Hours: long days, meal breaks, rest between days, long runs, and children's hours (from the day's timetable)
+  const hm = (min) => Math.floor(min / 60) + "h" + (min % 60 ? String(min % 60).padStart(2, "0") : "");
+  const dates = planDates(plan), tts = plan.days.map((d) => dayTimes(d, byId, plan.settings));
+  const hasScenes = plan.days.map((d) => (d.scenes || []).some((id) => byId[id]));
+  const clock = (x) => toHM(x);
+  plan.days.forEach((d, i) => {
+    if(!hasScenes[i]) return;
+    const tt = tts[i], callM = toMin(tt.call), N = "Day " + (i + 1);
+    if(tt.length > 12 * 60) out.push({ level: "warn", code: "LONGDAY", day: i + 1, text: N + " runs " + hm(tt.length) + " (call " + tt.call + ", wrap " + tt.wrap + "). Over 12 hours: check overtime and safe travel home" });
+    if(tt.lateMeal || tt.rows.some((r) => r.type === "meal" && r.late)) out.push({ level: "warn", code: "LATEMEAL", day: i + 1, text: N + ": the first meal break starts more than 6 hours after call. A meal penalty may apply" });
+    else if(d.noMeal && tt.length > 6 * 60) out.push({ level: "warn", code: "NOMEAL", day: i + 1, text: N + " runs " + hm(tt.length) + " with no meal break" });
+    const kidScenes = (d.scenes || []).map((id) => byId[id]).filter((sc) => sc && (sc.cast || []).some((n) => kids[n]));
+    if(kidScenes.length){
+      const ids = kidScenes.map((sc) => sc.id), last = tt.rows.filter((r) => r.type === "scene" && ids.indexOf(r.id) >= 0).pop(), span = last ? (toMin(last.wrap) - callM + 1440) % 1440 : 0;
+      if(span > 8 * 60) out.push({ level: "warn", code: "KIDHOURS", day: i + 1, text: N + ": a child's scenes run until " + last.wrap + ", " + hm(span) + " after call. Check the permitted hours for their age" });
+      const lastM = last ? toMin(last.wrap) : 0;
+      if(last && (lastM >= 21 * 60 || lastM < callM)) out.push({ level: "warn", code: "KIDLATE", day: i + 1, text: N + ": a child's scene wraps at " + last.wrap + ". Check the latest finish allowed for their age" });
+    }
+  });
+  // Rest between one wrap and the next call (10 hours), using the dates when set, else back-to-back days
+  for(let i = 0; i + 1 < plan.days.length; i++){
+    if(!hasScenes[i] || !hasScenes[i + 1]) continue;
+    const a = tts[i], b = tts[i + 1], da = parseISO(dates[i]), db = parseISO(dates[i + 1]);
+    const gap = da && db ? Math.round((db - da) / 864e5) : 1;
+    if(gap < 1) continue;
+    const rest = gap * 1440 + toMin(b.call) - (toMin(a.call) + a.length);
+    if(rest < 10 * 60) out.push({ level: "warn", code: "TURNAROUND", day: i + 2, text: "Day " + (i + 2) + ": only " + hm(Math.max(0, rest)) + " between wrap on Day " + (i + 1) + " (" + a.wrap + ") and call (" + b.call + "). Aim for 10 hours rest" });
+  }
+  // Six or more shooting days in a row (needs dates)
+  let run = 0;
+  plan.days.forEach((d, i) => {
+    const prev = i ? parseISO(dates[i - 1]) : null, cur = parseISO(dates[i]);
+    const consecutive = i && hasScenes[i - 1] && hasScenes[i] && prev && cur && Math.round((cur - prev) / 864e5) === 1;
+    run = hasScenes[i] ? (consecutive ? run + 1 : 1) : 0;
+    if(run === 6) out.push({ level: "warn", code: "SIXDAYS", day: i + 1, text: "Day " + (i + 1) + " is the 6th shooting day in a row. Check that cast and crew get a day off" });
+  });
   // What the breakdown says each day needs (only when the element sheets are feeding the plan)
   if(breakdown && breakdown.fromElements){
     const stats = plan.days.map((d) => dayStats(d, byId, max));

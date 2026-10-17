@@ -371,3 +371,19 @@ test("a day's meal can be moved, made longer or removed", () => {
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if(failed) process.exit(1);
+
+test("hours flags: long day, late meal, short turnaround, child hours, six days in a row", () => {
+  const sc = (id, n, est, extra) => Object.assign({ id, n, loc: "HOUSE", dn: "D", eighths: 8, est, cast: [] }, extra || {});
+  const big = { scenes: [sc("a", 1, 300), sc("b", 2, 300), sc("c", 3, 300), sc("k", 4, 120, { cast: ["KID"] })], cast: [{ name: "KID", minor: true, age: 9 }] };
+  const codes = (plan, b) => P.validate(P.normalize(plan), b).map((w) => w.code);
+  const long = codes({ settings: { days: 1, maxEighths: 200, start: "2026-11-02" }, days: [{ scenes: ["a", "b", "c"] }] }, big);
+  assert.ok(long.indexOf("LONGDAY") >= 0);
+  const kid = codes({ settings: { days: 1, maxEighths: 200, start: "2026-11-02" }, days: [{ scenes: ["a", "b", "k"] }] }, big);
+  assert.ok(kid.indexOf("KIDHOURS") >= 0);
+  const turn = P.validate(P.normalize({ settings: { days: 2, maxEighths: 200, start: "2026-11-02", call: "07:00" }, days: [{ scenes: ["a", "b", "c"] }, { scenes: ["k"] }] }), big);
+  assert.ok(turn.some((w) => w.code === "TURNAROUND" && w.day === 2));
+  const easy = codes({ settings: { days: 2, maxEighths: 200, start: "2026-11-02" }, days: [{ scenes: ["k"] }, { scenes: ["a"] }] }, big);
+  assert.ok(easy.indexOf("TURNAROUND") < 0 && easy.indexOf("LONGDAY") < 0 && easy.indexOf("SIXDAYS") < 0);
+  const six = codes({ settings: { days: 6, maxEighths: 200, start: "2026-11-02", perWeek: 7 }, days: [1, 2, 3, 4, 5, 6].map((n) => ({ scenes: ["x" + n] })) }, { scenes: [1, 2, 3, 4, 5, 6].map((n) => sc("x" + n, n, 60)), cast: [] });
+  assert.ok(six.indexOf("SIXDAYS") >= 0);
+});
