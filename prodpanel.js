@@ -1012,7 +1012,7 @@ function sbView(c){
         </div>
         <div class="sbDayB">
           <span class="sbTimes"><label class="sbT">Call${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}</label>
-          <label class="sbT"${tipAttr("Auto lets Camp place the meal break. No meal takes it off this day")}>Lunch${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis).replace('<option value=""', '<option value="none"' + (d.noMeal ? " selected" : "") + '>No meal</option><option value=""').replace(d.noMeal ? '<option value="" selected>' : '\u0000', '<option value="">')}</label>
+          <label class="sbT"${tipAttr("Auto lets Camp place the meal break. No meal takes it off this day")}>Meal${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis).replace('<option value=""', '<option value="none"' + (d.noMeal ? " selected" : "") + '>No meal</option><option value=""').replace(d.noMeal ? '<option value="" selected>' : '\u0000', '<option value="">')}</label>
           <label class="sbT"${tipAttr("Auto lets Camp work out the wrap")}>Wrap${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</label></span>
           ${canEdit && rec.unscheduled.length ? `<button type="button" class="btn sm sbAddX" data-sb="addsc" data-day="${i}"${tipAttr("Pick unscheduled scenes to add to the end of this day")}>＋ Add scenes</button>` : ""}
           ${canEdit ? `<button type="button" class="btn sm sbAddX" data-sb="xnew" data-day="${i}"${tipAttr("Add a break, a company move or a note to this day")}>＋ Break / move</button>` : ""}
@@ -1021,7 +1021,7 @@ function sbView(c){
         </div>
       </div>
       <div class="sbRows" data-day="${i}">${SB.addTo === i && canEdit ? addForm(i, rec.unscheduled, byId) : ""}${!folded && d.noMeal && d.scenes.length ? `<button type="button" class="sbBan meal off" data-sb="mealback" data-day="${i}"${canEdit ? "" : " disabled"}${tipAttr("This day has no meal break. Click to put it back")}>No meal break · put it back</button>` : ""}${folded ? "" : (d.scenes.length || (d.extras || []).length ? rows : `<div class="sbEmpty">${canEdit ? "Drag scenes here" : "No scenes"}</div>`) + (SB.xform && SB.xform.day === i && !SB.xform.id ? xForm(i, d, null) : "")}</div>
-      <div class="sbEnd"><b>End of Day ${i + 1}</b>${tt.wrap ? `<span>Wrap ${tt.wrapManual ? "" : "~"}${esc(fmtTime(tt.wrap))}</span>` : ""}${x.over ? `<span class="over">Over the page limit</span>` : ""}</div>
+      <div class="sbEnd"><b>End of Day ${i + 1}</b>${tt.wrap ? `<span>Wrap ${tt.wrapManual ? "" : "~"}${esc(fmtTime(tt.wrap))}</span>` : ""}${tt.wrap && tt.length > 0 ? `<span${tipAttr("Call to wrap, including the meal and any moves")}>Total ${tt.wrapManual ? "" : "~"}${fmtMins(tt.length)}</span>` : ""}${x.over ? `<span class="over">Over the page limit</span>` : ""}</div>
     </section>`;
   }).join("");
   const L2 = { D: 0, M: 1, N: 2 }, boneSort = { n: (a, b) => byId[a].n - byId[b].n, loc: (a, b) => String(placeOf(byId[a])).localeCompare(String(placeOf(byId[b]))) || byId[a].n - byId[b].n,
