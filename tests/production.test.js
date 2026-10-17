@@ -225,6 +225,34 @@ test("elements shape the plan: shared specials group together, warnings use the 
   void plan;
 });
 
+test("company moves: going back to a location counts again", () => {
+  const byId = {
+    a: { id: "a", n: 1, loc: "BACKYARD", eighths: 8, dn: "D", cast: [] },
+    b: { id: "b", n: 2, loc: "BATHROOM", eighths: 8, dn: "D", cast: [] },
+    c: { id: "c", n: 3, loc: "BACKYARD", eighths: 8, dn: "D", cast: [] }
+  };
+  assert.strictEqual(P.dayStats({ scenes: ["a", "b", "c"] }, byId, 40).moves, 2, "backyard → bathroom → backyard");
+  assert.strictEqual(P.dayStats({ scenes: ["a", "c", "b"] }, byId, 40).moves, 1, "both backyard scenes together");
+  assert.strictEqual(P.dayStats({ scenes: ["a", "c"] }, byId, 40).moves, 0);
+});
+
+test("a day of night scenes gets its own call, worked back from sunset when the shoot has a place", () => {
+  const byId = {
+    n1: { id: "n1", n: 1, loc: "KITCHEN", eighths: 8, dn: "N", cast: [], est: 60 },
+    n2: { id: "n2", n: 2, loc: "KITCHEN", eighths: 8, dn: "N", cast: [], est: 60 },
+    d1: { id: "d1", n: 3, loc: "YARD", eighths: 8, dn: "D", cast: [], est: 60 }
+  };
+  const night = { scenes: ["n1", "n2"] }, mixed = { scenes: ["n1", "d1"] };
+  assert.strictEqual(P.dayTimes(night, byId, { call: "07:00" }).call, "16:00", "the night call setting");
+  assert.strictEqual(P.dayTimes(mixed, byId, { call: "07:00" }).call, "07:00", "any daylight and the normal call stands");
+  assert.strictEqual(P.dayTimes({ scenes: ["n1"], call: "22:00" }, byId, { call: "07:00" }).call, "22:00", "a call typed in by hand wins");
+  assert.strictEqual(P.dayTimes(night, byId, { call: "07:00", nightCall: "15:30" }).call, "15:30");
+  // Melbourne in November: the sun sets about 20:00, so the crew is called an hour before for the first shot
+  const where = { name: "Melbourne", lat: -37.81, lng: 144.96, tz: "Australia/Melbourne" };
+  const sun = P.dayTimes(night, byId, { call: "07:00", where }, "2026-11-09").call;
+  assert.ok(/^(18|19|20):/.test(sun), "call worked back from sunset, got " + sun);
+});
+
 test("timetable: call, shoot and wrap per scene with the meal at six hours (matches a real day)", () => {
   // Day 1 of a real schedule: call 6:00, scenes of 2h30, 2h, 1h30, 2h; meal 12:00-12:30; wrap 5:00 pm
   const by = { a: { id: "a", n: 12, loc: "DINER", est: 150 }, b: { id: "b", n: 14, loc: "DINER", est: 120 }, c: { id: "c", n: 1, loc: "DINER", est: 90 }, d: { id: "d", n: 21, loc: "DINER", est: 120 } };

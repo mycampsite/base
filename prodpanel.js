@@ -567,7 +567,8 @@ function draw(pid){
   const pl = rec.plan, st = pl.settings, dates = P.planDates(pl);
   const badOrder = dates.some((d, i) => i && d && dates[i - 1] && d <= dates[i - 1]);
   const stats = pl.days.map((d) => P.dayStats(d, byId, st.maxEighths));
-  const times = pl.days.map((d) => P.dayTimes(d, byId, pl.settings));
+  const planDays = P.planDates(pl);
+  const times = pl.days.map((d, i) => P.dayTimes(d, byId, pl.settings, planDays[i] || ""));
   const warns = P.validate(pl, bd);
   const scheduled = bd.scenes.filter((s) => s.id).length - rec.unscheduled.length;
   const nWarn = warns.filter((w) => w.level === "warn").length;

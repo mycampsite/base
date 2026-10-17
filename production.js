@@ -8,7 +8,7 @@
 (function (root) {
 "use strict";
 
-const DEFAULTS = { start: "", days: 5, perWeek: 7, maxEighths: 40, maxHours: 12, call: "07:00" };
+const DEFAULTS = { start: "", days: 5, perWeek: 7, maxEighths: 40, maxHours: 12, call: "07:00", nightCall: "16:00" };
 const MAX_DAYS = 120;
 
 // ---------- small helpers ----------
@@ -194,6 +194,7 @@ function normalize(plan){
     maxEighths: clampInt(s.maxEighths, 4, 160, DEFAULTS.maxEighths),
     maxHours: clampInt(s.maxHours, 4, 24, DEFAULTS.maxHours),   // call to wrap; auto-schedule fills a day only up to this
     call: /^\d{2}:\d{2}$/.test(s.call || "") ? s.call : DEFAULTS.call,
+    nightCall: /^\d{2}:\d{2}$/.test(s.nightCall || "") ? s.nightCall : DEFAULTS.nightCall,   // a day of night scenes
     off: (Array.isArray(s.off) ? s.off : (s.off && typeof s.off === "object" ? Object.values(s.off) : [])).filter((x) => parseISO(x)).sort()
   };
   // day timing someone changed (see TIME_DEFAULTS), and the shoot's base location (sunrise, sunset and weather come from it)
@@ -319,7 +320,11 @@ function dayStats(day, byId, maxEighths){
   const dn = uniq(sc.map((s) => s.dn || "D"));
   const needs = {};
   sc.forEach((x) => Object.keys(x.needs || {}).forEach((c) => { (needs[c] = needs[c] || []); x.needs[c].forEach((n) => { if(needs[c].indexOf(n) < 0) needs[c].push(n); }); }));
-  return { scenes: sc.length, eighths, locs, cast, dn, over: eighths > maxEighths, moves: Math.max(0, locs.length - 1), needs };
+  // A company move is every change of location in the order the day is shot, so going back counts again:
+  // backyard → bathroom → backyard is two moves, not one. (The day's timetable already counts them this way.)
+  let moves = 0, was = "";
+  sc.forEach((s) => { const l = s.loc || ""; if(!l) return; if(was && l !== was) moves++; was = l; });
+  return { scenes: sc.length, eighths, locs, cast, dn, over: eighths > maxEighths, moves, needs };
 }
 
 // ---------- automatic scheduling ----------
@@ -539,7 +544,7 @@ function validate(plan, breakdown){
   });
   // Hours: long days, meal breaks, rest between days, long runs, and children's hours (from the day's timetable)
   const hm = (min) => Math.floor(min / 60) + "h" + (min % 60 ? String(min % 60).padStart(2, "0") : "");
-  const dates = planDates(plan), tts = plan.days.map((d) => dayTimes(d, byId, plan.settings));
+  const dates = planDates(plan), tts = plan.days.map((d, i) => dayTimes(d, byId, plan.settings, dates[i] || ""));
   const hasScenes = plan.days.map((d) => (d.scenes || []).some((id) => byId[id]));
   const clock = (x) => toHM(x);
   plan.days.forEach((d, i) => {
@@ -688,10 +693,25 @@ function timeSettings(settings){
   Object.keys(TIME_DEFAULTS).forEach((k) => { const v = Number(src[k]); if(isFinite(v) && v >= 0 && v <= 1440) t[k] = Math.round(v); });
   return t;
 }
-function dayTimes(day, byId, settings){
+// A day of night scenes can't start at the morning call: the first shot has to be after dark. When the shoot has a
+// place and the day has a date, the call is worked back from that evening's sunset; otherwise the night call
+// setting stands. A call typed in by hand always wins, and a day with any daylight in it is unaffected.
+function nightCall_(day, sc, settings, T, date){
+  if(day && day.call) return null;
+  if(!sc.length || !sc.every((s) => (s.dn || "D") === "N")) return null;
+  const where = (settings && settings.where) || null, iso = (day && day.date) || date || "";
+  if(where && isFinite(Number(where.lat)) && isFinite(Number(where.lng)) && iso){
+    const sun = sunTimes(iso, where.lat, where.lng);
+    const set = sun && hmIn(sun.set, where.tz);
+    const m = toMin(set);
+    if(m !== null) return toHM(m - T.prep);   // first shot as the sun goes down
+  }
+  return /^\d{2}:\d{2}$/.test((settings && settings.nightCall) || "") ? settings.nightCall : DEFAULTS.nightCall;
+}
+function dayTimes(day, byId, settings, date){
   const T = timeSettings(settings);
-  const call = toMin((day && day.call) || (settings && settings.call) || DEFAULTS.call);
   const sc = ((day && day.scenes) || []).map((id) => byId[id]).filter(Boolean);
+  const call = toMin(nightCall_(day, sc, settings, T, date) || (day && day.call) || (settings && settings.call) || DEFAULTS.call);
   const rows = []; let t = call, est = 0, meal = null, prevLoc = "", lateMeal = false;
   const lunchAt = toMin(day && day.lunch);   // a lunch time set by hand: the meal goes in at the scene break nearest it
   let handMove = false;   // a company move added by hand right before this scene replaces the automatic one
@@ -727,7 +747,7 @@ function dayTimes(day, byId, settings){
 // Every day's timetable, as sent with Sync (scene ids and HH:MM times only)
 function timetable(plan, byId){
   const pl = normalize(plan), dates = planDates(pl);
-  return pl.days.map((d, i) => Object.assign({ day: i + 1, date: dates[i] || "" }, dayTimes(d, byId, pl.settings)));
+  return pl.days.map((d, i) => Object.assign({ day: i + 1, date: dates[i] || "" }, dayTimes(d, byId, pl.settings, dates[i] || "")));
 }
 
 // Put new scenes on their suggested days (skips any already placed or with no room)
