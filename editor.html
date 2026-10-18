@@ -338,6 +338,20 @@
   body.kbOpen .top{ transform: translateY(-100%); }
   /* Keyboard up: the bar sits right on it. Buttons keep the same size so nothing resizes under your thumb. */
   body.kbOpen .touchBar{ padding: 6px 8px; border-top-color: rgba(255,255,255,.14); }
+  .touchBar .tbChip{ display:none; }
+  /* Phones, keyboard up: one slim row (current line type, bold, italic, undo, redo). Tap the type to pick another. */
+  @media (max-width: 760px){
+    body.kbOpen .touchBar{ padding: 4px 8px; gap: 6px; }
+    body.kbOpen .touchBar button{ height: 36px; min-width: 36px; }
+    body.kbOpen .touchBar .tbIcon{ width: 38px; }
+    body.kbOpen .touchBar .tbChip{ display:inline-flex; gap:6px; padding:0 12px; }
+    body.kbOpen .touchBar .tbChip::after{ content:"▾"; font-size:10px; opacity:.7; }
+    body.kbOpen .touchBar.tbExp .tbChip::after{ content:"▴"; }
+    body.kbOpen .touchBar .tbSep, body.kbOpen .touchBar [data-a="scenes"], body.kbOpen .touchBar [data-a="comment"], body.kbOpen .touchBar .tbFit{ display:none !important; }
+    body.kbOpen .touchBar [data-type]{ display:none; }
+    body.kbOpen .touchBar.tbExp [data-type]{ display:inline-flex; }
+    body.kbOpen .touchBar.tbExp [data-cmd], body.kbOpen .touchBar.tbExp [data-a="undo"], body.kbOpen .touchBar.tbExp [data-a="redo"]{ display:none; }
+  }
 
   /* ---------- Page slider ---------- */
   .pageRail{ position: fixed; z-index: 45; width: 22px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -377,7 +391,14 @@
     .viewTabs{ margin-left: 4px !important; }
     .viewTabs button{ padding: 4px 8px !important; }
     #countWords, #countScenes, #countPages{ display:none !important; }
-    .stats{ max-width: none !important; }
+    .stats{ max-width: none !important; flex: 0 0 auto; flex-wrap: nowrap !important; gap: 6px !important; }
+    .counterPill{ padding: 7px 10px; font-size: 12.5px; border-radius: 12px; }
+    /* Live: just the glowing dot (the number and word are on the tooltip), so it never squeezes the Saved pill */
+    .livePill{ padding: 0 2px !important; border: 0 !important; background: none !important; gap: 0; }
+    .menuBtn{ padding: 6px 6px !important; }
+    .viewTabs{ margin-left: 2px !important; }
+    #countSave{ flex: 0 0 auto; white-space: nowrap; }
+    body.phoneUI #countSave{ max-width: none; overflow: visible; }
     .dropdown{ max-width: calc(100vw - 16px); }
   }
   @media (max-width: 440px){
@@ -385,6 +406,16 @@
     .menuBtn{ padding: 6px 5px !important; font-size: 12.5px; }
     .viewTabs button{ padding: 4px 6px !important; font-size: 12px; }
     #countSave{ padding: 4px 8px !important; font-size: 11.5px; }
+    #countSave .n{ font-size: 11.5px; }
+  }
+  /* Very small phones: make room for the Saved pill (the Live dot hides; teammates still show as tents in the banner) */
+  @media (max-width: 380px){
+    .topInner{ padding: 8px 4px !important; gap: 2px !important; }
+    .menuBtn{ padding: 6px 3px !important; font-size: 11.5px; }
+    .viewTabs{ margin-left: 0 !important; padding: 2px; }
+    .viewTabs button{ padding: 4px 4px !important; font-size: 11px; }
+    .livePill{ display: none !important; }
+    .counterPill{ padding: 5px 6px; font-size: 11px; }
     #countSave .n{ font-size: 11.5px; }
   }
 
@@ -14860,9 +14891,10 @@ ${TP.join("\n")}
     if(avail < pageW){
       if(__PHONE_MQ.matches && __fitText){
         const L = parseFloat(cs.getPropertyValue("--m-left-mm")) || 38.1, R = parseFloat(cs.getPropertyValue("--m-right-mm")) || 25.4;
-        const colW = mmToPx(wMm - L - R + 10);              // text column + a little paper either side
+        const padL = 8, padR = 18;                          // a little paper at the left, and the right margin where scene numbers sit
+        const colW = mmToPx(wMm - L - R + padL + padR);
         s = Math.min(1, avail / colW);
-        shift = -mmToPx((L - R) / 2) * s;                   // centre the text column, not the page
+        shift = -mmToPx((L - R) / 2 + (padR - padL) / 2) * s;   // centre that visible strip on the screen
       }else s = Math.max(0.3, avail / pageW);
     }
     s = Math.round(s * 1000) / 1000;
@@ -14889,6 +14921,7 @@ ${TP.join("\n")}
     bar.innerHTML = `
       <button type="button" data-a="scenes" class="tbIcon" title="Scenes &amp; comments" aria-label="Scenes and comments"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
       <span class="tbSep"></span>
+      <button type="button" data-a="typechip" class="tbChip" aria-label="Line type">Action</button>
       ${T.map(([k, l]) => `<button type="button" data-type="${k}">${l}</button>`).join("")}
       <span class="tbSep"></span>
       <button type="button" data-cmd="bold" class="tbIcon"><b>B</b></button>
@@ -14913,8 +14946,10 @@ ${TP.join("\n")}
       if(b.dataset.type){
         const line = getActiveLine();
         if(line){ setLineType(line, b.dataset.type, { preserveSelection: true }); }
+        bar.classList.remove("tbExp");
         refreshBar(); return;
       }
+      if(b.dataset.a === "typechip"){ bar.classList.toggle("tbExp"); return; }
       if(b.dataset.cmd){ try{ exec(b.dataset.cmd); }catch(_e){ document.execCommand(b.dataset.cmd); } return; }
       if(b.dataset.a === "comment"){ window.__scriptyComments && window.__scriptyComments.add(); return; }
       if(b.dataset.a === "undo"){ window.__scriptyUndo ? window.__scriptyUndo() : document.getElementById("undoBtn")?.click(); return; }
@@ -14933,6 +14968,8 @@ ${TP.join("\n")}
       const line = getActiveLine && getActiveLine();
       const t = line && line.closest && line.closest("#scriptEditor") ? (line.dataset.type || "action") : "";
       bar.querySelectorAll("[data-type]").forEach(b => b.classList.toggle("on", b.dataset.type === t));
+      const chip = bar.querySelector(".tbChip"), cur = t && bar.querySelector('[data-type="' + t + '"]');
+      if(chip) chip.textContent = cur ? cur.textContent : "Action";
     }
     document.addEventListener("selectionchange", () => { if(!bar.hidden) refreshBar(); kbHints(); });
     // Phone keyboards: caps on and autocorrect off on character / scene / transition lines,
@@ -14966,7 +15003,7 @@ ${TP.join("\n")}
       const kbH = vv ? Math.max(0, window.innerHeight - visH) : 0;
       const open = __TOUCHBAR_MQ.matches && isEditing() && (kbH > 80 || visH < maxH * 0.78);
       const was = document.body.classList.contains("kbOpen");
-      if(open !== was) document.body.classList.toggle("kbOpen", open);
+      if(open !== was){ document.body.classList.toggle("kbOpen", open); if(!open) bar.classList.remove("tbExp"); }
       if(open && !was) keepCaret();   // only when the keyboard first appears, not on every scroll
     };
     // While the keyboard is up, only move the page if the line you're typing is hidden
