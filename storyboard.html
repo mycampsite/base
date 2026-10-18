@@ -383,7 +383,17 @@
     body.focusView.railOpen #rightRail{ transform:none; visibility:visible; }
     body.focusView #body{ padding-bottom:calc(60px + env(safe-area-inset-bottom)); }
     body.focusView #railHandle{ display:flex; }
-    #toolbar{ padding:8px 12px; gap:8px; }
+    #toolbar{ padding:8px 12px; gap:8px; flex-wrap:wrap; }
+    #toolbar .tbBack{ order:0; width:40px; height:38px; padding:0 !important; font-size:0; display:inline-flex !important; align-items:center; justify-content:center; line-height:1; }
+    #toolbar .tbBack::before{ content:"\2190"; font-size:18px; }
+    #toolbar #toolGroup{ order:1; flex:0 1 auto; min-width:0; }
+    #toolbar #toolGroup .tool-btn{ width:36px; }
+    #toolbar .tbActs{ order:2; margin-left:auto; gap:4px; }
+    #toolbar .tbActs .btn.ib{ width:36px; height:38px; }
+    #toolbar #zoomGroup{ display:none !important; }
+    #toolbar #colorGroup{ order:5; flex:1 1 0 !important; min-width:0; }
+    #toolbar > label{ order:6; flex:0 0 112px !important; }
+    #toolbar > label input{ width:84px !important; flex:1; }
     /* Drawing toolbar on phones: Back + tools + Undo/Redo/Clear on the first row, colours scroll on the second, size + zoom on the third */
     #toolbar{ height:auto; flex-wrap:wrap; padding:8px 12px; gap:8px; }
     #toolbar .vsep, #toolbar .grow{ display:none; }
@@ -398,7 +408,7 @@
     #canvasWrap{ padding:12px; min-height:0; }
     body.focusView .railBack{ display:none; }
     /* Bigger drawing area + touch-sized controls + visible press feedback */
-    body.focusView #canvasWrap{ height:max(340px, calc(100dvh - 190px)); flex:0 0 auto; padding:12px; align-items:flex-start; }
+    body.focusView #canvasWrap{ height:auto; min-height:0; flex:0 0 auto; padding:10px 12px; align-items:flex-start; overflow:visible; }
     .tool-btn{ width:40px; height:38px; }
     .swatch{ width:26px; height:26px; flex:0 0 auto; }
     .swatch.selected{ box-shadow:0 0 0 2px var(--bg), 0 0 0 4px #fff; }
@@ -2880,7 +2890,8 @@ window.SB3D={
     const stack = document.getElementById("panelStack");
     const wrap = document.getElementById("canvasWrap");
     const availW = Math.max(200, (wrap ? wrap.clientWidth : 920) - 40);
-    const availH = Math.max(140, (wrap ? wrap.clientHeight : 600) - 40);
+    const phoneSB = window.matchMedia("(max-width: 760px)").matches;
+    const availH = Math.max(140, (phoneSB ? Math.round(window.innerHeight * 0.62) : (wrap ? wrap.clientHeight : 600)) - 40);
     const wCss = Math.round(Math.min(880, availW, availH * S.ratio >= 200 ? availH * S.ratio : availW)), hCss = Math.round(wCss / S.ratio);
     stack.style.width = wCss + "px"; stack.style.height = hCss + "px";
     stack.style.transform = "scale(" + S.zoom + ")";
