@@ -2,17 +2,30 @@
    Read only. The values come from the main script's "sheetview" (one tab at a time, as the Sheet shows them).
    The layout logic (layout) is pure, so the tests run it in node; the drawing part only runs in the browser.
 
-   How a tab becomes cards:
-   - the header row is the busiest bold/shaded row near the top (NAME, ROLE, PHONE…); rows above it are the title
-   - a row with a single value is a section heading (CREW, PRODUCTION…); two headings in a row = a group and its sub-group
-   - every other row is a card: a short code (scene 12A, account 2300, shot 3B) becomes a badge beside the next value,
-     the rest are "label: value" pairs using the header; empty cells are left out, so a card only shows what's filled in */
+   Every doc (Budget, Schedule, Shot List, Crew & Contacts, shortlists…) uses the same card, driven by the column titles:
+   - header row: the busiest bold/shaded row near the top; rows above it are the title block
+   - a styled row with one value is a section heading (CREW, PRODUCTION…); two in a row = a group and its sub-group
+   - a styled row with just a code, a name and a figure (2300 ART DEPARTMENT $4,200) is a group heading with its subtotal
+   - each other row is a card:
+       badges  the codes (#, NO., SC., ACCT, SHOT, STRIP)
+       title   the name-like column (NAME, CHARACTER, ROLE, ITEM, SET…); an empty NAME shows the role and "No name yet"
+       figure  the number that matters, on the right (TOTAL, then PAGES)
+       chips   short tags (I/E, D/N, STATUS, TYPE, SIZE, ANGLE, LENS…)
+       rows    everything else as label / value
+       notes   long text (DESCRIPTION, NOTES, ONE-LINER, WHY…) as a paragraph
+     empty cells are left out, so a card only shows what's filled in */
 (function (root) {
 "use strict";
 
 const clean = (v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim();
 const HIDE_COL = /^(scripty key|_)/i;
 const isCode = (v) => v.length <= 6 && /^[A-Za-z]{0,2}\d{1,4}[A-Za-z]{0,2}$|^\d+(\.\d+)?$/.test(v);
+const norm = (h) => clean(h).toUpperCase().replace(/\.$/, "");
+const BADGE = ["#", "NO", "SC", "ACCT", "SHOT", "STRIP"];
+const TITLE = ["NAME", "CHARACTER", "ROLE", "ITEM", "CATEGORY", "SET / LOCATION", "SET", "SCRIPT LOCATION", "LOCATION", "ACTOR NAME", "DESCRIPTION OF ACTION", "ONE-LINER", "DESCRIPTION"];
+const FIGURE = ["TOTAL", "PAGES", "PGS"];
+const CHIP = ["%", "I/E", "D/N", "TYPE", "STATUS", "SHOT SIZE", "SIZE", "ANGLE", "MOVEMENT", "MOVE", "LENS", "UNIT", "DEPARTMENT", "SCRIPT DAY", "DAY"];
+const LONG = /^(DESCRIPTION|NOTES|ONE-LINER|WHY|BRIEF|SPECIAL REQ|SCENE NUMBERS|SC\. NUMBERS|CHARACTERS|EQUIPMENT|ADDRESS)/;
 
 function kindOf(v){
   if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "email";
@@ -27,11 +40,17 @@ function headerRowOf(rows, fmt){
     const cells = rows[r].map(clean).filter(Boolean);
     if(cells.length < 2 || cells.some((c) => c.length > 32)) continue;
     const f = (fmt && fmt[r]) || {};
-    const styled = !!(f.b || f.h);
-    const score = cells.length + (styled ? 0.5 : 0);
+    const score = cells.length + (f.b || f.h ? 0.5 : 0);
     if(score > bestN + (best < 0 ? 0 : 0.01)){ best = r; bestN = score; }
   }
   return best;
+}
+// Which job each column does, from its title
+function rolesOf(header, hidden){
+  const H = header.map(norm), pick = (list) => { for(const n of list){ const i = H.indexOf(n); if(i >= 0 && !hidden[i]) return i; } return -1; };
+  const badges = H.map((n, i) => (BADGE.indexOf(n) >= 0 && !hidden[i] ? i : -1)).filter((i) => i >= 0);
+  return { H, badges, title: pick(TITLE), name: H.indexOf("NAME"), figure: pick(FIGURE),
+    chip: (i) => CHIP.indexOf(H[i]) >= 0, long: (i) => LONG.test(H[i]) };
 }
 
 // rows: [[cell, …], …] as shown in the Sheet; fmt (optional): [{ b: bold?, h: shade colour or "" }, …] per row
@@ -40,35 +59,61 @@ function layout(rows, fmt){
   const h = headerRowOf(rows, fmt);
   const header = h >= 0 ? rows[h] : [];
   const hidden = header.map((x) => HIDE_COL.test(x));
+  const R = rolesOf(header, hidden);
   const title = [];
   for(let r = 0; r < (h >= 0 ? h : 0); r++){ const t = rows[r].filter(Boolean).join(" · "); if(t) title.push(t); }
-  const body = rows.slice(h >= 0 ? h + 1 : 0).map((r) => r.map((v, i) => (hidden[i] ? "" : v)));
-  const items = [];
-  const filled = (r) => r.map((v, i) => ({ i, v })).filter((c) => c.v);
+  const off = h >= 0 ? h + 1 : 0;
+  const body = rows.slice(off).map((r, k) => ({ cells: r.map((v, i) => (hidden[i] ? "" : v)), f: (fmt && fmt[k + off]) || null }));
+  const filled = (r) => r.cells.map((v, i) => ({ i, v })).filter((c) => c.v);
   const nonEmpty = body.filter((r) => filled(r).length);
   // A heading: one value in the first columns, shown bold or shaded (without formatting info: first column or in capitals).
   // A lone value that isn't styled (an unfilled crew slot: just its role) stays a card.
-  const fmtOf = (r) => (fmt && fmt[body.indexOf(r) + (h >= 0 ? h + 1 : 0)]) || null;
   const isSection = (r) => {
     const c = filled(r); if(c.length !== 1 || c[0].i > 1) return false;
-    const f = fmtOf(r);
-    return f ? !!(f.b || f.h) : (c[0].i === 0 || (/[A-Z]/.test(c[0].v) && c[0].v === c[0].v.toUpperCase()));
+    return r.f ? !!(r.f.b || r.f.h) : (c[0].i === 0 || (/[A-Z]/.test(c[0].v) && c[0].v === c[0].v.toUpperCase()));
   };
+  const items = [];
   nonEmpty.forEach((r, k) => {
-    const cells = filled(r);
+    const cells = filled(r), at = (i) => (i >= 0 ? r.cells[i] || "" : "");
     if(isSection(r)){
-      const next = nonEmpty[k + 1], nextIsSection = !!next && isSection(next);
-      items.push({ type: "section", text: cells[0].v, level: nextIsSection ? 1 : 2 });
+      const next = nonEmpty[k + 1];
+      items.push({ type: "section", text: cells[0].v, level: next && isSection(next) ? 1 : 2 });
       return;
     }
-    let badge = "", head = cells[0], rest = cells.slice(1);
-    if(isCode(head.v) && rest.length){ badge = head.v; head = rest[0]; rest = rest.slice(1); }
-    const total = /\btotal\b/i.test(head.v) || /\btotal\b/i.test(badge);
-    const missing = !r[0] && header[0] && !hidden[0] && cells[0].i > 0 ? header[0] : "";
-    items.push({
-      type: "card", badge, title: head.v, total, missing,
-      fields: rest.map((c) => ({ label: header[c.i] || "", value: c.v, kind: kindOf(c.v), long: c.v.length > 48 }))
+    const used = {};
+    const take = (i) => { used[i] = 1; return r.cells[i]; };
+    // badges: the code columns; with no code columns, a short code in the first cell
+    let badges = R.badges.filter((i) => at(i)).map((i) => ({ label: header[i], value: take(i) }));
+    let ti = R.title >= 0 && at(R.title) ? R.title : -1, missing = "";
+    if(R.name >= 0 && !at(R.name) && R.title === R.name){                  // an unfilled crew slot: show its role instead
+      const role = R.H.indexOf("ROLE"); if(role >= 0 && at(role)){ ti = role; missing = header[R.name]; }
+    }
+    if(ti < 0){
+      const first = cells.find((c) => !used[c.i]);
+      if(first && !badges.length && isCode(first.v) && cells.filter((c) => !used[c.i]).length > 1){ badges = [{ label: header[first.i] || "", value: take(first.i) }]; }
+      const nxt = cells.find((c) => !used[c.i]); ti = nxt ? nxt.i : -1;
+    }
+    const t = ti >= 0 ? take(ti) : (badges[0] ? badges[0].value : "");
+    // a short line under the title: the role under a name, the actor under a character
+    const subI = ["ROLE", "ACTOR NAME", "ACTOR"].map((n) => R.H.indexOf(n)).find((i) => i >= 0 && !used[i] && at(i) && at(i).length <= 40);
+    const subtitle = subI != null && subI >= 0 ? take(subI) : "";
+    if(ti < 0 && badges.length === 1) badges = [];
+    const figure = R.figure >= 0 && at(R.figure) && !used[R.figure] ? { label: header[R.figure], value: take(R.figure) } : null;
+    const chips = [], rowsOut = [], notes = [];
+    // Budget lines: "5 days × $450" on one line instead of three
+    { const q = R.H.indexOf("QTY"), u = R.H.indexOf("UNIT"), rt = R.H.indexOf("RATE");
+      if(q >= 0 && rt >= 0 && at(q) && at(rt) && !used[q] && !used[rt]){ rowsOut.push({ label: "Qty × rate", value: take(q) + (u >= 0 && at(u) && !used[u] ? " " + take(u) : "") + " × " + take(rt), kind: "text" }); } }
+    cells.forEach((c) => {
+      if(used[c.i]) return;
+      const label = header[c.i] || "", v = c.v, kind = kindOf(v);
+      if(R.chip(c.i) && v.length <= 16) chips.push({ label, value: v });
+      else if(R.long(c.i) || v.length > 40) notes.push({ label, value: v, kind });
+      else rowsOut.push({ label, value: v, kind });
     });
+    const total = /\btotal\b/i.test(t) || badges.some((b) => /\btotal\b/i.test(b.value));
+    // a bold row with only a code/name and a figure is a group heading with its subtotal (Budget accounts)
+    const group = !!(r.f && r.f.b) && !chips.length && !rowsOut.length && !notes.length && !!figure && !missing;
+    items.push({ type: group ? "group" : "card", badges, title: t, subtitle, missing, figure, chips, rows: rowsOut, notes, total });
   });
   return { title, header: header.filter((x, i) => x && !hidden[i]), items };
 }
@@ -76,7 +121,8 @@ function matches(item, q){
   if(!q) return true;
   q = q.toLowerCase();
   if(item.type === "section") return false;
-  return [item.badge, item.title].concat(item.fields.map((f) => f.value)).some((v) => String(v || "").toLowerCase().indexOf(q) >= 0);
+  const vals = [item.title, item.subtitle].concat(item.badges.map((b) => b.value), item.figure ? [item.figure.value] : [], item.chips.map((x) => x.value), item.rows.map((x) => x.value), item.notes.map((x) => x.value));
+  return vals.some((v) => String(v || "").toLowerCase().indexOf(q) >= 0);
 }
 const telHref = (v) => "tel:" + v.replace(/[^\d+]/g, "");
 
@@ -104,20 +150,32 @@ const css = `
 .dcTitle{ margin:6px 2px 10px; }
 .dcTitle b{ display:block; font-size:17px; }
 .dcTitle span{ display:block; color:var(--uiMuted, #999); font-size:12.5px; margin-top:3px; line-height:1.4; }
-.dcSec{ margin:18px 2px 8px; font:800 12px Inter, system-ui, sans-serif; letter-spacing:.08em; text-transform:uppercase; color:var(--uiText, #eee); }
-.dcSec.l2{ margin-top:12px; font-weight:700; color:var(--uiMuted, #999); }
-.dcCard{ border:1px solid var(--uiBorder, #333); border-radius:12px; background:#1f1f1f; padding:11px 13px; margin-bottom:8px; }
-.dcCard.total{ background:#262a33; border-color:#3b4a63; }
-.dcHead{ display:flex; align-items:baseline; gap:8px; }
-.dcBadge{ flex:0 0 auto; font:700 12px Inter, system-ui, sans-serif; padding:2px 7px; border-radius:6px; background:rgba(255,255,255,.1); color:var(--uiText, #eee); font-variant-numeric:tabular-nums; }
-.dcName{ font-weight:700; font-size:15px; line-height:1.3; overflow-wrap:anywhere; }
-.dcMiss{ margin-top:2px; font-size:12px; color:var(--uiMuted, #999); font-style:italic; }
-.dcF{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px 12px; margin-top:9px; }
-.dcF div{ min-width:0; }
-.dcF div.w{ grid-column:1 / -1; }
-.dcF small{ display:block; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--uiMuted, #999); margin-bottom:1px; }
-.dcF span, .dcF a{ display:block; font-size:14px; line-height:1.4; overflow-wrap:anywhere; color:var(--uiText, #eee); }
-.dcF a{ color:#8fb4ff; text-decoration:none; }
+/* One card design for every doc: sections, group headings with subtotals, and cards (badges · title · figure, chips, rows, notes) */
+.dcSec{ margin:22px 2px 8px; padding-bottom:6px; border-bottom:1px solid var(--uiBorder, #333); font:800 11.5px Inter, system-ui, sans-serif; letter-spacing:.09em; text-transform:uppercase; color:var(--uiText, #eee); }
+.dcSec.l2{ margin-top:14px; border-bottom:0; padding-bottom:0; font-weight:700; color:var(--uiMuted, #999); }
+.dcGroup{ display:flex; align-items:center; gap:8px; margin:18px 2px 8px; font:700 13px Inter, system-ui, sans-serif; color:var(--uiText, #eee); }
+.dcGroup .dcName{ font-size:13.5px; text-transform:uppercase; letter-spacing:.03em; }
+.dcCard{ border:1px solid var(--uiBorder, #2e2e2e); border-radius:12px; background:#1e1f22; padding:12px 14px; margin-bottom:8px; }
+.dcCard.total{ background:#232a36; border-color:#3b4a63; }
+.dcHead{ display:flex; align-items:flex-start; gap:8px; }
+.dcBadges{ display:flex; gap:4px; flex:0 0 auto; padding-top:1px; }
+.dcBadge{ font:700 11.5px/18px Inter, system-ui, sans-serif; padding:0 6px; border-radius:5px; background:rgba(255,255,255,.1); color:var(--uiText, #eee); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.dcName{ flex:1 1 auto; min-width:0; font-weight:650; font-size:15px; line-height:20px; overflow-wrap:anywhere; color:var(--uiText, #eee); }
+.dcFig{ flex:0 0 auto; font:700 15px/20px Inter, system-ui, sans-serif; font-variant-numeric:tabular-nums; color:var(--uiText, #eee); white-space:nowrap; }
+.dcFig small{ display:block; text-align:right; font:600 9.5px/12px Inter, system-ui, sans-serif; letter-spacing:.06em; text-transform:uppercase; color:var(--uiMuted, #999); }
+.dcSub{ margin-top:2px; font-size:13.5px; color:#c9c9ce; }
+.dcMiss{ margin-top:3px; font-size:12.5px; color:var(--uiMuted, #999); font-style:italic; }
+.dcChips{ display:flex; flex-wrap:wrap; gap:5px; margin-top:9px; }
+.dcChip{ font:600 11.5px/22px Inter, system-ui, sans-serif; padding:0 8px; border-radius:6px; background:rgba(255,255,255,.07); color:#d6d6da; white-space:nowrap; }
+.dcRows{ margin-top:9px; border-top:1px solid rgba(255,255,255,.07); }
+.dcRow{ display:flex; justify-content:space-between; align-items:baseline; gap:14px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.07); }
+.dcRow:last-child{ border-bottom:0; padding-bottom:0; }
+.dcRow small, .dcNote small{ flex:0 0 auto; max-width:45%; font:600 10.5px/16px Inter, system-ui, sans-serif; letter-spacing:.05em; text-transform:uppercase; color:var(--uiMuted, #999); }
+.dcRow span, .dcRow a{ min-width:0; text-align:right; font-size:14px; line-height:1.35; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; color:var(--uiText, #eee); }
+.dcNote{ margin-top:9px; }
+.dcNote small{ display:block; max-width:none; margin-bottom:2px; }
+.dcNote p{ margin:0; font-size:14px; line-height:1.45; color:#d6d6da; overflow-wrap:anywhere; white-space:pre-wrap; }
+.dcCard a{ color:#8fb4ff; text-decoration:none; }
 .dcMsg{ padding:40px 16px; text-align:center; color:var(--uiMuted, #999); display:flex; flex-direction:column; align-items:center; gap:12px; font-size:13.5px; }
 .dcMsg b{ color:var(--uiText, #eee); font-size:15px; }
 .dcMsg .row{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
@@ -128,19 +186,24 @@ function style(){ if(styled) return; styled = true; const s = document.createEle
 
 const ICON_REFRESH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`;
 
-function fieldHtml(f){
-  const lab = f.label ? `<small>${esc(f.label)}</small>` : "";
-  const val = f.kind === "email" ? `<a href="mailto:${esc(f.value)}">${esc(f.value)}</a>`
+function valHtml(f){
+  return f.kind === "email" ? `<a href="mailto:${esc(f.value)}">${esc(f.value)}</a>`
     : f.kind === "phone" ? `<a href="${esc(telHref(f.value))}">${esc(f.value)}</a>`
-    : f.kind === "url" ? `<a href="${esc(f.value)}" target="_blank" rel="noopener">${esc(f.value.replace(/^https?:\/\//i, "").slice(0, 60))}</a>`
+    : f.kind === "url" ? `<a href="${esc(f.value)}" target="_blank" rel="noopener">${esc(f.value.replace(/^https?:\/\//i, "").slice(0, 48))}</a>`
     : `<span>${esc(f.value)}</span>`;
-  return `<div class="${f.long ? "w" : ""}">${lab}${val}</div>`;
 }
+const badgesHtml = (it) => it.badges.length ? `<span class="dcBadges">${it.badges.map((b) => `<span class="dcBadge" title="${esc(b.label)}">${esc(b.value)}</span>`).join("")}</span>` : "";
+const figHtml = (it) => it.figure ? `<span class="dcFig">${esc(it.figure.value)}<small>${esc(it.figure.label)}</small></span>` : "";
 function cardHtml(it){
-  if(it.type === "section") return `<div class="dcSec${it.level === 2 ? " l2" : ""}">${esc(it.title || it.text)}</div>`;
-  return `<div class="dcCard${it.total ? " total" : ""}"><div class="dcHead">${it.badge ? `<span class="dcBadge">${esc(it.badge)}</span>` : ""}<span class="dcName">${esc(it.title)}</span></div>`
+  if(it.type === "section") return `<div class="dcSec${it.level === 2 ? " l2" : ""}">${esc(it.text)}</div>`;
+  if(it.type === "group") return `<div class="dcGroup">${badgesHtml(it)}<span class="dcName">${esc(it.title)}</span>${figHtml(it)}</div>`;
+  return `<div class="dcCard${it.total ? " total" : ""}"><div class="dcHead">${badgesHtml(it)}<span class="dcName">${esc(it.title)}</span>${figHtml(it)}</div>`
+    + (it.subtitle ? `<div class="dcSub">${esc(it.subtitle)}</div>` : "")
     + (it.missing ? `<div class="dcMiss">No ${esc(it.missing.toLowerCase())} yet</div>` : "")
-    + (it.fields.length ? `<div class="dcF">${it.fields.map(fieldHtml).join("")}</div>` : "") + `</div>`;
+    + (it.chips.length ? `<div class="dcChips">${it.chips.map((c) => `<span class="dcChip" title="${esc(c.label)}">${esc(c.value)}</span>`).join("")}</div>` : "")
+    + (it.rows.length ? `<div class="dcRows">${it.rows.map((f) => `<div class="dcRow"><small>${esc(f.label)}</small>${valHtml(f)}</div>`).join("")}</div>` : "")
+    + it.notes.map((f) => `<div class="dcNote">${f.label ? `<small>${esc(f.label)}</small>` : ""}${f.kind === "text" ? `<p>${esc(f.value)}</p>` : valHtml(f)}</div>`).join("")
+    + `</div>`;
 }
 
 function show(host, o){
@@ -169,11 +232,12 @@ async function load(host, tab, force){
     }
     const d = { name: res.name || o.sheet.name, tabs: res.tabs || [], tab: res.tab || "", rows: res.rows || [], fmt: res.fmt || [] };
     S.cache[k] = { state: "ok", d, at: Date.now() };
-    if(!tab && d.tab){ S.cache[o.sheet.id + "|" + d.tab] = S.cache[k]; if(S.cur === o) S.cur.tab = d.tab; }
+    if(!tab && d.tab){ S.cache[o.sheet.id + "|" + d.tab] = S.cache[k]; if(S.cur && S.cur.sheet.id === o.sheet.id && !S.cur.tab) S.cur.tab = d.tab; }
   }catch(err){
     S.cache[k] = { state: "error", err: (err && err.message) || String(err), reason: err && err.reason, d: old && old.d, at: Date.now() };
   }
-  if(S.cur === o && host.isConnected) draw(host);
+  // the hub redraws while this loads (new S.cur object), so match by Sheet, not by object
+  if(S.cur && S.cur.sheet.id === o.sheet.id && host.isConnected) draw(host);
 }
 function draw(host){
   const o = S.cur; if(!o) return;

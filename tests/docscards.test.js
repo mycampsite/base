@@ -40,26 +40,44 @@ test("single-value rows are headings: a group then its sub-group", () => {
 test("an unfilled crew slot shows the role and says the name is missing", () => {
   const c = D.layout(DIR, DIR_FMT).items.find((i) => i.title === "Producer");
   assert.strictEqual(c.missing, "NAME");
-  assert.strictEqual(c.fields.length, 0);
+  assert.strictEqual(c.rows.length + c.notes.length + c.chips.length, 0);
 });
 test("a filled row: name as the title, phone and email tappable", () => {
   const c = D.layout(DIR, DIR_FMT).items.find((i) => i.title === "Sam Lee");
   assert.strictEqual(c.missing, "");
-  assert.deepStrictEqual(c.fields.map((f) => [f.label, f.kind]), [["ROLE", "text"], ["PHONE", "phone"], ["EMAIL", "email"]]);
+  assert.strictEqual(c.subtitle, "Writer");
+  assert.deepStrictEqual(c.rows.map((f) => [f.label, f.kind]), [["PHONE", "phone"], ["EMAIL", "email"]]);
   assert.strictEqual(D.telHref("0412 345 678"), "tel:0412345678");
 });
-test("short codes (account, scene, shot) become a badge beside the next value", () => {
-  const L = D.layout([["ACCT", "DESCRIPTION", "TOTAL"], ["2300", "Art Department", "$4,200"], ["", "TOTAL BELOW THE LINE", "$12,000"], ["12A", "INT. KITCHEN - NIGHT", "2 2/8"]]);
-  const [a, t, s] = L.items;
-  assert.deepStrictEqual([a.badge, a.title, a.fields[0].value], ["2300", "Art Department", "$4,200"]);
-  assert.ok(t.total && !t.badge);
-  assert.deepStrictEqual([s.badge, s.title], ["12A", "INT. KITCHEN - NIGHT"]);
+test("budget: account badge, item title, total on the right, a bold account line is a group heading", () => {
+  const L = D.layout([["ACCT", "ITEM", "QTY", "UNIT", "RATE", "TOTAL", "", "NOTES"], ["2300", "ART DEPARTMENT", "", "", "", "$4,200", "", ""], ["2310", "Production designer", "5", "days", "$450", "$2,250", "", "Prep and shoot"]],
+    [{ b: 1 }, { b: 1 }, {}]);
+  const [g, c] = L.items;
+  assert.strictEqual(g.type, "group");
+  assert.deepStrictEqual([g.badges[0].value, g.title, g.figure.value], ["2300", "ART DEPARTMENT", "$4,200"]);
+  assert.deepStrictEqual([c.badges[0].value, c.title, c.figure.value], ["2310", "Production designer", "$2,250"]);
+  assert.deepStrictEqual(c.chips, []);
+  assert.deepStrictEqual(c.rows.map((x) => x.value), ["5 days × $450"]);
+  assert.deepStrictEqual(c.notes.map((x) => x.value), ["Prep and shoot"]);
 });
-test("long text spans the card; links are only plain web links", () => {
+test("shot list: codes as badges, size/angle/lens as chips, the action as a paragraph", () => {
+  const L = D.layout([["NO.", "SC.", "SHOT", "I/E", "D/N", "SHOT SIZE", "ANGLE", "LENS", "LOCATION", "DESCRIPTION OF ACTION", "STATUS"], ["1", "12A", "12A-1", "INT", "NIGHT", "MS", "Eye level", "35mm", "KITCHEN", "Jimmy watches the gift wobble on the table.", "To shoot"]]);
+  const c = L.items[0];
+  assert.deepStrictEqual(c.badges.map((b) => b.value), ["1", "12A", "12A-1"]);
+  assert.strictEqual(c.title, "KITCHEN");
+  assert.deepStrictEqual(c.chips.map((x) => x.value), ["INT", "NIGHT", "MS", "Eye level", "35mm", "To shoot"]);
+  assert.deepStrictEqual(c.notes.map((x) => x.label), ["DESCRIPTION OF ACTION"]);
+});
+test("short codes still become a badge when there are no code columns", () => {
+  const L = D.layout([["WHAT", "WHERE", "WHEN"], ["12A", "INT. KITCHEN - NIGHT", "Day 2"], ["", "TOTAL BELOW THE LINE", "$12,000"]]);
+  assert.deepStrictEqual([L.items[0].badges[0].value, L.items[0].title], ["12A", "INT. KITCHEN - NIGHT"]);
+  assert.ok(L.items[1].total);
+});
+test("long text becomes a note; links are only plain web links", () => {
   const L = D.layout([["NAME", "NOTES", "LINK"], ["Ana", "x".repeat(80), "https://example.com/a"]]);
-  const f = L.items[0].fields;
-  assert.ok(f[0].long);
-  assert.strictEqual(f[1].kind, "url");
+  const c = L.items[0];
+  assert.strictEqual(c.notes[0].label, "NOTES");
+  assert.strictEqual(c.rows[0].kind, "url");
   assert.strictEqual(D.kindOf("javascript:alert(1)"), "text");
   assert.strictEqual(D.kindOf("2 2/8"), "text");
   assert.strictEqual(D.kindOf("12"), "text");
