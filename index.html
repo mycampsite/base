@@ -187,10 +187,11 @@
   #frames iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
   #frames iframe.dark{ filter:invert(.92) hue-rotate(180deg); }
   .frameLoad{ position:absolute; inset:0; z-index:1; display:flex; align-items:center; justify-content:center; gap:10px; background:var(--uiPanel); color:var(--uiMuted); font-size:13px; }
-  .empty{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:24px; text-align:center; color:var(--uiMuted); }
-  .empty b{ color:var(--uiText); font-size:15px; }
-  .empty p{ margin:0; max-width:420px; }
-  .empty .why{ font-size:12px; opacity:.75; }
+  /* the "nothing here" screens only (a bare .empty also matched the Stripboard's Add location button and the Board's photo box) */
+  :is(#empty, #noProject){ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:24px; text-align:center; color:var(--uiMuted); }
+  :is(#empty, #noProject) b{ color:var(--uiText); font-size:15px; }
+  :is(#empty, #noProject) p{ margin:0; max-width:420px; }
+  :is(#empty, #noProject) .why{ font-size:12px; opacity:.75; }
 
   /* Members drawer */
   #drawer{ position:fixed; top:calc(var(--topBarH) + 12px); right:12px; bottom:12px; width:min(380px, calc(100vw - 24px)); z-index:30; background:var(--uiPanel); border:1px solid var(--uiBorder); border-radius:14px; box-shadow:0 18px 55px rgba(0,0,0,.55); display:flex; flex-direction:column; overflow:hidden; }
@@ -361,8 +362,8 @@
     .pHead .btn, .actions .btn{ padding:0 11px; }
     /* Phones: a swipeable tab row (icon over label). Each tab keeps a readable size instead of being squeezed
        to fit; the next tab peeks in at the edge so it is obvious the row scrolls. */
-    .mtabs{ padding:0 4px; overflow-x:auto; scroll-snap-type:x proximity; scroll-padding:0 24px; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; }
-    .mtab{ flex:0 0 auto; min-width:68px; flex-direction:column; gap:4px; padding:9px 10px 8px; font-size:11.5px; scroll-snap-align:center; }
+    .mtabs{ padding:0 4px; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    .mtab{ flex:0 0 auto; min-width:68px; flex-direction:column; gap:4px; padding:9px 10px 8px; margin-bottom:0; font-size:11.5px; }
     .mtab svg{ width:19px; height:19px; }
     .mtab .n{ display:none; }
     #listPane{ padding:10px; }
@@ -379,6 +380,10 @@
     #prodPane[data-tab=schedule] .bar{ flex-wrap:nowrap; }
     #prodPane[data-tab=schedule] .bar .tabs{ flex:1 1 0; min-width:0; }
     #prodPane[data-tab=schedule] .bar .actions{ flex:0 0 auto; overflow:visible; }
+    #prodPane[data-tab=schedule] .bar .tabs{ display:flex; }
+    #prodPane[data-tab=schedule] .bar .tab{ flex:1 1 0; text-align:center; }
+    .bar .tab{ padding:7px 14px; }
+    .bar .btn{ height:38px; }
     .bar .actions::-webkit-scrollbar{ display:none; }
     .bar .actions .btn{ flex:0 0 auto; white-space:nowrap; }
     .tab{ padding:9px 14px; font-size:13px; }
@@ -529,8 +534,8 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="production.js?v=6" defer></script>
 <script src="shottime.js?v=3" defer></script>
 <script src="elements.js?v=7" defer></script>
-<script src="prodpanel.js?v=11" defer></script>
-<script src="bdpanel.js?v=19" defer></script>
+<script src="prodpanel.js?v=12" defer></script>
+<script src="bdpanel.js?v=20" defer></script>
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=2" defer></script>
 <script src="layouts.js?v=3" defer></script>
@@ -1280,7 +1285,9 @@ function renderBody() {
   const ns = scriptIds(p).length, sh = sheetsByProject[current.pid];
   void ns; void sh;   // the main tabs no longer show counts
   document.querySelectorAll(".mtab").forEach(t => { const on = t.dataset.tab === current.tab; t.classList.toggle("on", on); t.setAttribute("aria-selected", on ? "true" : "false"); });
-  { const at = document.querySelector(".mtab.on"); if (at && at.scrollIntoView && window.matchMedia("(max-width:760px)").matches) { try { at.scrollIntoView({ inline: "center", block: "nearest" }); } catch (_e) {} } }
+  // Phones: bring the open section's tab into view only when the section changes (not on every redraw, which yanked the row back mid-swipe)
+  if (lastShownTab !== current.tab) { lastShownTab = current.tab; const at = document.querySelector(".mtab.on"), row = at && at.parentElement;
+    if (at && row && window.matchMedia("(max-width:760px)").matches) { const l = at.offsetLeft - row.offsetLeft, r = l + at.offsetWidth; if (l < row.scrollLeft || r > row.scrollLeft + row.clientWidth) row.scrollLeft = Math.max(0, l - (row.clientWidth - at.offsetWidth) / 2); } }
 
   const prod = isProdTab(current.tab), board = current.tab === "board", lay = current.tab === "layouts";
   $("listPane").classList.toggle("hidden", prod || board || lay);
@@ -1510,6 +1517,7 @@ function showFrame() {
 }
 // Google Sheets grabs focus when it loads, which makes the browser scroll the page to it.
 // Remember where every scrolled box was and put it back for a moment afterwards.
+let lastShownTab = null;
 const HINT_KEY = "Camp_HUB_BUDGETHINT_V1";
 const CARDS_KEY = "Camp_DOCS_VIEW_V1";            // "grid" = this phone shows the Sheet itself instead of cards
 const PHONE_MQ = window.matchMedia("(max-width:760px)");

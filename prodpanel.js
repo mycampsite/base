@@ -889,7 +889,12 @@ button.sbBan[data-bk]:hover .sbBGrip{ opacity:.9; }
 @media (max-width:760px){
   .sbHead, .sbRow{ grid-template-columns:14px 22px 30px minmax(0,1fr) 40px 40px; column-gap:7px; }
   .sbHead .sbCast, .sbHead .sbTm, .sbRow .sbTm, .sbRow .sbCast{ display:none; }
-  .sbRow{ height:50px; }
+  /* Phones: a strip grows to show the whole place and description instead of cutting them off */
+  .sbRow{ height:auto; min-height:50px; padding-top:8px; padding-bottom:8px; align-items:start; }
+  .sbRow > .sbNo, .sbRow > .sbIE, .sbRow > .sbDN, .sbRow > .sbPg, .sbRow > .sbGrip{ padding-top:2px; }
+  .sbMain{ overflow:visible; }
+  .sbL1{ flex-wrap:wrap; }
+  .sbPlace, .sbSyn{ white-space:normal; overflow:visible; overflow-wrap:anywhere; }
   .sbXForm{ grid-template-columns:1fr 1fr; } .sbXForm label.wide{ grid-column:1 / -1; }
   .sbDay{ grid-template-columns:1fr; } .sbDayR{ justify-content:flex-start; }
   .sbGrip{ font-size:15px; opacity:.8; }

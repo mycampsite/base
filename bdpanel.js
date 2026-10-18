@@ -345,9 +345,11 @@ const css = `
   /* Scene strip: wider, easier to read cards you swipe through; the heading can wrap to two lines */
   #bdctl .bdList{ flex-direction:row; gap:8px; max-height:none; overflow-x:auto; position:static; padding-bottom:8px; scroll-snap-type:x proximity; scrollbar-width:none; }
   #bdctl .bdList::-webkit-scrollbar{ display:none; }
-  #bdctl .bdSc{ flex:0 0 min(220px, 68vw); scroll-snap-align:start; padding:9px 10px 9px 8px; font-size:13px; border-radius:6px; }
-  #bdctl .bdSc .l{ white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-  #bdctl .bdSc .m{ font-size:12px; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  #bdctl .bdList{ align-items:stretch; }
+  #bdctl .bdSc{ flex:0 0 min(250px, 74vw); scroll-snap-align:start; padding:10px 10px 10px 8px; font-size:13px; border-radius:6px; align-items:start; }
+  #bdctl .bdSc .no{ padding-top:2px; }
+  #bdctl .bdSc .l{ white-space:normal; overflow:visible; overflow-wrap:anywhere; line-height:1.3; }
+  #bdctl .bdSc .m{ font-size:12px; white-space:normal; overflow:visible; }
   #bdctl .bdSc .dots i{ width:8px; height:8px; }
   /* Scene sheet lists: one card-like row per element, the note drops underneath at full width */
   #bdctl table.ct, #bdctl table.ct tbody{ display:block; }
