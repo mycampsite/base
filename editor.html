@@ -399,13 +399,27 @@
     #countSave::before{ content: ""; width: 8px; height: 8px; border-radius: 50%; background: #8fd3a6; flex: none; }
     body.isLive #countSave::before{ background: #5ed38a; box-shadow: 0 0 0 3px rgba(94,211,138,.2); margin-right: 0; }
     body #countSave.isOk{ padding: 0 !important; width: 30px; min-width: 30px; height: 30px; justify-content: center; }
-    body #countSave.isOk .n{ display: none !important; }
+    body #countSave .n{ display: none !important; }
+    body #countSave{ padding: 0 !important; width: 30px; min-width: 30px; height: 30px; justify-content: center; cursor: pointer; }
+    body #countSave.isBusy::before{ background: #f2c94c; box-shadow: none; animation: saveBlink 1s ease-in-out infinite; }
+    body #countSave.isOff::before{ background: #f2c94c; }
+    body #countSave.isErr::before{ background: #ff6b61; box-shadow: 0 0 0 3px rgba(255,107,97,.2); }
+    @keyframes saveBlink{ 50%{ opacity: .35; } }
+    body #countSave{ position: relative; }
+    body #countSave.peek .n{ display: block !important; position: absolute; top: 38px; right: 0; z-index: 60; margin: 0; padding: 7px 11px; border-radius: 9px; background: #1d1e22; border: 1px solid rgba(255,255,255,.16); box-shadow: 0 8px 22px rgba(0,0,0,.45); color: #f2f2f2; font: 600 12.5px/1.2 Inter, system-ui, sans-serif; white-space: nowrap; }
     #countSave:not(.isOk) .n{ margin-left: 6px; }
     .menuBtn{ padding: 6px 6px !important; }
     .viewTabs{ margin-left: 2px !important; }
     #countSave{ flex: 0 0 auto; white-space: nowrap; }
     body.phoneUI #countSave{ max-width: none; overflow: visible; }
     .dropdown{ max-width: calc(100vw - 16px); }
+    .dropdown.open{ position: fixed !important; left: 8px !important; right: 8px !important; top: calc(var(--topBarH, 106px) + 2px) !important; width: auto !important; min-width: 0 !important; max-height: calc(100dvh - var(--topBarH, 106px) - 16px); overflow-y: auto; overscroll-behavior: contain; }
+    .submenuWrap::after{ display: none; }
+    .submenu{ position: static !important; display: none; min-width: 0; margin: 2px 0 6px 14px; padding: 0 0 0 8px; border: 0; border-left: 2px solid rgba(255,255,255,.12); border-radius: 0; box-shadow: none; background: transparent; }
+    .submenuWrap:hover .submenu{ display: none; }
+    .submenuWrap.subOpen .submenu{ display: block; }
+    .submenuWrap.subOpen .submenuArrow{ transform: rotate(90deg); }
+    .submenuArrow{ transition: transform .15s; }
   }
   @media (max-width: 440px){
     .topInner{ padding: 8px 6px !important; gap: 4px !important; }
@@ -2802,13 +2816,16 @@ const lsRemove = (key)=>{ try{ __LS && __LS.removeItem(String(key)); }catch(_e){
     });
 
     // Hover-to-open (also closes other submenus)
+    const HOVER = window.matchMedia("(hover: hover) and (pointer: fine)");
     wrap.addEventListener("mouseenter", () => {
+      if(!HOVER.matches) return;
       const dd = wrap.closest(".dropdown");
       if(dd && dd.classList.contains("open")) openThis();
     });
 
     // Leaving the wrap closes it (prevents "stuck" submenus)
     wrap.addEventListener("mouseleave", () => {
+      if(!HOVER.matches) return;
       setSubmenuOpen(wrap, false);
     });
   });
@@ -11101,7 +11118,7 @@ function updateSaveState(){
   else if(hasCloud && !__cloud.fileId){ txt = "Not in Drive yet"; }
   else { txt = hasCloud ? "Saved" : "Saved locally"; }
   el.textContent = txt;
-  if(pill){ pill.classList.toggle("isOk", txt === "Saved" || txt === "Saved locally"); pill.setAttribute("aria-label", txt); pill.classList.toggle("isErr", cls === "err"); pill.classList.toggle("isOff", cls === "off"); pill.title = cls === "off" ? "No internet. Your changes are kept in this browser and will be sent to Drive when you're back online." : (__saveError || __cloudBlocked && "This script didn't load, so saving is switched off to protect it. Go back to the Library and open it again." || ""); }
+  if(pill){ pill.classList.toggle("isOk", txt === "Saved" || txt === "Saved locally"); pill.classList.toggle("isBusy", txt === "Saving…" || txt === "Unsaved"); pill.setAttribute("aria-label", txt); pill.classList.toggle("isErr", cls === "err"); pill.classList.toggle("isOff", cls === "off"); pill.title = cls === "off" ? "No internet. Your changes are kept in this browser and will be sent to Drive when you're back online." : (__saveError || __cloudBlocked && "This script didn't load, so saving is switched off to protect it. Go back to the Library and open it again." || ""); }
 }
 window.__scriptyUpdateSaveState = updateSaveState;
 
@@ -18403,7 +18420,7 @@ function clearHighlights(){
   }
 
   /* Blank-line caret: drawn by us so it can never go missing on an empty line */
-  #blankCaret{ position:fixed; z-index:40; width:2px; border-radius:1px; pointer-events:none; animation: blankBlink 1.06s steps(1) infinite; }
+  #blankCaret{ position:absolute; z-index:40; width:2px; border-radius:1px; pointer-events:none; animation: blankBlink 1.06s steps(1) infinite; }
   #blankCaret[hidden]{ display:none; }
   body.ownCaret #scriptEditor, body.ownCaret #scriptEditor *{ caret-color: transparent !important; }
   @keyframes blankBlink{ 0%,58%{ opacity:1; } 59%,100%{ opacity:.14; } }
@@ -18502,7 +18519,7 @@ function clearHighlights(){
     else if(cs.textAlign === "right" || cs.textAlign === "end") x = r.right - (parseFloat(cs.paddingRight) || 0) * scale;
     const h = Math.min(r.height, (parseFloat(cs.lineHeight) || r.height) * scale);
     const key = Math.round(x) + "," + Math.round(r.top);
-    bar.style.left = x + "px"; bar.style.top = r.top + "px"; bar.style.height = h + "px"; bar.style.background = cs.color;
+    bar.style.left = (x + window.scrollX) + "px"; bar.style.top = (r.top + window.scrollY) + "px"; bar.style.height = h + "px"; bar.style.background = cs.color;
     bar.hidden = false; document.body.classList.add("ownCaret");   // one caret only: ours on blank lines, the browser's otherwise
     if(key !== lastKey){ lastKey = key; bar.style.animation = "none"; void bar.offsetWidth; bar.style.animation = ""; }   // solid right after you move, then blinks
   }
@@ -18608,6 +18625,12 @@ function clearHighlights(){
   document.addEventListener("mousedown", (e) => { if(!m.hidden && !m.contains(e.target)) hide(); }, true);
   document.addEventListener("keydown", (e) => { if(e.key === "Escape") hide(); });
   window.addEventListener("scroll", hide, true); window.addEventListener("resize", hide); window.addEventListener("blur", hide);
+})();
+</script>
+<script>
+/* Phones: the save dot shows its status when tapped */
+(function(){ var p = document.getElementById("countSave"); if(!p) return; var t = 0;
+  p.addEventListener("click", function(){ p.classList.add("peek"); clearTimeout(t); t = setTimeout(function(){ p.classList.remove("peek"); }, 2200); });
 })();
 </script>
 </body>
