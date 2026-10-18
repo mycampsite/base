@@ -105,6 +105,13 @@
   #stage{ position:absolute; box-shadow:0 10px 40px rgba(0,0,0,.55); will-change:transform; }
   #textDock{ position:fixed; left:0; right:0; bottom:0; z-index:320; display:flex; align-items:flex-end; gap:8px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); background:#1b1b1b; border-top:1px solid var(--uiBorder); box-shadow:0 -10px 30px rgba(0,0,0,.45); }
   #textDock[hidden]{ display:none; }
+  /* Phones: the typing box sits at the top of the screen, so iOS has no reason to slide the page to reach it
+     when the keyboard opens; the box being edited is framed between it and the keyboard. */
+  @media (max-width:760px){
+    #textDock{ top:0; bottom:auto !important; align-items:flex-start; padding:calc(8px + env(safe-area-inset-top)) 10px 8px; border-top:0; border-bottom:1px solid var(--uiBorder); box-shadow:0 10px 30px rgba(0,0,0,.45); }
+    html.typingLock, html.typingLock body{ overflow:hidden !important; overscroll-behavior:none; }
+    body.typing #banner, body.typing #toolbar{ visibility:hidden; }
+  }
   #dockTa{ flex:1; min-height:44px; max-height:32vh; resize:none; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.18); background:rgba(0,0,0,.35); color:var(--uiText); font:16px/1.4 Inter,system-ui,sans-serif; outline:none; }
   #dockTa:focus{ border-color:var(--focus); }
   #textDock .btn{ height:44px; }
@@ -2750,7 +2757,7 @@
   function startDockEdit(el){
     const id = el.id, dock = document.getElementById("textDock"), ta = document.getElementById("dockTa");
     SEL = id; EDITING = id; DOCK = true; __preEdit = snap(); __preText = el.text || "";
-    document.body.classList.add("typing"); setSheet(false);
+    document.body.classList.add("typing"); document.documentElement.classList.add("typingLock"); setSheet(false);
     dock.hidden = false; ta.value = el.text || ""; ta.placeholder = el.ph || "Type here";
     ta.focus();                                            // inside the tap, so the keyboard opens
     try{ ta.setSelectionRange(ta.value.length, ta.value.length); }catch(_e){}
@@ -2762,7 +2769,7 @@
     };
     const sizeTa = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight + 2, innerHeight * 0.32) + "px"; };
     sizeTa();
-    ta.oninput = () => { const e2 = findEl(id); if(!e2) return; e2.text = ta.value; sizeTa(); show(); clearTimeout(__typeT); __typeT = setTimeout(typingCheckpoint, 900); };
+    ta.oninput = () => { const e2 = findEl(id); if(!e2) return; e2.text = ta.value; const h0 = dock.offsetHeight; sizeTa(); if(dock.offsetHeight !== h0) layoutDock(); show(); clearTimeout(__typeT); __typeT = setTimeout(typingCheckpoint, 900); };
     ta.onkeydown = (ev) => { ev.stopPropagation(); if(ev.key === "Escape"){ ev.preventDefault(); finishEdit(); } };
     document.getElementById("dockDone").onclick = () => finishEdit();
     layoutDock(true);
@@ -2775,11 +2782,14 @@
     if(!DOCK) return;
     const dock = document.getElementById("textDock"), vv = window.visualViewport;
     const kb = vv ? Math.max(0, innerHeight - vv.height - vv.offsetTop) : 0;
-    dock.style.bottom = kb + "px";
-    // The part of the stage you can actually see: between the top of the visible screen and the typing bar.
-    // iOS scrolls the page up when the keyboard opens, so the top of the stage can be out of sight too.
+    const top = window.matchMedia("(max-width:760px)").matches;      // phones: the box is at the top of the screen
+    if(top){ dock.style.bottom = ""; dock.style.top = (vv ? vv.offsetTop : 0) + "px"; if(window.scrollY || window.scrollX) window.scrollTo(0, 0); }
+    else dock.style.bottom = kb + "px";
+    // The part of the stage you can actually see: between the typing box and the keyboard (phones),
+    // or between the top of the visible screen and the typing bar (tablets).
     const wrap = document.getElementById("stageWrap"), r = wrap.getBoundingClientRect();
-    const visTop = vv ? vv.offsetTop : 0, visBottom = (vv ? vv.offsetTop + vv.height : innerHeight) - dock.offsetHeight;
+    const visTop = top ? dock.getBoundingClientRect().bottom : (vv ? vv.offsetTop : 0);
+    const visBottom = (vv ? vv.offsetTop + vv.height : innerHeight) - (top ? 0 : dock.offsetHeight);
     VIEW.padT = Math.max(0, Math.round(visTop - r.top));
     VIEW.padB = Math.max(0, Math.round(r.bottom - visBottom));
     clearTimeout(__dockT);
@@ -2790,7 +2800,7 @@
     DOCK = false;
     const dock = document.getElementById("textDock"), ta = document.getElementById("dockTa");
     ta.oninput = ta.onkeydown = null; ta.blur(); dock.hidden = true;
-    document.body.classList.remove("typing");
+    document.body.classList.remove("typing"); document.documentElement.classList.remove("typingLock"); dock.style.top = "";
     if(window.visualViewport){ visualViewport.removeEventListener("resize", layoutDock); visualViewport.removeEventListener("scroll", layoutDock); }
     VIEW.padB = 0; VIEW.padT = 0;
   }

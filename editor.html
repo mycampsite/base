@@ -15048,7 +15048,7 @@ ${TP.join("\n")}
     const place = () => {
       if(!isEditing()) maxH = Math.max(window.innerHeight, vv ? vv.height : 0);
       const kb = vv ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop)) : 0;
-      const tf = kb > 40 ? `translateY(${-kb}px)` : "";
+      const tf = kb > 40 && isEditing() ? `translateY(${-kb}px)` : "";
       if(bar.style.transform !== tf) bar.style.transform = tf;
       const visH = vv ? vv.height * (vv.scale || 1) : window.innerHeight;   // pinch-zoom isn't a keyboard
       const kbH = vv ? Math.max(0, window.innerHeight - visH) : 0;
