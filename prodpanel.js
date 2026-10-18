@@ -277,7 +277,15 @@ const css = `
   .moveBar{ position:fixed; left:8px; right:8px; bottom:max(8px, env(safe-area-inset-bottom)); z-index:30; margin:0; padding:10px; box-shadow:0 10px 30px rgba(0,0,0,.55); background:#202634; }
   .moveBar select{ flex:1 1 140px; height:40px; font-size:16px; } .moveBar .btn{ height:40px; }
   .colHead .dtPick{ padding:6px 10px; font-size:13px; }
-  .fxRow{ flex-direction:column; align-items:stretch; }
+  /* Script flags on phones: a compact card per flag — name and what was found, the scene chips, then Keep / Watch / Ignore */
+  .fxRow{ flex-direction:column; align-items:stretch; gap:10px; padding:14px 12px; }
+  .fxName, .fxScenes{ flex:0 0 auto; }
+  .fxName{ gap:3px; font-size:14px; } .fxName span{ font-size:12.5px; line-height:1.4; }
+  .fxScenes{ gap:6px; align-items:flex-start; }
+  .fxSc{ height:32px; padding:0 11px; font-size:12.5px; border-radius:8px; }
+  .fxSeg{ display:flex; width:100%; box-sizing:border-box; }
+  .fxSeg button{ flex:1 1 0; height:34px; font-size:13px; }
+  .fx .fxNote{ padding:4px 12px 12px; }
   .btn.sm{ min-height:36px; }
   .doodWrap{ -webkit-overflow-scrolling:touch; }
 }`;

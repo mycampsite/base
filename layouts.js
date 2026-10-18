@@ -328,7 +328,15 @@ const css = `
   .lyWrap{ flex-direction:column; }
   .lyList{ width:auto; border-right:0; border-bottom:1px solid var(--uiBorder); }
   .lyItems{ flex-direction:row; overflow-x:auto; padding-bottom:8px; }
-  .lyCard{ flex:0 0 130px; } .lyCard svg{ height:60px; }
+  .lyCard{ flex:0 0 112px; } .lyCard svg{ height:46px; }
+  /* Phones: the canvas gets the screen. One swipeable row of tools instead of four stacked rows, a slim layouts strip */
+  .lyWrap{ height:calc(100dvh - var(--topBarH, 56px) - 96px); min-height:460px; }
+  .lyListHd{ padding:8px 10px 6px 12px; }
+  .lyItems{ padding:0 8px 8px; }
+  .lyBar{ flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; overscroll-behavior:contain; padding:6px 8px; }
+  .lyBar::-webkit-scrollbar{ display:none; }
+  .lyGrp{ flex:0 0 auto; }
+  .lyBtn{ height:34px; min-width:34px; }
   .lyHint{ display:none; }
   /* The kit opens as a bottom sheet so the canvas stays visible above it */
   .lyKit{ left:8px; right:8px; top:auto; bottom:8px; width:auto; max-height:46%; }

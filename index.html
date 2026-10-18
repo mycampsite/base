@@ -148,6 +148,7 @@
   .listHead .muted{ flex:1; }
   .srow{ display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--uiBorder); border-radius:12px; background:rgba(255,255,255,.03); margin-bottom:8px; cursor:pointer; }
   .srow:hover{ background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.14); }
+  .srow .vShort{ display:none; }
   .srow .ico{ width:44px; height:44px; flex:0 0 auto; }
   .srow .ico svg{ width:44px; height:44px; display:block; }
   .btn.on{ background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.3); }
@@ -369,9 +370,16 @@
     .mtab svg{ width:19px; height:19px; }
     .mtab .n{ display:none; }
     #listPane{ padding:10px; }
-    .listHead .muted{ flex:1 1 100%; }
-    .srow{ flex-wrap:wrap; }
-    .srow .acts{ width:100%; justify-content:flex-end; }
+    .listHead .muted{ flex:1 1 auto; }
+    /* One line per script: icon, title and details, then Open and ⋯, all centred on the same row */
+    .srow{ flex-wrap:nowrap; gap:12px; padding:12px; }
+    .srow .ico, .srow .ico svg{ width:40px; height:40px; }
+    .srow .tx b{ white-space:normal; overflow-wrap:anywhere; line-height:1.3; }
+    .srow .acts{ width:auto; flex:0 0 auto; gap:4px; }
+    .srow .acts .btn{ height:36px; padding:0 14px; }
+    .srow .vLong{ display:none; } .srow .vShort{ display:inline; }
+    .listHead{ flex-wrap:nowrap; align-items:center; }
+    .emptyBox .btn .lbl{ display:inline; }
     .drafts{ margin-left:8px; }
     .drow{ flex-wrap:wrap; }
     .drow .acts{ width:100%; justify-content:flex-end; }
@@ -540,11 +548,11 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="production.js?v=6" defer></script>
 <script src="shottime.js?v=3" defer></script>
 <script src="elements.js?v=7" defer></script>
-<script src="prodpanel.js?v=13" defer></script>
+<script src="prodpanel.js?v=14" defer></script>
 <script src="bdpanel.js?v=21" defer></script>
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=3" defer></script>
-<script src="layouts.js?v=3" defer></script>
+<script src="layouts.js?v=4" defer></script>
 <script src="docscards.js?v=2" defer></script>
 <script src="calendar.js?v=2" defer></script>
 <script type="module">
@@ -1360,7 +1368,7 @@ function renderList(p) {
     else if (tab === "scripts") meta = [f.pages ? f.pages + " page" + (f.pages === 1 ? "" : "s") : "", fmtWhen(f.modified)].filter(Boolean).join(" · ");
     else meta = tab === "storyboard" ? "Storyboard" : "Treatment deck";   // f.modified is the script's time, not the deck's, so it isn't shown here
     const href = toolHref(TOOL[tab].page, id);
-    const main = !f && RIP.files ? "" : `<a class="btn sm primary" href="${esc(href)}">${TOOL[tab].verb}</a>`;
+    const main = !f && RIP.files ? "" : `<a class="btn sm primary" href="${esc(href)}" aria-label="${esc(TOOL[tab].verb)}"><span class="vLong">${TOOL[tab].verb}</span><span class="vShort">Open</span></a>`;
     const more = canEdit && (f || owner) ? `<button class="pbtn" type="button" data-row="${esc(id)}" aria-label="More for ${esc(scriptTitle(id))}" title="More">${DOTS}</button>` : "";
     return `<div class="srow" tabindex="0" data-href="${esc(href)}"${!f && RIP.files ? ' data-missing="1"' : ""}><span class="ico ${tab}" aria-hidden="true">${ICON[tab]}</span><div class="tx"><b>${esc(scriptTitle(id))}</b><span>${esc(meta)}</span></div><div class="acts">${main}${more}</div></div>${draftsHtml(id, tab, owner)}`;
   }).join("");
