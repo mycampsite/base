@@ -239,9 +239,17 @@ const css = `
 .setWrap > summary{ display:none; }
 .dayTabs{ display:none; }
 @media (max-width:760px){
-  .ctlHead{ padding:8px 10px; gap:6px; }
+  /* One slim header row: the status chips scroll sideways, the refresh/undo/redo/More buttons sit at the end */
+  .ctlHead{ padding:8px 10px; gap:8px; flex-wrap:nowrap; }
+  .ctlChips{ flex:1 1 0; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+  .ctlChips::-webkit-scrollbar{ display:none; }
+  .ctlChip{ flex:0 0 auto; }
   .ctlChip.hideSm{ display:none; }
-  .ctlActs{ margin-left:0; width:100%; display:flex; gap:6px; } .ctlActs .btn.primary{ flex:1; }
+  .ctlActs{ margin-left:0; flex:0 0 auto; flex-wrap:nowrap; display:flex; gap:6px; } .ctlActs .btn.primary{ flex:1; }
+  .ctlMore{ position:static; }
+  /* The More menu is a sheet at the bottom of the screen (it used to open half off the edge) */
+  .ctlMenu{ position:fixed; left:8px; right:8px; top:auto; bottom:max(8px, env(safe-area-inset-bottom)); z-index:10002; max-height:70vh; overflow-y:auto; min-width:0; padding:6px; border-radius:14px; box-shadow:0 -10px 40px rgba(0,0,0,.6); }
+  .ctlMenu button{ padding:13px 14px; font-size:14px; }
   .ctlBody{ padding:0 10px 90px; }
   .setWrap{ border-bottom:1px solid var(--uiBorder); }
   .setWrap > summary{ display:flex; align-items:center; gap:10px; list-style:none; padding:10px 2px; font-size:13px; font-weight:600; cursor:pointer; min-height:44px; }

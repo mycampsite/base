@@ -375,6 +375,10 @@
     .bar{ padding:8px; gap:6px; }
     .bar .tabs{ flex:1 1 100%; order:1; padding:3px; }
     .bar .actions{ flex:1 1 100%; order:2; margin-left:0; flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start; scrollbar-width:none; }
+    /* Schedule: the Stripboard / Call sheets switch and the Sync button share one row */
+    #prodPane[data-tab=schedule] .bar{ flex-wrap:nowrap; }
+    #prodPane[data-tab=schedule] .bar .tabs{ flex:1 1 0; min-width:0; }
+    #prodPane[data-tab=schedule] .bar .actions{ flex:0 0 auto; overflow:visible; }
     .bar .actions::-webkit-scrollbar{ display:none; }
     .bar .actions .btn{ flex:0 0 auto; white-space:nowrap; }
     .tab{ padding:9px 14px; font-size:13px; }

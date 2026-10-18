@@ -342,8 +342,46 @@ const css = `
   #bdctl .bdChip{ flex:0 0 auto; }
   #bdctl .bdBody{ padding:0 10px 90px; }
   #bdctl .bdSplit{ grid-template-columns:1fr; }
-  #bdctl .bdList{ flex-direction:row; max-height:none; overflow-x:auto; position:static; padding-bottom:6px; }
-  #bdctl .bdSc{ flex:0 0 170px; }
+  /* Scene strip: wider, easier to read cards you swipe through; the heading can wrap to two lines */
+  #bdctl .bdList{ flex-direction:row; gap:8px; max-height:none; overflow-x:auto; position:static; padding-bottom:8px; scroll-snap-type:x proximity; scrollbar-width:none; }
+  #bdctl .bdList::-webkit-scrollbar{ display:none; }
+  #bdctl .bdSc{ flex:0 0 min(220px, 68vw); scroll-snap-align:start; padding:9px 10px 9px 8px; font-size:13px; border-radius:6px; }
+  #bdctl .bdSc .l{ white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  #bdctl .bdSc .m{ font-size:12px; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  #bdctl .bdSc .dots i{ width:8px; height:8px; }
+  /* Scene sheet lists: one card-like row per element, the note drops underneath at full width */
+  #bdctl table.ct, #bdctl table.ct tbody{ display:block; }
+  #bdctl table.ct thead{ display:none; }
+  #bdctl table.ct tr{ display:grid; grid-template-columns:30px minmax(0,1fr) auto 34px 38px; align-items:center; column-gap:4px; padding:6px 4px; border-top:1px solid rgba(255,255,255,.06); }
+  #bdctl table.ct td{ display:block; border-top:0; padding:0; min-width:0; width:auto !important; }
+  #bdctl table.ct .c-no{ grid-column:1; padding-left:0; }
+  #bdctl table.ct .c-nm{ grid-column:2; font-size:14px; }
+  #bdctl table.ct .c-q{ grid-column:3; width:auto; }
+  #bdctl table.ct .c-h{ grid-column:4; }
+  #bdctl table.ct .c-x{ grid-column:5; }
+  #bdctl table.ct .c-sc{ display:none; }
+  #bdctl table.ct .c-nt{ grid-column:2 / -1; grid-row:2; white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; font-size:12.5px; line-height:1.4; padding-top:2px; }
+  #bdctl table.ct .c-nt .mu{ display:none; }
+  #bdctl table.ct .c-nm .goText{ opacity:.6; height:26px; min-width:26px; }
+  #bdctl table.ct .star, #bdctl table.ct .c-x button{ min-width:34px; height:34px; font-size:16px; }
+  /* Elements list: each element is a card, name and note first, then scenes, then pages and Edit */
+  #bdctl table.bdT, #bdctl table.bdT tbody{ display:block; table-layout:auto; }
+  #bdctl table.bdT colgroup, #bdctl table.bdT thead{ display:none; }
+  #bdctl table.bdT tr{ display:block; }
+  #bdctl table.bdT tr.grp td{ display:block; padding:14px 4px 6px; border-top:0; }
+  #bdctl table.bdT tr.er{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 10px; align-items:center; margin:0 0 8px; padding:11px 12px; border:1px solid var(--uiBorder); border-left:4px solid var(--cc, #888); border-radius:10px; background:#1b1b1b; }
+  #bdctl table.bdT tr.er td{ display:block; grid-column:1 / -1; border-top:0; padding:0; min-width:0; }
+  #bdctl table.bdT tr.er td.num{ grid-column:1; text-align:left; }
+  #bdctl table.bdT tr.er td.act{ grid-column:2; justify-self:end; }
+  #bdctl table.bdT tr.er td.num::before{ content:"Pages "; color:var(--uiMuted); font-size:11px; }
+  #bdctl table.bdT .nt{ display:block; margin-top:4px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12.5px; line-height:1.4; }
+  #bdctl table.bdT .scBtns{ display:flex; flex-wrap:wrap; gap:6px; }
+  #bdctl .edBtn{ min-height:36px; padding:0 14px; }
+  #bdctl .bdTools{ gap:8px; }
+  #bdctl .bdTools input#bdQ{ width:100% !important; }
+  #bdctl .bdTools .catChips{ flex-wrap:nowrap; overflow-x:auto; max-width:100%; scrollbar-width:none; padding-bottom:2px; }
+  #bdctl .bdTools .catChips::-webkit-scrollbar{ display:none; }
+  #bdctl .catChip{ flex:0 0 auto; padding:5px 12px; font-size:12.5px; }
   #bdctl .bdFind input{ flex:1 1 auto; }
   #bdctl .shHead h3{ white-space:normal; }
   #bdctl .shHead .pr{ display:none; }
