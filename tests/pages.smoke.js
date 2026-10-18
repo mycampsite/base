@@ -104,7 +104,9 @@ let BASE = "";
     await p.keyboard.press("Escape"); await p.waitForTimeout(100);
     await expect(p, () => document.getElementById("qMenu").hidden && !document.body.classList.contains("ctxOpen"), "closed again");
   });
-  await page(browser, "storyboard opens", "/storyboard.html?fileId=f1");
+  // the page must stay responsive (a script that loops forever froze it on every device once, and loaded without an error)
+  const alive = (p) => Promise.race([p.evaluate(() => !!document.body), new Promise((_, no) => setTimeout(() => no(new Error("the page stopped responding")), 5000))]);
+  await page(browser, "storyboard opens", "/storyboard.html?fileId=f1", async (p) => { await alive(p); });
   await page(browser, "treatment builds its pages, and Export shows the preview first", "/treatment.html?fileId=f1", async (p) => {
     await expect(p, () => document.querySelectorAll(".navItem").length > 2 && !!document.querySelector("#stage .tpage"), "pages on the stage");
     await p.click("#stage"); await p.keyboard.press("Control+a"); await p.waitForTimeout(200);

@@ -3778,7 +3778,7 @@ window.SB3D={
 <script>
 (function(){ var h = document.getElementById("railHandle"); if(!h) return;
   h.addEventListener("click", function(){ var o = document.body.classList.toggle("railOpen"); h.setAttribute("aria-expanded", o ? "true" : "false"); });
-  new MutationObserver(function(){ if(!document.body.classList.contains("focusView")) document.body.classList.remove("railOpen"); }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  new MutationObserver(function(){ var c = document.body.classList; if(!c.contains("focusView") && c.contains("railOpen")) c.remove("railOpen"); })   // only touch the class when it is there: remove() always rewrites it, which would wake this observer again forever.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 })();
 </script>
 </body>
