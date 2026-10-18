@@ -338,19 +338,19 @@
   body.kbOpen .top{ transform: translateY(-100%); }
   /* Keyboard up: the bar sits right on it. Buttons keep the same size so nothing resizes under your thumb. */
   body.kbOpen .touchBar{ padding: 6px 8px; border-top-color: rgba(255,255,255,.14); }
-  .touchBar .tbChip{ display:none; }
-  /* Phones, keyboard up: one slim row (current line type, bold, italic, undo, redo). Tap the type to pick another. */
+  /* Phones, keyboard up: no bottom bar at all (iOS already puts its own bar above the keyboard, and a fixed bar
+     jumped about while scrolling). The line type is a small chip in the page margin beside the line you're typing. */
+  .lineChip{ position:absolute; z-index:950; display:none; align-items:center; justify-content:center; height:24px; min-width:34px; padding:0 5px; border-radius:7px; border:1px solid rgba(0,0,0,.18); background:#1d1e22; color:#fff; font:700 9.5px/1 Inter, system-ui, sans-serif; letter-spacing:.02em; box-shadow:0 2px 8px rgba(0,0,0,.25); touch-action:manipulation; -webkit-user-select:none; user-select:none; }
+  .lineChip::after{ content:"\25BE"; margin-left:2px; font-size:8px; opacity:.7; }
+  .lineMenu{ position:absolute; z-index:951; display:none; flex-direction:column; min-width:168px; padding:5px; border-radius:12px; background:#1d1e22; border:1px solid rgba(255,255,255,.16); box-shadow:0 12px 30px rgba(0,0,0,.45); }
+  .lineMenu.show{ display:flex; }
+  .lineMenu button{ all:unset; display:flex; justify-content:space-between; gap:14px; padding:11px 12px; border-radius:8px; color:#f2f2f2; font:600 14px Inter, system-ui, sans-serif; }
+  .lineMenu button small{ color:rgba(255,255,255,.45); font-weight:600; font-size:11px; }
+  .lineMenu button.on{ background:rgba(255,255,255,.12); }
   @media (max-width: 760px){
-    body.kbOpen .touchBar{ padding: 4px 8px; gap: 6px; }
-    body.kbOpen .touchBar button{ height: 36px; min-width: 36px; }
-    body.kbOpen .touchBar .tbIcon{ width: 38px; }
-    body.kbOpen .touchBar .tbChip{ display:inline-flex; gap:6px; padding:0 12px; }
-    body.kbOpen .touchBar .tbChip::after{ content:"▾"; font-size:10px; opacity:.7; }
-    body.kbOpen .touchBar.tbExp .tbChip::after{ content:"▴"; }
-    body.kbOpen .touchBar .tbSep, body.kbOpen .touchBar [data-a="scenes"], body.kbOpen .touchBar [data-a="comment"], body.kbOpen .touchBar .tbFit{ display:none !important; }
-    body.kbOpen .touchBar [data-type]{ display:none; }
-    body.kbOpen .touchBar.tbExp [data-type]{ display:inline-flex; }
-    body.kbOpen .touchBar.tbExp [data-cmd], body.kbOpen .touchBar.tbExp [data-a="undo"], body.kbOpen .touchBar.tbExp [data-a="redo"]{ display:none; }
+    body.kbOpen .touchBar{ display:none !important; }
+    body.kbOpen.hasTouchBar{ padding-bottom: 0; }
+    body.kbOpen .lineChip.show{ display:inline-flex; }
   }
 
   /* ---------- Page slider ---------- */
@@ -14891,10 +14891,12 @@ ${TP.join("\n")}
     if(avail < pageW){
       if(__PHONE_MQ.matches && __fitText){
         const L = parseFloat(cs.getPropertyValue("--m-left-mm")) || 38.1, R = parseFloat(cs.getPropertyValue("--m-right-mm")) || 25.4;
-        const padL = 8, padR = 18;                          // a little paper at the left, and the right margin where scene numbers sit
-        const colW = mmToPx(wMm - L - R + padL + padR);
+        // Phones: the page from 12mm in on each side, centred. Both scene numbers, the title page's contact block and
+        // every line of text stay on screen; only blank paper at the very edges runs off.
+        void L; void R;
+        const edge = 12, colW = mmToPx(wMm - edge * 2);
         s = Math.min(1, avail / colW);
-        shift = -mmToPx((L - R) / 2 + (padR - padL) / 2) * s;   // centre that visible strip on the screen
+        shift = 0;
       }else s = Math.max(0.3, avail / pageW);
     }
     s = Math.round(s * 1000) / 1000;
@@ -14921,7 +14923,6 @@ ${TP.join("\n")}
     bar.innerHTML = `
       <button type="button" data-a="scenes" class="tbIcon" title="Scenes &amp; comments" aria-label="Scenes and comments"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
       <span class="tbSep"></span>
-      <button type="button" data-a="typechip" class="tbChip" aria-label="Line type">Action</button>
       ${T.map(([k, l]) => `<button type="button" data-type="${k}">${l}</button>`).join("")}
       <span class="tbSep"></span>
       <button type="button" data-cmd="bold" class="tbIcon"><b>B</b></button>
@@ -14946,10 +14947,8 @@ ${TP.join("\n")}
       if(b.dataset.type){
         const line = getActiveLine();
         if(line){ setLineType(line, b.dataset.type, { preserveSelection: true }); }
-        bar.classList.remove("tbExp");
         refreshBar(); return;
       }
-      if(b.dataset.a === "typechip"){ bar.classList.toggle("tbExp"); return; }
       if(b.dataset.cmd){ try{ exec(b.dataset.cmd); }catch(_e){ document.execCommand(b.dataset.cmd); } return; }
       if(b.dataset.a === "comment"){ window.__scriptyComments && window.__scriptyComments.add(); return; }
       if(b.dataset.a === "undo"){ window.__scriptyUndo ? window.__scriptyUndo() : document.getElementById("undoBtn")?.click(); return; }
@@ -14968,9 +14967,58 @@ ${TP.join("\n")}
       const line = getActiveLine && getActiveLine();
       const t = line && line.closest && line.closest("#scriptEditor") ? (line.dataset.type || "action") : "";
       bar.querySelectorAll("[data-type]").forEach(b => b.classList.toggle("on", b.dataset.type === t));
-      const chip = bar.querySelector(".tbChip"), cur = t && bar.querySelector('[data-type="' + t + '"]');
-      if(chip) chip.textContent = cur ? cur.textContent : "Action";
+      placeChip();
     }
+    // ---- the line-type chip (phones, keyboard up) ----
+    const SHORT = { scene: "SCENE", action: "ACT", character: "CHAR", dialogue: "DIAL", parenthetical: "( )", transition: "TRANS", shot: "SHOT" };
+    const chip = document.createElement("button"); chip.type = "button"; chip.className = "lineChip"; chip.setAttribute("aria-label", "Line type");
+    const menu = document.createElement("div"); menu.className = "lineMenu"; menu.setAttribute("role", "menu");
+    menu.innerHTML = T.map(([k, l]) => `<button type="button" role="menuitem" data-type="${k}">${({ parenthetical: "Parenthetical", transition: "Transition" })[k] || l}<small>${SHORT[k]}</small></button>`).join("");
+    document.body.appendChild(chip); document.body.appendChild(menu);
+    const PHONE = window.matchMedia("(max-width: 760px)");
+    // Never take the caret out of the script: the keyboard stays up while you pick
+    [chip, menu].forEach((el) => { el.addEventListener("pointerdown", (e) => e.preventDefault()); el.addEventListener("mousedown", (e) => e.preventDefault()); });
+    let chipLine = null, chipF = 0;
+    function placeChip(){
+      cancelAnimationFrame(chipF);
+      chipF = requestAnimationFrame(() => {
+        const line = getActiveLine && getActiveLine();
+        const ok = PHONE.matches && document.body.classList.contains("kbOpen") && line && line.closest && line.closest("#scriptEditor");
+        if(!ok){ chip.classList.remove("show"); menu.classList.remove("show"); chipLine = null; return; }
+        if(chipLine !== line) menu.classList.remove("show");
+        chipLine = line;
+        const t = line.dataset.type || "action";
+        chip.textContent = SHORT[t] || "ACT";
+        // In page coordinates, so it scrolls with the text instead of chasing the keyboard
+        const r = line.getBoundingClientRect(), pa = document.getElementById("paperArea"), pr = pa ? pa.getBoundingClientRect() : { left: 0 };
+        const lh = Math.min(r.height, parseFloat(getComputedStyle(line).lineHeight) || r.height);
+        const x = Math.max(2, pr.left + 2) + window.scrollX, y = r.top + window.scrollY + lh / 2 - 12;   // centred on the line's first row
+        chip.style.left = x + "px"; chip.style.top = y + "px"; chip.classList.add("show");
+        if(menu.classList.contains("show")){ menu.style.left = x + "px"; menu.style.top = (y + 28) + "px"; }
+      });
+    }
+    chip.addEventListener("click", () => {
+      const open = !menu.classList.contains("show");
+      menu.classList.toggle("show", open);
+      if(open){
+        const t = chipLine ? (chipLine.dataset.type || "action") : "";
+        menu.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.type === t));
+        menu.style.left = chip.style.left; menu.style.top = (parseFloat(chip.style.top) + 28) + "px";
+        // keep the list on screen above the keyboard
+        requestAnimationFrame(() => { const vv = window.visualViewport, mr = menu.getBoundingClientRect(), bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+          if(mr.bottom > bottom - 6) menu.style.top = (parseFloat(chip.style.top) - mr.height - 4) + "px"; });
+      }
+    });
+    menu.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-type]"); if(!b) return;
+      const line = getActiveLine && getActiveLine();
+      if(line) setLineType(line, b.dataset.type, { preserveSelection: true });
+      menu.classList.remove("show"); refreshBar();
+    });
+    document.addEventListener("input", (e) => { if(e.target && e.target.closest && e.target.closest("#scriptEditor")) placeChip(); }, true);
+    window.addEventListener("scripty:layout", placeChip);
+    window.addEventListener("resize", placeChip);
+    new MutationObserver(placeChip).observe(document.body, { attributes: true, attributeFilter: ["class"] });
     document.addEventListener("selectionchange", () => { if(!bar.hidden) refreshBar(); kbHints(); });
     // Phone keyboards: caps on and autocorrect off on character / scene / transition lines,
     // so names like "TGM" aren't "corrected" to real words. Normal sentence typing everywhere else.
@@ -15003,7 +15051,7 @@ ${TP.join("\n")}
       const kbH = vv ? Math.max(0, window.innerHeight - visH) : 0;
       const open = __TOUCHBAR_MQ.matches && isEditing() && (kbH > 80 || visH < maxH * 0.78);
       const was = document.body.classList.contains("kbOpen");
-      if(open !== was){ document.body.classList.toggle("kbOpen", open); if(!open) bar.classList.remove("tbExp"); }
+      if(open !== was) document.body.classList.toggle("kbOpen", open);
       if(open && !was) keepCaret();   // only when the keyboard first appears, not on every scroll
     };
     // While the keyboard is up, only move the page if the line you're typing is hidden
