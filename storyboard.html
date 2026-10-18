@@ -3788,7 +3788,16 @@ window.SB3D={
 </script>
 <script>
 (function(){ var h = document.getElementById("railHandle"); if(!h) return;
-  h.addEventListener("click", function(){ var o = document.body.classList.toggle("railOpen"); h.setAttribute("aria-expanded", o ? "true" : "false"); });
+  var rail = document.getElementById("rightRail");
+  // The sheet rises only to the bottom of the canvas, so the drawing stays in view
+  function fit(){ var c = document.getElementById("panelStack") || document.getElementById("canvasWrap"); if(!rail) return;
+    var r = c ? c.getBoundingClientRect() : null, room = window.innerHeight - (r && r.bottom > 0 ? r.bottom + 10 : window.innerHeight * 0.36);
+    rail.style.maxHeight = Math.max(240, Math.round(room)) + "px"; }
+  function set(o){ if(o) fit(); if(document.body.classList.contains("railOpen") !== o) document.body.classList.toggle("railOpen", o); h.setAttribute("aria-expanded", o ? "true" : "false"); }
+  h.addEventListener("click", function(){ set(!document.body.classList.contains("railOpen")); });
+  // Tap anywhere outside the sheet to close it
+  document.addEventListener("pointerdown", function(e){ if(!document.body.classList.contains("railOpen")) return; if(rail && rail.contains(e.target)) return; if(h.contains(e.target)) return; set(false); }, true);
+  window.addEventListener("resize", function(){ if(document.body.classList.contains("railOpen")) fit(); });
   new MutationObserver(function(){ var c = document.body.classList; if(!c.contains("focusView") && c.contains("railOpen")) c.remove("railOpen"); })   // only touch the class when it is there: remove() always rewrites it, which would wake this observer again forever.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 })();
 </script>
