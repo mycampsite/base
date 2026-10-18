@@ -87,10 +87,20 @@ test("search finds cards by any value, never headings", () => {
   const hits = L.items.filter((i) => D.matches(i, "sam@"));
   assert.deepStrictEqual(hits.map((h) => h.title), ["Sam Lee"]);
 });
+test("table view mirrors the Sheet: hidden and empty columns go, bands, bold totals, numbers on the right", () => {
+  const T = D.table([["BUDGET", "", "", "", ""], ["ACCT", "ITEM", "", "TOTAL", "ScriptY key"], ["ABOVE THE LINE", "", "", "", ""], ["1100", "Story", "", "$500", "k"], ["", "GRAND TOTAL", "", "$24,300", ""]],
+    [{ b: 1 }, { b: 1, h: "#dce3ee" }, { b: 1, h: "#1f2a3d" }, {}, { b: 1 }]);
+  assert.deepStrictEqual(T.title, ["BUDGET"]);
+  assert.deepStrictEqual(T.columns.map((c) => [c.label, c.num]), [["ACCT", true], ["ITEM", false], ["TOTAL", true]]);
+  assert.deepStrictEqual(T.rows.map((r) => r.type), ["section", "row", "row"]);
+  assert.strictEqual(T.rows[0].band, "dark");
+  assert.ok(T.rows[2].bold);
+});
 test("odd input doesn't throw", () => {
   assert.deepStrictEqual(D.layout(null).items, []);
   assert.deepStrictEqual(D.layout([[]]).items, []);
   assert.ok(Array.isArray(D.layout([["only one"], ["a", "b"], [1, null]]).items));
+  assert.ok(Array.isArray(D.table(null).rows) && Array.isArray(D.table([["x"]]).rows));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

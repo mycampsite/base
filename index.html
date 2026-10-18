@@ -553,7 +553,7 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=3" defer></script>
 <script src="layouts.js?v=4" defer></script>
-<script src="docscards.js?v=2" defer></script>
+<script src="docscards.js?v=3" defer></script>
 <script src="calendar.js?v=2" defer></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -1500,8 +1500,8 @@ function showFrame() {
   }
   // Phones: the Sheet as readable cards (docscards.js) unless this device picked the grid
   if (PHONE_MQ.matches && window.CampDocCards) {
-    const cards = lsGet(CARDS_KEY) !== "grid";
-    $("viewToggle").classList.remove("hidden");
+    const cards = true;   // the embedded Sheet can't sign in on iPhone (Safari blocks Google's cookies in other sites): "Open in Sheets" opens the app
+    $("viewToggle").classList.add("hidden");
     $("viewToggle").querySelector(".lbl").textContent = cards ? "Grid" : "Cards";
     $("viewToggle").classList.toggle("toCards", !cards); $("viewToggle").setAttribute("aria-label", cards ? "Show the grid" : "Show as cards");
     if (cards) {

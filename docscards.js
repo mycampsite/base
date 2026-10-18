@@ -126,13 +126,54 @@ function matches(item, q){
 }
 const telHref = (v) => "tel:" + v.replace(/[^\d+]/g, "");
 
-const api = { layout, matches, kindOf, isCode, telHref };
+// The tab as a table that mirrors the Sheet: its columns (minus hidden and empty ones), section bands, bold rows,
+// numbers on the right. band: "dark" for the Sheet's dark header colours, "light" for its pale group shading.
+const NUM = /^[-+]?[$€£]?\s?\(?[-+]?[\d,]*\.?\d+\)?\s?%?$|^\d+\s\d\/\d$|^\d\/\d$/;
+function lum(hex){ const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "")); if(!m) return 1; const n = parseInt(m[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; }
+function table(rows, fmt){
+  rows = (Array.isArray(rows) ? rows : []).map((r) => (Array.isArray(r) ? r : []).map(clean));
+  const h = headerRowOf(rows, fmt);
+  const header = h >= 0 ? rows[h] : [];
+  const title = [];
+  for(let r = 0; r < (h >= 0 ? h : 0); r++){ const t = rows[r].filter(Boolean).join(" · "); if(t) title.push(t); }
+  const off = h >= 0 ? h + 1 : 0, body = rows.slice(off);
+  const width = Math.max(header.length, ...body.map((r) => r.length), 0);
+  const keep = [];
+  for(let c = 0; c < width; c++){
+    if(HIDE_COL.test(header[c] || "")) continue;
+    if(!(header[c] || "") && !body.some((r) => r[c])) continue;            // an empty spacer column
+    keep.push(c);
+  }
+  const out = [];
+  body.forEach((r, k) => {
+    const cells = keep.map((c) => r[c] || "");
+    if(!cells.some(Boolean)) return;
+    const f = (fmt && fmt[k + off]) || {};
+    const filled = cells.filter(Boolean).length;
+    const band = f.h ? (lum(f.h) < 0.45 ? "dark" : "light") : "";
+    const section = filled === 1 && (cells[0] || cells[1]) && (f.b || f.h || !fmt);
+    out.push({ type: section ? "section" : "row", cells, text: section ? cells.find(Boolean) : "", bold: !!f.b || /\btotal\b/i.test(cells.join(" ")), band });
+  });
+  // a column is numeric when most of its filled cells are numbers
+  const num = keep.map((c, i) => { const v = out.filter((x) => x.type === "row" && x.cells[i]).map((x) => x.cells[i]); return v.length > 0 && v.filter((x) => NUM.test(x)).length / v.length >= 0.7; });
+  // widths: wide enough for the longest word (so words never break), long-text columns get a reading width
+  const cols = keep.map((c, i) => {
+    const vals = out.filter((x) => x.type === "row" && x.cells[i]).map((x) => x.cells[i]);
+    const word = Math.max(String(header[c] || "").length * 0.8, ...vals.map((v) => Math.max(...v.split(/\s+/).map((w) => w.length))), 4);
+    const avg = vals.length ? vals.reduce((a, v) => a + v.length, 0) / vals.length : 0;
+    const one = vals.every((v) => kindOf(v) !== "text" || NUM.test(v) || v.length <= 18);   // short values stay on one line
+    return { label: header[c] || "", num: num[i], ch: Math.min(22, Math.ceil(word) + 1), long: avg > 28, one };
+  });
+  return { title, columns: cols, rows: out };
+}
+
+const api = { layout, table, matches, kindOf, isCode, telHref };
 if(typeof module !== "undefined" && module.exports){ module.exports = api; return; }
 
 /* ---------------- browser ---------------- */
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const STALE_MS = 5 * 60 * 1000, MAX_CARDS = 300;
-const S = { cache: {}, cur: null, q: "", more: 0 };   // cache: sheetId|tab -> { at, d, state, err }
+const S = { cache: {}, cur: null, q: "", more: 0, mode: (() => { try{ return localStorage.getItem("Camp_DOCS_MODE_V1") || "table"; }catch(_e){ return "table"; } })() };   // cache: sheetId|tab -> { at, d, state, err }
 
 const css = `
 #docCards{ display:none; padding:0 10px 90px; }
@@ -176,6 +217,26 @@ const css = `
 .dcNote small{ display:block; max-width:none; margin-bottom:2px; }
 .dcNote p{ margin:0; font-size:14px; line-height:1.45; color:#d6d6da; overflow-wrap:anywhere; white-space:pre-wrap; }
 .dcCard a{ color:#8fb4ff; text-decoration:none; }
+/* Table view: mirrors the Sheet — same columns, sticky titles and first column, section bands, bold totals */
+.dcMode{ display:flex; gap:2px; padding:3px; border-radius:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); flex:0 0 auto; }
+.dcMode button{ width:36px; height:32px; border:0; border-radius:7px; background:none; color:rgba(255,255,255,.6); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+.dcMode button svg{ width:17px; height:17px; }
+.dcMode button.on{ background:#ececf0; color:#111; }
+.dcSheet{ max-height:calc(100dvh - 210px); overflow:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; border:1px solid var(--uiBorder, #2e2e2e); border-radius:10px; background:#1a1b1e; }
+.dcSheet table{ border-collapse:separate; border-spacing:0; min-width:100%; font:13.5px/1.35 Inter, system-ui, sans-serif; color:var(--uiText, #eee); }
+.dcSheet th, .dcSheet td{ padding:9px 12px; border-bottom:1px solid rgba(255,255,255,.07); border-right:1px solid rgba(255,255,255,.05); text-align:left; vertical-align:top; max-width:260px; overflow-wrap:normal; word-break:normal; hyphens:none; background:#1a1b1e; }
+.dcSheet td.one, .dcSheet td.n{ white-space:nowrap; }
+.dcSheet td.c0.n{ text-align:left; }
+.dcSheet th{ position:sticky; top:0; z-index:2; background:#24272d; font:700 10.5px/1.3 Inter, system-ui, sans-serif; letter-spacing:.06em; text-transform:uppercase; color:#b8bcc6; white-space:nowrap; max-width:none; }
+.dcSheet .c0{ position:sticky; left:0; z-index:1; max-width:42vw; box-shadow:1px 0 0 rgba(255,255,255,.08); }
+.dcSheet th.c0{ z-index:3; }
+.dcSheet .n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.dcSheet tr.b td{ font-weight:700; }
+.dcSheet tr.sec td{ font:800 11.5px/1.3 Inter, system-ui, sans-serif; letter-spacing:.07em; text-transform:uppercase; white-space:nowrap; }
+.dcSheet tr.sec.dark td{ background:#2a3346; color:#e8edf7; }
+.dcSheet tr.sec.light td, .dcSheet tr.bd-light td{ background:#22252b; }
+.dcSheet tr.bd-dark td{ background:#2a3346; }
+.dcSheet a{ color:#8fb4ff; text-decoration:none; }
 .dcMsg{ padding:40px 16px; text-align:center; color:var(--uiMuted, #999); display:flex; flex-direction:column; align-items:center; gap:12px; font-size:13.5px; }
 .dcMsg b{ color:var(--uiText, #eee); font-size:15px; }
 .dcMsg .row{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
@@ -184,6 +245,8 @@ const css = `
 let styled = false;
 function style(){ if(styled) return; styled = true; const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); }
 
+const ICON_TABLE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M3 15h18M9 4v16"/></svg>`;
+const ICON_CARDS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/></svg>`;
 const ICON_REFRESH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`;
 
 function valHtml(f){
@@ -204,6 +267,27 @@ function cardHtml(it){
     + (it.rows.length ? `<div class="dcRows">${it.rows.map((f) => `<div class="dcRow"><small>${esc(f.label)}</small>${valHtml(f)}</div>`).join("")}</div>` : "")
     + it.notes.map((f) => `<div class="dcNote">${f.label ? `<small>${esc(f.label)}</small>` : ""}${f.kind === "text" ? `<p>${esc(f.value)}</p>` : valHtml(f)}</div>`).join("")
     + `</div>`;
+}
+
+function cellHtml(v){
+  if(!v) return "";
+  const k = kindOf(v);
+  return k === "email" ? `<a href="mailto:${esc(v)}">${esc(v)}</a>` : k === "phone" ? `<a href="${esc(telHref(v))}">${esc(v)}</a>`
+    : k === "url" ? `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(v.replace(/^https?:\/\//i, "").slice(0, 32))}${v.length > 40 ? "…" : ""}</a>` : esc(v);
+}
+function tableHtml(T, q){
+  const n = T.columns.length;
+  const ql = (q || "").toLowerCase();
+  let rows = T.rows;
+  if(ql){ rows = rows.filter((r) => r.type === "row" && r.cells.some((c) => c.toLowerCase().indexOf(ql) >= 0)); }
+  if(!rows.length) return `<div class="dcMsg"><span>${q ? "Nothing matches." : "This tab is empty."}</span></div>`;
+  const sty = (c) => c.long ? "min-width:220px;max-width:260px" : `min-width:${c.ch}ch`;
+  const cls = (c, i) => (c.num ? "n" : "") + (c.one && !c.long ? " one" : "") + (i === 0 ? " c0" : "");
+  const head = `<thead><tr>${T.columns.map((c, i) => `<th class="${cls(c, i)}" style="${sty(c)}">${esc(c.label)}</th>`).join("")}</tr></thead>`;
+  const body = rows.slice(0, 600).map((r) => r.type === "section"
+    ? `<tr class="sec ${r.band || "light"}"><td class="c0" colspan="1">${esc(r.text)}</td><td colspan="${Math.max(1, n - 1)}"></td></tr>`
+    : `<tr class="${r.bold ? "b " : ""}${r.band ? "bd-" + r.band : ""}">${r.cells.map((v, i) => `<td class="${cls(T.columns[i] || {}, i)}">${cellHtml(v)}</td>`).join("")}</tr>`).join("");
+  return `<div class="dcSheet"><table>${head}<tbody>${body}</tbody></table></div>`;
 }
 
 function show(host, o){
@@ -251,17 +335,19 @@ function draw(host){
   }
   if(!d){ host.innerHTML = `<div class="dcMsg"><span class="spin"></span><span>Reading ${esc(o.sheet.name || "the Sheet")}…</span></div>`; return; }
   const L = layout(d.rows, d.fmt);
-  const items = L.items.filter((it) => !S.q || matches(it, S.q));
+  const asTable = S.mode !== "cards";
+  const items = asTable ? [] : L.items.filter((it) => !S.q || matches(it, S.q));
   const lim = MAX_CARDS + S.more;
   const shown = items.slice(0, lim);
   const tabs = d.tabs.length > 1 ? `<div class="dcTabs" role="tablist">${d.tabs.map((t) => `<button type="button" role="tab" data-dct="${esc(t)}" class="${t === d.tab ? "on" : ""}" aria-selected="${t === d.tab}">${esc(t)}</button>`).join("")}</div>` : "";
   const keepFocus = document.activeElement && document.activeElement.id === "dcQ";
   const selStart = keepFocus ? document.activeElement.selectionStart : 0;
   host.innerHTML = `<div class="dcTop">${tabs}<div class="dcFind"><input type="search" id="dcQ" placeholder="Find in ${esc(d.tab || "this tab")}" value="${esc(S.q)}" autocomplete="off" aria-label="Find">
+      <div class="dcMode" role="tablist" aria-label="View"><button type="button" data-dcm="table" class="${asTable ? "on" : ""}" aria-label="Table" title="Table, like the Sheet">${ICON_TABLE}</button><button type="button" data-dcm="cards" class="${asTable ? "" : "on"}" aria-label="Cards" title="Cards">${ICON_CARDS}</button></div>
       <button type="button" data-dc="refresh" aria-label="Refresh" title="Read the Sheet again">${c.state === "loading" ? `<span class="spin"></span>` : ICON_REFRESH}</button></div></div>
     ${L.title.length && !S.q ? `<div class="dcTitle"><b>${esc(L.title[0])}</b>${L.title.slice(1, 3).map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
-    ${shown.length ? shown.map(cardHtml).join("") : `<div class="dcMsg"><span>${S.q ? "Nothing matches." : "This tab is empty."}</span></div>`}
-    ${items.length > lim ? `<button type="button" class="dcMore" data-dc="more">Show more (${items.length - lim} left)</button>` : ""}`;
+    ${asTable ? tableHtml(table(d.rows, d.fmt), S.q) : (shown.length ? shown.map(cardHtml).join("") : `<div class="dcMsg"><span>${S.q ? "Nothing matches." : "This tab is empty."}</span></div>`)}
+    ${!asTable && items.length > lim ? `<button type="button" class="dcMore" data-dc="more">Show more (${items.length - lim} left)</button>` : ""}`;
   if(keepFocus){ const q = host.querySelector("#dcQ"); if(q){ q.focus({ preventScroll: true }); try{ q.setSelectionRange(selStart, selStart); }catch(_e){} } }
   wire(host);
 }
@@ -270,6 +356,8 @@ function wire(host){
   host.addEventListener("click", (e) => {
     const t = e.target.closest("[data-dct]");
     if(t){ S.cur.tab = t.dataset.dct; S.q = ""; S.more = 0; const c = S.cache[S.cur.sheet.id + "|" + S.cur.tab]; draw(host); if(!c || Date.now() - c.at > STALE_MS) load(host, S.cur.tab); window.scrollTo && host.scrollIntoView && host.scrollIntoView({ block: "start" }); return; }
+    const m = e.target.closest("[data-dcm]");
+    if(m){ S.mode = m.dataset.dcm; try{ localStorage.setItem("Camp_DOCS_MODE_V1", S.mode); }catch(_e){} draw(host); return; }
     const b = e.target.closest("[data-dc]"); if(!b) return;
     const a = b.dataset.dc;
     if(a === "refresh" || a === "retry") load(host, S.cur.tab, true);
