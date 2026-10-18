@@ -18318,7 +18318,7 @@ function clearHighlights(){
   const fromHub = !!(cameHub || hubHref);
   window.__campBackHref = backHref;
   if(back){ back.href = backHref; back.innerHTML = fromHub ? "&larr; Project" : (came ? "&larr; Back" : "&larr; Library"); }
-  if(mnLib){ mnLib.href = backHref; mnLib.textContent = fromHub ? "Project" : (came ? "Back" : "Library"); }
+  if(mnLib){ mnLib.href = backHref; mnLib.textContent = fromHub ? "This project" : (came ? "Back" : "Library"); }
   const go = (e) => {
     e.preventDefault();
     // going back through history restores the hub exactly as it was left (scroll, open section)

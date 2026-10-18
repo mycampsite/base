@@ -330,6 +330,8 @@ const css = `
   .lyItems{ flex-direction:row; overflow-x:auto; padding-bottom:8px; }
   .lyCard{ flex:0 0 130px; } .lyCard svg{ height:60px; }
   .lyHint{ display:none; }
+  /* The kit opens as a bottom sheet so the canvas stays visible above it */
+  .lyKit{ left:8px; right:8px; top:auto; bottom:8px; width:auto; max-height:46%; }
 }`;
 const IC = {
   select:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 8-6 2-3 6z"/></svg>`,
@@ -561,7 +563,7 @@ function wire(){
   EL.pane.addEventListener("click", (e) => {
     const b = e.target.closest("[data-ly], [data-tool], [data-ink], [data-sw], [data-lid], [data-lymore], [data-kit]"); if(!b) return;
     if(b.dataset.lymore){ e.stopPropagation(); openMore(b.dataset.lymore, b); return; }
-    if(b.dataset.kit){ addKit(b.dataset.kit); return; }
+    if(b.dataset.kit){ addKit(b.dataset.kit); if(window.matchMedia("(max-width:760px)").matches){ S.kitOpen = false; draw(); } return; }   // phones: the kit panel covers the canvas, so close it after placing
     if(b.dataset.lid){ endEdit(); S.lid[S.pid] = b.dataset.lid; lsSet("Camp_LAYOUTS_LAST_" + S.pid, b.dataset.lid); S.sel = []; S.undo = []; S.redo = []; S.sig = ""; draw(true); if(!S.view[b.dataset.lid]) setTimeout(fitAll, 0); return; }
     if(b.dataset.tool){ S.tool = b.dataset.tool; S.sel = S.tool === "select" ? S.sel : []; draw(); st.focus({ preventScroll:true }); return; }
     if(b.dataset.ink){ if(S.tool === "note") S.note = b.dataset.ink; else S.ink = b.dataset.ink; recolour(b.dataset.ink); draw(); return; }

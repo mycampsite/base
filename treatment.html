@@ -5212,7 +5212,7 @@
     if(!backHref && hub) backHref = "index.html?pid=" + encodeURIComponent(hub) + cloudParam() + "&tab=treatment";
     if(backHref){
       const fromHub = /hub/i.test(backHref) || !!hub;
-      back.href = mnLib.href = backHref; back.innerHTML = fromHub ? "&larr; Project" : "&larr; Back"; mnLib.textContent = fromHub ? "Project" : "Back";
+      back.href = mnLib.href = backHref; back.innerHTML = fromHub ? "&larr; Project" : "&larr; Back"; mnLib.textContent = fromHub ? "This project" : "Back";
       const goBack = (e) => {
         e.preventDefault();
         if(came && document.referrer === came && history.length > 1){ history.back(); setTimeout(() => { location.href = backHref; }, 700); }

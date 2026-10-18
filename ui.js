@@ -51,7 +51,7 @@
     if (!menu || menu.querySelector("#mnHub")) return;
     var cloud = ""; try { var c = new URLSearchParams(location.search).get("cloud"); if (c) cloud = "cloud=" + encodeURIComponent(c); } catch (_e) {}
     var hub = d.createElement("a"); hub.id = "mnHub"; hub.textContent = "Hub"; hub.href = "index.html" + (cloud ? "?" + cloud : "");
-    var pr = d.createElement("a"); pr.id = "mnProjects"; pr.textContent = "Projects"; pr.href = "index.html?projects=1" + (cloud ? "&" + cloud : "");
+    var pr = d.createElement("a"); pr.id = "mnProjects"; pr.textContent = "All projects"; pr.href = "index.html?projects=1" + (cloud ? "&" + cloud : "");
     menu.insertBefore(pr, menu.firstChild); menu.insertBefore(hub, pr);
   })();
 

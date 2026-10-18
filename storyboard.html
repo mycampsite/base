@@ -227,6 +227,10 @@
   /* Undo / Redo / Clear stay together; if the toolbar must wrap they move down as one group, right-aligned */
   .tbActs{ display:flex; gap:6px; margin-left:auto; }
   #toolbar > .grow{ display:none; }
+  #railHandle{ display:none; position:fixed; left:0; right:0; bottom:0; z-index:151; height:calc(52px + env(safe-area-inset-bottom)); padding:0 16px env(safe-area-inset-bottom); align-items:center; justify-content:center; gap:8px; border:0; border-top:1px solid var(--border); background:var(--panel); color:#f2f0ec; font:600 14px Inter,system-ui,sans-serif; }
+  #railHandle::after{ content:"\25B4"; font-size:11px; opacity:.7; }
+  body.railOpen #railHandle::after{ content:"\25BE"; }
+  @media (min-width: 761px){ #railHandle{ display:none !important; } }
   /* Laptop widths: two tidy rows instead of a ragged wrap (tools, size, zoom, actions / colours) */
   @media (min-width: 761px) and (max-width: 1439px){
     #toolbar #colorGroup{ order:5; flex:1 1 100%; }
@@ -374,7 +378,12 @@
     .card .cap .top .cardMenu{ visibility:visible; }
     body.focusView #main{ order:0; flex:0 0 auto; }
     body.focusView #leftRail{ order:1; border-top:1px solid var(--border); }
-    body.focusView #rightRail{ order:2; width:auto; border-left:0; border-top:1px solid var(--border); overflow:visible; }
+    /* Shot settings: a sheet that slides up from a bar at the bottom, so you never scroll the whole page to reach them */
+    body.focusView #rightRail{ position:fixed; left:0; right:0; bottom:0; z-index:150; width:auto; max-height:64dvh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; border-left:0; border-top:1px solid var(--border); border-radius:16px 16px 0 0; box-shadow:0 -14px 34px rgba(0,0,0,.5); padding:16px 16px calc(76px + env(safe-area-inset-bottom)); transform:translateY(105%); transition:transform .2s ease; visibility:hidden; }
+    body.focusView.railOpen #rightRail{ transform:none; visibility:visible; }
+    body.focusView #body{ padding-bottom:calc(60px + env(safe-area-inset-bottom)); }
+    body.focusView #railHandle{ display:flex; }
+    #toolbar{ padding:6px 10px; gap:6px 8px; }
     /* Drawing toolbar on phones: Back + tools + Undo/Redo/Clear on the first row, colours scroll on the second, size + zoom on the third */
     #toolbar{ height:auto; flex-wrap:wrap; padding:8px 12px; gap:8px; }
     #toolbar .vsep, #toolbar .grow{ display:none; }
@@ -488,6 +497,7 @@
     <div id="rightRail" style="display:none;"></div>
   </div>
 </div>
+<button id="railHandle" type="button" aria-controls="rightRail">Shot settings</button>
 <div id="printRoot"></div>
 <div id="sbToast" role="status" aria-live="polite"><span id="sbToastMsg"></span></div>
 
@@ -1476,7 +1486,7 @@ window.SB3D={
       };
       // The banner's menu (phones) and Sign out, like the other pages
       const q = "?fileId=" + encodeURIComponent(S.fileId) + cloudParam() + (hub ? "&hub=" + encodeURIComponent(hub) : "");
-      const mnLib = document.getElementById("mnLib"); mnLib.href = b.href; mnLib.onclick = b.onclick; mnLib.textContent = hub ? "Project" : "Library";
+      const mnLib = document.getElementById("mnLib"); mnLib.href = b.href; mnLib.onclick = b.onclick; mnLib.textContent = hub ? "This project" : "Library";
       document.getElementById("mnScript").href = "editor.html" + q;
       document.getElementById("mnTr").href = "treatment.html" + q;
       const menu = document.getElementById("navMenu");
@@ -3763,6 +3773,12 @@ window.SB3D={
   });
 
   boot();
+})();
+</script>
+<script>
+(function(){ var h = document.getElementById("railHandle"); if(!h) return;
+  h.addEventListener("click", function(){ var o = document.body.classList.toggle("railOpen"); h.setAttribute("aria-expanded", o ? "true" : "false"); });
+  new MutationObserver(function(){ if(!document.body.classList.contains("focusView")) document.body.classList.remove("railOpen"); }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
 })();
 </script>
 </body>
