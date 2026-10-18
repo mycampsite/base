@@ -106,4 +106,24 @@
   window.addEventListener("offline", function () { show(false); });
   window.addEventListener("online", function () { if (el && el.classList.contains("on")) show(true); });
   if (n.onLine === false) show(false);
+
+  // Phones: a sideways row of tabs that's just been drawn shows its open tab (it used to start at the left, hiding it).
+  // Only rows that are new since last time are moved, so a row someone is swiping is never yanked back.
+  (function () {
+    if (!window.matchMedia || !window.MutationObserver) return;
+    var phone = window.matchMedia("(max-width:760px)"), seen = typeof WeakSet === "function" ? new WeakSet() : null, t = 0;
+    var ROWS = ".sbSecs, .dcTabs, .bar .tabs, #bdctl div.seg, .mtabs";
+    function reveal() {
+      if (!phone.matches || !seen) return;
+      d.querySelectorAll(ROWS).forEach(function (row) {
+        if (seen.has(row)) return; seen.add(row);
+        if (row.scrollWidth <= row.clientWidth + 2) return;
+        var on = row.querySelector(".on, [aria-selected=true]"); if (!on) return;
+        var l = on.offsetLeft - row.offsetLeft, r = l + on.offsetWidth;
+        if (l < row.scrollLeft || r > row.scrollLeft + row.clientWidth) row.scrollLeft = Math.max(0, l - (row.clientWidth - on.offsetWidth) / 2);
+      });
+    }
+    function start() { new MutationObserver(function () { clearTimeout(t); t = setTimeout(reveal, 60); }).observe(d.body, { childList: true, subtree: true }); reveal(); }
+    if (d.body) start(); else d.addEventListener("DOMContentLoaded", start);
+  })();
 })();

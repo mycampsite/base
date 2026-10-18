@@ -337,16 +337,16 @@ const css = `
   #bdctl .bdActs > .seg[role=tablist]{ order:-1; flex:1 1 100%; }
   #bdctl .bdActs > .seg[role=tablist] button{ flex:1 1 0; height:36px; font-size:13px; }
   #bdctl .bdActs > select{ flex:1 1 100%; height:40px; }
-  #bdctl .bdChips{ order:2; flex:1 1 100%; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
+  #bdctl .bdChips{ order:2; flex:1 1 auto; min-width:0; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
   #bdctl .bdChips::-webkit-scrollbar{ display:none; }
   #bdctl .bdChip{ flex:0 0 auto; }
   #bdctl .bdBody{ padding:0 10px 90px; }
   #bdctl .bdSplit{ grid-template-columns:1fr; }
   /* Scene strip: wider, easier to read cards you swipe through; the heading can wrap to two lines */
-  #bdctl .bdList{ flex-direction:row; gap:8px; max-height:none; overflow-x:auto; position:static; padding-bottom:8px; scroll-snap-type:x proximity; scrollbar-width:none; }
+  #bdctl .bdList{ flex-direction:row; gap:8px; max-height:none; overflow-x:auto; overflow-y:hidden; position:static; padding-bottom:8px; scroll-snap-type:x mandatory; scroll-padding-left:0; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
   #bdctl .bdList::-webkit-scrollbar{ display:none; }
   #bdctl .bdList{ align-items:stretch; }
-  #bdctl .bdSc{ flex:0 0 min(250px, 74vw); scroll-snap-align:start; padding:10px 10px 10px 8px; font-size:13px; border-radius:6px; align-items:start; }
+  #bdctl .bdSc{ flex:0 0 min(230px, 64vw); scroll-snap-align:start; scroll-snap-stop:normal; padding:10px 10px 10px 8px; font-size:13px; border-radius:6px; align-items:start; }
   #bdctl .bdSc .no{ padding-top:2px; }
   #bdctl .bdSc .l{ white-space:normal; overflow:visible; overflow-wrap:anywhere; line-height:1.3; }
   #bdctl .bdSc .m{ font-size:12px; white-space:normal; overflow:visible; }
@@ -379,6 +379,10 @@ const css = `
   #bdctl table.bdT .nt{ display:block; margin-top:4px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12.5px; line-height:1.4; }
   #bdctl table.bdT .scBtns{ display:flex; flex-wrap:wrap; gap:6px; }
   #bdctl .edBtn{ min-height:36px; padding:0 14px; }
+  #bdctl table.bdT.grouped tr.grp td{ margin-top:14px; padding:10px 12px; border:1px solid color-mix(in srgb, var(--cc) 45%, #2a2a2a); border-radius:10px 10px 0 0; background:color-mix(in srgb, var(--cc) 18%, #181818); font-size:12.5px; }
+  #bdctl table.bdT.grouped tr.er{ margin:0; border-radius:0; border:1px solid color-mix(in srgb, var(--cc) 45%, #2a2a2a); border-top:0; border-left-width:1px; background:#181818; padding:12px; }
+  #bdctl table.bdT.grouped tr.er:has(+ tr.grp), #bdctl table.bdT.grouped tr.er:last-child{ border-radius:0 0 10px 10px; margin-bottom:4px; }
+  #bdctl table.bdT tr.er td, #bdctl table.bdT tr.er:hover td{ background:none !important; }
   #bdctl .bdTools{ gap:8px; }
   #bdctl .bdTools input#bdQ{ width:100% !important; }
   #bdctl .bdTools .catChips{ flex-wrap:nowrap; overflow-x:auto; max-width:100%; scrollbar-width:none; padding-bottom:2px; }
@@ -1007,7 +1011,7 @@ function elementsView(b, can){
   const dropped = (storeOf(S.pid, S.sid).drop || []);
   const ignored = dropped.length ? `<div style="margin-top:14px;font-size:12px;color:var(--uiMuted)"><b style="color:var(--uiText)">Ignored</b> ${dropped.map((k) => `<button type="button" class="scBtn" style="margin:2px" data-a="undrop" data-k="${esc(k)}" title="Bring back"${can ? "" : " disabled"}>${esc(k.split("|").slice(1).join("|"))} ✕</button>`).join("")}</div>` : "";
   return `<div class="bdTools"><input type="text" id="bdQ" placeholder="Search elements and notes" value="${esc(S.q)}" style="width:220px" autocomplete="off"><div class="catChips">${chips}</div><span class="cnt">${keys.length === b.totals.elements ? keys.length + " elements" : keys.length + " of " + b.totals.elements}</span></div>
-    ${rows ? `<table class="bdT"><colgroup><col>${grouped ? "" : `<col style="width:130px">`}<col style="width:38%"><col style="width:70px"><col style="width:64px"></colgroup><thead><tr><th>Element</th>${grouped ? "" : "<th>Category</th>"}<th>Scenes</th><th class="num">Pages</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="bdEmpty">Nothing matches.</div>`}${ignored}`;
+    ${rows ? `<table class="bdT${grouped ? " grouped" : ""}"><colgroup><col>${grouped ? "" : `<col style="width:130px">`}<col style="width:38%"><col style="width:70px"><col style="width:64px"></colgroup><thead><tr><th>Element</th>${grouped ? "" : "<th>Category</th>"}<th>Scenes</th><th class="num">Pages</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="bdEmpty">Nothing matches.</div>`}${ignored}`;
 }
 
 /* ---------- reports ---------- */
