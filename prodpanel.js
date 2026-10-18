@@ -286,6 +286,13 @@ const css = `
   .fxSeg{ display:flex; width:100%; box-sizing:border-box; }
   .fxSeg button{ flex:1 1 0; height:34px; font-size:13px; }
   .fx .fxNote{ padding:4px 12px 12px; }
+  .fxRow:has(.avWrap){ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 10px; align-items:center; padding:10px 12px; }
+  .fxRow:has(.avWrap) .fxName{ grid-column:1; grid-row:1 / span 2; align-self:center; }
+  .fxRow:has(.avWrap) .fxIn{ grid-column:2; grid-row:1; font-size:0; gap:0; justify-self:end; }
+  .fxRow:has(.avWrap) .fxIn select{ height:34px; font-size:14px !important; max-width:52vw; }
+  .fxRow:has(.avWrap) .avWrap{ grid-column:2; grid-row:2; justify-content:flex-end; }
+  .fxRow:has(.avWrap) .avLbl:empty{ display:none; }
+  .fxRow:has(.avWrap) .avAdd{ height:28px; }
   .btn.sm{ min-height:36px; }
   .doodWrap{ -webkit-overflow-scrolling:touch; }
 }`;

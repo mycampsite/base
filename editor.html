@@ -396,8 +396,11 @@
     /* Live: shown as a green dot inside the Saved pill, so nothing can overlap it */
     .livePill{ display: none !important; }
     body.isLive #countSave::before{ content: ""; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #5ed38a; box-shadow: 0 0 0 3px rgba(94,211,138,.2); flex: none; }
-    .menubar{ flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
-    .menubar::-webkit-scrollbar{ display: none; }
+    #countSave::before{ content: ""; width: 8px; height: 8px; border-radius: 50%; background: #8fd3a6; flex: none; }
+    body.isLive #countSave::before{ background: #5ed38a; box-shadow: 0 0 0 3px rgba(94,211,138,.2); margin-right: 0; }
+    body #countSave.isOk{ padding: 0 !important; width: 30px; min-width: 30px; height: 30px; justify-content: center; }
+    body #countSave.isOk .n{ display: none !important; }
+    #countSave:not(.isOk) .n{ margin-left: 6px; }
     .menuBtn{ padding: 6px 6px !important; }
     .viewTabs{ margin-left: 2px !important; }
     #countSave{ flex: 0 0 auto; white-space: nowrap; }
@@ -2392,7 +2395,7 @@ body.ctxOpen #smartMenu, body.ctxOpen #charMenu, body.ctxOpen #sceneLocMenu, bod
       <div class="counterPill" id="countWords">Words: <span class="n" id="wordsNum">0</span></div>
       <div class="counterPill" id="countScenes">Scenes: <span class="n" id="scenesNum">0</span></div>
       <div class="counterPill" id="countPages" title="Script pages (the title page isn't counted). About one minute of screen time each.">Pages: <span class="n" id="pagesNum">0</span></div>
-      <div class="counterPill" id="countSave"><span class="n" id="saveStateNum">Saved</span></div>
+      <div class="counterPill isOk" id="countSave" aria-label="Saved"><span class="n" id="saveStateNum">Saved</span></div>
     </div>
   </div>
 </header>
@@ -11098,7 +11101,7 @@ function updateSaveState(){
   else if(hasCloud && !__cloud.fileId){ txt = "Not in Drive yet"; }
   else { txt = hasCloud ? "Saved" : "Saved locally"; }
   el.textContent = txt;
-  if(pill){ pill.classList.toggle("isErr", cls === "err"); pill.classList.toggle("isOff", cls === "off"); pill.title = cls === "off" ? "No internet. Your changes are kept in this browser and will be sent to Drive when you're back online." : (__saveError || __cloudBlocked && "This script didn't load, so saving is switched off to protect it. Go back to the Library and open it again." || ""); }
+  if(pill){ pill.classList.toggle("isOk", txt === "Saved" || txt === "Saved locally"); pill.setAttribute("aria-label", txt); pill.classList.toggle("isErr", cls === "err"); pill.classList.toggle("isOff", cls === "off"); pill.title = cls === "off" ? "No internet. Your changes are kept in this browser and will be sent to Drive when you're back online." : (__saveError || __cloudBlocked && "This script didn't load, so saving is switched off to protect it. Go back to the Library and open it again." || ""); }
 }
 window.__scriptyUpdateSaveState = updateSaveState;
 

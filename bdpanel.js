@@ -395,7 +395,10 @@ const css = `
   #bdctl .shBar .jump{ flex:1 1 100%; max-width:none; order:-1; }
   #bdctl .shCats{ grid-template-columns:1fr; }
   #bdctl .shBar .sp, #bdctl .shBar [data-a=print]{ display:none; }
-  #bdctl .shFields{ grid-template-columns:1fr 1fr; margin:8px 10px 0; }
+  #bdctl .shFields{ grid-template-columns:1fr 1fr; margin:8px 10px 0; gap:1px; background:var(--uiBorder); }
+  #bdctl .shFields .f{ border:0 !important; margin:0 !important; background:#1b1b1b; }
+  #bdctl .shFields .f:first-child{ background:color-mix(in srgb, var(--sc,#ddd) 14%, #181818); }
+  #bdctl .shFields .f:last-child:nth-child(even){ grid-column:1 / -1; }
   #bdctl .shFields .fw{ grid-column:1 / -1; }
   #bdctl .shMain, #bdctl .shSide{ padding-left:10px; padding-right:10px; }
   #bdctl .qAdd{ flex-wrap:wrap; }
