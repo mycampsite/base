@@ -377,6 +377,10 @@
     .drow .acts{ width:100%; justify-content:flex-end; }
     .bar{ padding:8px; gap:6px; }
     .bar .tabs{ flex:1 1 100%; order:1; padding:3px; }
+    #bdBar{ flex-wrap:nowrap; }
+    #bdBar .tabs{ flex:1 1 0; order:0; min-width:0; }
+    #bdBar > span[style]{ display:none; }
+    #bdBar .btn{ flex:0 0 auto; height:40px; }
     .bar .actions{ flex:1 1 100%; order:2; margin-left:0; flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start; scrollbar-width:none; }
     /* Schedule: the Stripboard / Call sheets switch and the Sync button share one row */
     #prodPane[data-tab=schedule] .bar{ flex-wrap:nowrap; }
@@ -537,9 +541,9 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="shottime.js?v=3" defer></script>
 <script src="elements.js?v=7" defer></script>
 <script src="prodpanel.js?v=13" defer></script>
-<script src="bdpanel.js?v=20" defer></script>
+<script src="bdpanel.js?v=21" defer></script>
 <script src="board.js?v=2" defer></script>
-<script src="boardpanel.js?v=2" defer></script>
+<script src="boardpanel.js?v=3" defer></script>
 <script src="layouts.js?v=3" defer></script>
 <script src="docscards.js?v=2" defer></script>
 <script src="calendar.js?v=2" defer></script>

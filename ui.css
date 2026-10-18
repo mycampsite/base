@@ -70,3 +70,13 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 @media (pointer:coarse) and (max-width:1100px){
   input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=button]):not([type=submit]):not([type=file]), select, textarea{ font-size:16px !important; }
 }
+
+/* Phones: every row of sub-tabs looks the same — a soft track with the open one as a light pill.
+   (Docs sheets, Schedule, Board, Breakdown views and filters, Stripboard views, a doc's own tabs.) */
+@media (max-width:760px){
+  html body :is(.bar .tabs, .sbSecs, .dcTabs, #bdctl div.seg){ display:flex; gap:2px; padding:3px; border-radius:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
+  html body :is(.bar .tabs .tab, .sbSecs button, .dcTabs button, #bdctl div.seg button){ flex:1 0 auto; height:34px; min-width:0; padding:0 14px; margin:0; border:0; border-radius:7px; background:transparent; color:rgba(255,255,255,.62); font:600 13px/34px Inter, system-ui, sans-serif; text-align:center; white-space:nowrap; box-shadow:none; }
+  html body :is(.bar .tabs .tab, .sbSecs button, .dcTabs button, #bdctl div.seg button).on{ background:#ececf0; color:#111; }
+  html body .sbSecs{ margin:12px 0 10px; }
+  html body #bdctl .bdTools > div.seg{ flex:1 1 100%; }
+}

@@ -393,8 +393,11 @@
     #countWords, #countScenes, #countPages{ display:none !important; }
     .stats{ max-width: none !important; flex: 0 0 auto; flex-wrap: nowrap !important; gap: 6px !important; }
     .counterPill{ padding: 7px 10px; font-size: 12.5px; border-radius: 12px; }
-    /* Live: just the glowing dot (the number and word are on the tooltip), so it never squeezes the Saved pill */
-    .livePill{ padding: 0 2px !important; border: 0 !important; background: none !important; gap: 0; }
+    /* Live: shown as a green dot inside the Saved pill, so nothing can overlap it */
+    .livePill{ display: none !important; }
+    body.isLive #countSave::before{ content: ""; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #5ed38a; box-shadow: 0 0 0 3px rgba(94,211,138,.2); flex: none; }
+    .menubar{ flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+    .menubar::-webkit-scrollbar{ display: none; }
     .menuBtn{ padding: 6px 6px !important; }
     .viewTabs{ margin-left: 2px !important; }
     #countSave{ flex: 0 0 auto; white-space: nowrap; }
@@ -14511,14 +14514,14 @@ ${TP.join("\n")}
   }
   function __liveRenderPill(){
     let pill = document.getElementById("livePill");
-    if(!__LIVE.active){ if(pill) pill.remove(); return; }
+    if(!__LIVE.active){ if(pill) pill.remove(); if(document.body.classList.contains("isLive")) document.body.classList.remove("isLive"); return; }
     if(!pill){
       pill = document.createElement("div"); pill.id = "livePill"; pill.className = "counterPill livePill";
       const save = document.getElementById("countSave"); if(save && save.parentElement) save.parentElement.insertBefore(pill, save); else return;
     }
     const present = __LIVE.present || [];
     const n = present.length;
-    pill.className = "counterPill livePill"; pill.onclick = null;
+    pill.className = "counterPill livePill"; pill.onclick = null; if(!document.body.classList.contains("isLive")) document.body.classList.add("isLive");
     pill.innerHTML = `<span class="liveDot"></span><span class="n">Live${n > 1 ? " · " + n : ""}</span>`;
     const __pc = __lcColors(), names = present.map(k => __lcName(k, __pc));
     pill.title = n > 1 ? "Editing together: " + names.join(", ") : "Live: changes appear for your team straight away";
@@ -14800,7 +14803,7 @@ ${TP.join("\n")}
       pill = document.createElement("button"); pill.type = "button"; pill.id = "livePill"; pill.className = "counterPill livePill off";
       const save = document.getElementById("countSave"); if(save && save.parentElement) save.parentElement.insertBefore(pill, save); else return;
     }
-    pill.className = "counterPill livePill off";
+    pill.className = "counterPill livePill off"; if(document.body.classList.contains("isLive")) document.body.classList.remove("isLive");
     pill.innerHTML = `<span class="liveDot"></span><span class="n">Live off</span>`;
     pill.title = reason;
     pill.onclick = () => { try{ showSaveToast("err", "Live editing is off: " + reason, 12000); }catch(_e){ alert("Live editing is off: " + reason); } };
