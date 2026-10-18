@@ -33,14 +33,18 @@ function kindOf(v){
   if(/^\+?[\d][\d\s().-]{6,}$/.test(v) && (v.match(/\d/g) || []).length >= 8) return "phone";
   return "text";
 }
+// The column titles: a row of short labels near the top (mostly capitals, styled), never a row of figures
 function headerRowOf(rows, fmt){
   let best = -1, bestN = 1;
-  const lim = Math.min(rows.length, 14);
+  const lim = Math.min(rows.length, 16);
   for(let r = 0; r < lim; r++){
     const cells = rows[r].map(clean).filter(Boolean);
     if(cells.length < 2 || cells.some((c) => c.length > 32)) continue;
+    const figures = cells.filter((c) => /^[-+$€£(]?\s?[\d,.]+%?\)?$/.test(c) || /^[$€£]/.test(c)).length;
+    if(figures / cells.length > 0.2) continue;
     const f = (fmt && fmt[r]) || {};
-    const score = cells.length + (f.b || f.h ? 0.5 : 0);
+    const caps = cells.filter((c) => /[A-Z]/.test(c) && c === c.toUpperCase()).length / cells.length;
+    const score = cells.length + (f.b || f.h ? 1.5 : 0) + (caps >= 0.6 ? 1 : 0);
     if(score > bestN + (best < 0 ? 0 : 0.01)){ best = r; bestN = score; }
   }
   return best;
@@ -222,21 +226,24 @@ const css = `
 .dcMode button{ width:36px; height:32px; border:0; border-radius:7px; background:none; color:rgba(255,255,255,.6); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
 .dcMode button svg{ width:17px; height:17px; }
 .dcMode button.on{ background:#ececf0; color:#111; }
-.dcSheet{ max-height:calc(100dvh - 210px); overflow:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; border:1px solid var(--uiBorder, #2e2e2e); border-radius:10px; background:#1a1b1e; }
-.dcSheet table{ border-collapse:separate; border-spacing:0; min-width:100%; font:13.5px/1.35 Inter, system-ui, sans-serif; color:var(--uiText, #eee); }
-.dcSheet th, .dcSheet td{ padding:9px 12px; border-bottom:1px solid rgba(255,255,255,.07); border-right:1px solid rgba(255,255,255,.05); text-align:left; vertical-align:top; max-width:260px; overflow-wrap:normal; word-break:normal; hyphens:none; background:#1a1b1e; }
-.dcSheet td.one, .dcSheet td.n{ white-space:nowrap; }
-.dcSheet td.c0.n{ text-align:left; }
-.dcSheet th{ position:sticky; top:0; z-index:2; background:#24272d; font:700 10.5px/1.3 Inter, system-ui, sans-serif; letter-spacing:.06em; text-transform:uppercase; color:#b8bcc6; white-space:nowrap; max-width:none; }
-.dcSheet .c0{ position:sticky; left:0; z-index:1; max-width:42vw; box-shadow:1px 0 0 rgba(255,255,255,.08); }
-.dcSheet th.c0{ z-index:3; }
-.dcSheet .n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-.dcSheet tr.b td{ font-weight:700; }
-.dcSheet tr.sec td{ font:800 11.5px/1.3 Inter, system-ui, sans-serif; letter-spacing:.07em; text-transform:uppercase; white-space:nowrap; }
-.dcSheet tr.sec.dark td{ background:#2a3346; color:#e8edf7; }
-.dcSheet tr.sec.light td, .dcSheet tr.bd-light td{ background:#22252b; }
-.dcSheet tr.bd-dark td{ background:#2a3346; }
-.dcSheet a{ color:#8fb4ff; text-decoration:none; }
+.dcGrid{ margin:0 -10px; border-top:1px solid var(--uiBorder, #2e2e2e); }
+.dcHeadWrap{ position:sticky; top:0; z-index:5; overflow:hidden; background:#24272d; border-bottom:1px solid rgba(255,255,255,.12); }
+.dcBodyWrap{ overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; }
+.dcT{ table-layout:fixed; border-collapse:separate; border-spacing:0; font:14px/1.4 Inter, system-ui, sans-serif; color:var(--uiText, #eee); }
+.dcT th, .dcT td{ padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.07); border-right:1px solid rgba(255,255,255,.05); text-align:left; vertical-align:top; overflow-wrap:normal; word-break:normal; background:#1a1b1e; }
+.dcT th{ padding:9px 12px; background:#24272d; border-bottom:0; font:700 10.5px/1.3 Inter, system-ui, sans-serif; letter-spacing:.06em; text-transform:uppercase; color:#b8bcc6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dcT td.one, .dcT td.n{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dcT .n{ text-align:right; font-variant-numeric:tabular-nums; }
+.dcT .c0{ position:sticky; left:0; z-index:1; box-shadow:1px 0 0 rgba(255,255,255,.1); }
+.dcT th.c0{ background:#24272d; z-index:2; }
+.dcT .c0.n{ text-align:left; }
+.dcT tr.b td{ font-weight:700; }
+.dcT tr.sec td{ font:800 11.5px/1.3 Inter, system-ui, sans-serif; letter-spacing:.07em; text-transform:uppercase; white-space:nowrap; overflow:visible; }
+.dcT tr.sec.dark td{ background:#2a3346; color:#e8edf7; }
+.dcT tr.sec.light td, .dcT tr.bd-light td{ background:#22252b; }
+.dcT tr.bd-dark td{ background:#2a3346; }
+.dcT a{ color:#8fb4ff; text-decoration:none; }
+.dcTitle{ margin:4px 2px 10px; } .dcTitle b{ font-size:15px; }
 .dcMsg{ padding:40px 16px; text-align:center; color:var(--uiMuted, #999); display:flex; flex-direction:column; align-items:center; gap:12px; font-size:13.5px; }
 .dcMsg b{ color:var(--uiText, #eee); font-size:15px; }
 .dcMsg .row{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
@@ -275,19 +282,30 @@ function cellHtml(v){
   return k === "email" ? `<a href="mailto:${esc(v)}">${esc(v)}</a>` : k === "phone" ? `<a href="${esc(telHref(v))}">${esc(v)}</a>`
     : k === "url" ? `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(v.replace(/^https?:\/\//i, "").slice(0, 32))}${v.length > 40 ? "…" : ""}</a>` : esc(v);
 }
+function colPx(c, i){ return Math.round(c.long ? 240 : Math.max(i === 0 ? 96 : 64, c.ch * 8.6 + 26)); }
 function tableHtml(T, q){
   const n = T.columns.length;
   const ql = (q || "").toLowerCase();
   let rows = T.rows;
   if(ql){ rows = rows.filter((r) => r.type === "row" && r.cells.some((c) => c.toLowerCase().indexOf(ql) >= 0)); }
   if(!rows.length) return `<div class="dcMsg"><span>${q ? "Nothing matches." : "This tab is empty."}</span></div>`;
-  const sty = (c) => c.long ? "min-width:220px;max-width:260px" : `min-width:${c.ch}ch`;
+  const w = T.columns.map(colPx), total = w.reduce((a, x) => a + x, 0);
+  const cols = `<colgroup>${w.map((x) => `<col style="width:${x}px">`).join("")}</colgroup>`;
   const cls = (c, i) => (c.num ? "n" : "") + (c.one && !c.long ? " one" : "") + (i === 0 ? " c0" : "");
-  const head = `<thead><tr>${T.columns.map((c, i) => `<th class="${cls(c, i)}" style="${sty(c)}">${esc(c.label)}</th>`).join("")}</tr></thead>`;
-  const body = rows.slice(0, 600).map((r) => r.type === "section"
-    ? `<tr class="sec ${r.band || "light"}"><td class="c0" colspan="1">${esc(r.text)}</td><td colspan="${Math.max(1, n - 1)}"></td></tr>`
+  const head = `<tr>${T.columns.map((c, i) => `<th class="${cls(c, i)}">${esc(c.label)}</th>`).join("")}</tr>`;
+  const body = rows.slice(0, 800).map((r) => r.type === "section"
+    ? `<tr class="sec ${r.band || "light"}"><td class="c0">${esc(r.text)}</td>${n > 1 ? `<td colspan="${n - 1}"></td>` : ""}</tr>`
     : `<tr class="${r.bold ? "b " : ""}${r.band ? "bd-" + r.band : ""}">${r.cells.map((v, i) => `<td class="${cls(T.columns[i] || {}, i)}">${cellHtml(v)}</td>`).join("")}</tr>`).join("");
-  return `<div class="dcSheet"><table>${head}<tbody>${body}</tbody></table></div>`;
+  return `<div class="dcGrid"><div class="dcHeadWrap"><table class="dcT" style="width:${total}px">${cols}<thead>${head}</thead></table></div>`
+    + `<div class="dcBodyWrap"><table class="dcT" style="width:${total}px">${cols}<tbody>${body}</tbody></table></div></div>`;
+}
+// keep the column titles over their columns while the table is swiped sideways
+function syncGrid(host){
+  const hw = host.querySelector(".dcHeadWrap"), bw = host.querySelector(".dcBodyWrap");
+  if(!hw || !bw) return;
+  const tabs = document.querySelector(".mtabs"), top = tabs && getComputedStyle(tabs).position === "sticky" ? tabs.offsetHeight : 0;
+  hw.style.top = top + "px";
+  bw.addEventListener("scroll", () => { hw.scrollLeft = bw.scrollLeft; }, { passive: true });
 }
 
 function show(host, o){
@@ -345,9 +363,10 @@ function draw(host){
   host.innerHTML = `<div class="dcTop">${tabs}<div class="dcFind"><input type="search" id="dcQ" placeholder="Find in ${esc(d.tab || "this tab")}" value="${esc(S.q)}" autocomplete="off" aria-label="Find">
       <div class="dcMode" role="tablist" aria-label="View"><button type="button" data-dcm="table" class="${asTable ? "on" : ""}" aria-label="Table" title="Table, like the Sheet">${ICON_TABLE}</button><button type="button" data-dcm="cards" class="${asTable ? "" : "on"}" aria-label="Cards" title="Cards">${ICON_CARDS}</button></div>
       <button type="button" data-dc="refresh" aria-label="Refresh" title="Read the Sheet again">${c.state === "loading" ? `<span class="spin"></span>` : ICON_REFRESH}</button></div></div>
-    ${L.title.length && !S.q ? `<div class="dcTitle"><b>${esc(L.title[0])}</b>${L.title.slice(1, 3).map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
+    ${L.title.length && !S.q ? `<div class="dcTitle"><b>${esc(L.title[0])}</b></div>` : ""}
     ${asTable ? tableHtml(table(d.rows, d.fmt), S.q) : (shown.length ? shown.map(cardHtml).join("") : `<div class="dcMsg"><span>${S.q ? "Nothing matches." : "This tab is empty."}</span></div>`)}
     ${!asTable && items.length > lim ? `<button type="button" class="dcMore" data-dc="more">Show more (${items.length - lim} left)</button>` : ""}`;
+  syncGrid(host);
   if(keepFocus){ const q = host.querySelector("#dcQ"); if(q){ q.focus({ preventScroll: true }); try{ q.setSelectionRange(selStart, selStart); }catch(_e){} } }
   wire(host);
 }
