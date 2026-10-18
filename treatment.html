@@ -562,7 +562,7 @@
     #banner .logo{ display:none; }
     .chip{ display:none; }
     #banner{ padding:0 8px; }
-    #toolbar{ gap:6px; padding:0 8px; height:48px; overflow-x:auto; scrollbar-width:none; }
+    #toolbar{ gap:6px; padding:0 12px; height:52px; overflow-x:auto; scrollbar-width:none; }
     #toolbar::-webkit-scrollbar{ display:none; }
     #toolbar .back, #toolbar .sep, #statusMsg{ display:none !important; }
     #toolbar .title{ font-size:13px; max-width:34vw; }
@@ -572,7 +572,7 @@
     .photoNote{ font-size:11px; }
     #app{ padding-bottom:58px; }
     #body{ flex-direction:column; }
-    #stageWrap{ order:1; padding:10px; min-height:0; }
+    #stageWrap{ order:1; padding:12px; min-height:0; }
     #leftRail{ order:2; width:100%; height:96px; flex-shrink:0; flex-direction:row; align-items:stretch; gap:6px; padding:8px; overflow-x:auto; overflow-y:hidden; border-right:0; border-top:1px solid var(--uiBorder); scrollbar-width:none; }
     #leftRail::-webkit-scrollbar{ display:none; }
     #leftRail .rail-label{ display:none; }
@@ -2098,20 +2098,23 @@
   /* ---------------- Stage view: zoom, pan and focus ---------------- */
   // VIEW.z is the zoom on top of "fit the page"; cx/cy is the page point (mm) at the centre of the view.
   // padB keeps the bottom of the view clear (the phone keyboard + typing bar).
-  const VIEW = { z:1, cx:PAGE_W / 2, cy:PAGE_H / 2, padB:0 };
+  // padT: the top of the view that's out of sight while typing (iOS slides the whole page up when the keyboard opens).
+  const VIEW = { z:1, cx:PAGE_W / 2, cy:PAGE_H / 2, padB:0, padT:0 };
   let VIEW_PREV = null, PINCH = null;
   function stageGeom(){
     const wrap = document.getElementById("stageWrap"), cs = getComputedStyle(wrap);
     const px = parseFloat(cs.paddingLeft) || 0, py = parseFloat(cs.paddingTop) || 0;
-    const availW = Math.max(40, wrap.clientWidth - px * 2), availH = Math.max(40, wrap.clientHeight - py * 2 - VIEW.padB);
-    return { wrap, px, py, availW, availH, fit:Math.max(0.05, Math.min(availW / PAGE_WPX, availH / PAGE_HPX)) };
+    const availW = Math.max(40, wrap.clientWidth - px * 2), availH = Math.max(40, wrap.clientHeight - py * 2 - VIEW.padB - VIEW.padT);
+    // the page's fitted size ignores the keyboard (so it doesn't shrink while typing); only where it sits uses the visible band
+    const fullH = Math.max(40, wrap.clientHeight - py * 2);
+    return { wrap, px, py:py + VIEW.padT, availW, availH, fit:Math.max(0.05, Math.min(availW / PAGE_WPX, (DOCK ? fullH : availH) / PAGE_HPX)) };
   }
   function positionStage(){
     const g = stageGeom(), stage = document.getElementById("stage"), s = g.fit * VIEW.z, W = PAGE_WPX * s, H = PAGE_HPX * s, k = PX_MM * s, M2 = 24;
     let left, top;
     if(W <= g.availW + 1){ left = g.px + (g.availW - W) / 2; VIEW.cx = PAGE_W / 2; }
     else{ left = Math.max(g.px + g.availW - W - M2, Math.min(g.px + M2, g.px + g.availW / 2 - VIEW.cx * k)); VIEW.cx = (g.px + g.availW / 2 - left) / k; }
-    if(H <= g.availH + 1){ top = g.py + (g.availH - H) / 2; VIEW.cy = PAGE_H / 2; }
+    if(H <= g.availH + 1){ top = g.py + (isPhone() && !DOCK ? 0 : (g.availH - H) / 2); VIEW.cy = PAGE_H / 2; }
     else{ top = Math.max(g.py + g.availH - H - M2, Math.min(g.py + M2, g.py + g.availH / 2 - VIEW.cy * k)); VIEW.cy = (g.py + g.availH / 2 - top) / k; }
     stage.style.left = left + "px"; stage.style.top = top + "px";
   }
@@ -2773,7 +2776,12 @@
     const dock = document.getElementById("textDock"), vv = window.visualViewport;
     const kb = vv ? Math.max(0, innerHeight - vv.height - vv.offsetTop) : 0;
     dock.style.bottom = kb + "px";
-    VIEW.padB = kb + dock.offsetHeight;
+    // The part of the stage you can actually see: between the top of the visible screen and the typing bar.
+    // iOS scrolls the page up when the keyboard opens, so the top of the stage can be out of sight too.
+    const wrap = document.getElementById("stageWrap"), r = wrap.getBoundingClientRect();
+    const visTop = vv ? vv.offsetTop : 0, visBottom = (vv ? vv.offsetTop + vv.height : innerHeight) - dock.offsetHeight;
+    VIEW.padT = Math.max(0, Math.round(visTop - r.top));
+    VIEW.padB = Math.max(0, Math.round(r.bottom - visBottom));
     clearTimeout(__dockT);
     __dockT = setTimeout(() => { const el = EDITING && findEl(EDITING); if(el){ if(!VIEW_PREV) VIEW_PREV = { z:VIEW.z, cx:VIEW.cx, cy:VIEW.cy }; focusOn(el, true); } }, first === true ? 0 : 120);
   }
@@ -2784,7 +2792,7 @@
     ta.oninput = ta.onkeydown = null; ta.blur(); dock.hidden = true;
     document.body.classList.remove("typing");
     if(window.visualViewport){ visualViewport.removeEventListener("resize", layoutDock); visualViewport.removeEventListener("scroll", layoutDock); }
-    VIEW.padB = 0;
+    VIEW.padB = 0; VIEW.padT = 0;
   }
   function typingCheckpoint(){
     clearTimeout(__typeT);

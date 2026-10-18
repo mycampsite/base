@@ -383,7 +383,7 @@
     body.focusView.railOpen #rightRail{ transform:none; visibility:visible; }
     body.focusView #body{ padding-bottom:calc(60px + env(safe-area-inset-bottom)); }
     body.focusView #railHandle{ display:flex; }
-    #toolbar{ padding:6px 10px; gap:6px 8px; }
+    #toolbar{ padding:8px 12px; gap:8px; }
     /* Drawing toolbar on phones: Back + tools + Undo/Redo/Clear on the first row, colours scroll on the second, size + zoom on the third */
     #toolbar{ height:auto; flex-wrap:wrap; padding:8px 12px; gap:8px; }
     #toolbar .vsep, #toolbar .grow{ display:none; }
@@ -398,7 +398,7 @@
     #canvasWrap{ padding:12px; min-height:0; }
     body.focusView .railBack{ display:none; }
     /* Bigger drawing area + touch-sized controls + visible press feedback */
-    body.focusView #canvasWrap{ height:max(340px, calc(100dvh - 190px)); flex:0 0 auto; padding:8px; }
+    body.focusView #canvasWrap{ height:max(340px, calc(100dvh - 190px)); flex:0 0 auto; padding:12px; align-items:flex-start; }
     .tool-btn{ width:40px; height:38px; }
     .swatch{ width:26px; height:26px; flex:0 0 auto; }
     .swatch.selected{ box-shadow:0 0 0 2px var(--bg), 0 0 0 4px #fff; }
