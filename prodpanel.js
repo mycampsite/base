@@ -727,7 +727,7 @@ function draw(pid){
    Scenes with no day wait in Unscheduled at the bottom. Pick a strip up anywhere and drag it up or down (it stays in
    line with the others); select several (click, Shift, Ctrl/Cmd) to move them together. ⚠ Every move writes the shared plan. */
 const SBP_KEY = "Camp_SB_PREFS_V1";
-const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {}; }catch(_e){} return { sec: "strips", q: "", ie: "", dn: "", cast: "", hi: "", bone: v.bone || "n", fold: {}, sel: [], anchor: null, landed: [], pid: null }; })();
+const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {}; }catch(_e){} return { sec: "strips", q: "", ie: "", dn: "", cast: "", hi: "", bone: v.bone || "n", fold: {}, sel: [], anchor: null, landed: [], pid: null, filtOpen: false, dayOpen: {} }; })();
 { const st2 = document.createElement("style"); st2.textContent = `.sbSecs{ display:flex; gap:2px; margin:12px 0 10px; border-bottom:1px solid var(--uiBorder); overflow-x:auto; scrollbar-width:none; }
 .sbSecs button{ border:0; background:none; color:var(--uiMuted); font:inherit; font-size:13px; font-weight:600; padding:8px 12px; border-bottom:2px solid transparent; margin-bottom:-1px; cursor:pointer; white-space:nowrap; }
 .sbSecs button.on{ color:var(--uiText); border-bottom-color:var(--uiText); }
@@ -735,6 +735,8 @@ const SB = (() => { let v = {}; try{ v = JSON.parse(lsGet(SBP_KEY) || "{}") || {
 .sbTools{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0 0 10px; }
 .sbTools select, .sbTools .sbQ{ height:32px; border-radius:8px; border:1px solid var(--uiBorder); background:#1d1d1d; color:var(--uiText); font:inherit; font-size:12.5px; padding:0 8px; }
 .sbTools .sbQ{ flex:1 1 220px; min-width:160px; max-width:340px; }
+.sbFilt{ display:contents; }
+.sbFiltBtn, .sbDayOpt{ display:none; }
 .sbSp{ flex:1; }
 .sbSelBar{ position:sticky; top:0; z-index:6; display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:8px 12px; margin:0 0 10px; border-radius:10px; background:#1f2a3d; border:1px solid rgba(127,182,255,.45); font-size:12.5px; box-shadow:0 6px 18px rgba(0,0,0,.35); }
 .sbSelBar > span{ color:var(--uiMuted); }
@@ -899,6 +901,22 @@ button.sbBan[data-bk]:hover .sbBGrip{ opacity:.9; }
   .sbDay{ grid-template-columns:1fr; } .sbDayR{ justify-content:flex-start; }
   .sbGrip{ font-size:15px; opacity:.8; }
   .sbTools .sbQ{ max-width:none; }
+  /* Phones: search + Filters + Fold on one row; the four filters open underneath; Print and the column titles go */
+  .sbTools{ flex-wrap:wrap; }
+  .sbTools .sbQ{ flex:1 1 0; min-width:0; height:40px; }
+  .sbFiltBtn{ display:inline-flex; align-items:center; gap:6px; height:40px; }
+  .sbFiltBtn b{ display:inline-grid; place-items:center; min-width:18px; height:18px; border-radius:9px; background:#7fb6ff; color:#111; font-size:11px; }
+  .sbTools [data-sb=foldall]{ height:40px; }
+  .sbTools [data-sb=print], .sbTools .sbSp, .sbHead{ display:none !important; }
+  .sbFilt{ display:none; }
+  .sbFilt.open{ display:grid; grid-template-columns:1fr 1fr; gap:8px; flex:1 1 100%; order:5; }
+  .sbFilt select{ width:100%; height:40px; }
+  /* Day card: date, place, totals; Call time and the day's tools behind "Day options" */
+  .sbDayOpt{ display:flex; justify-content:space-between; align-items:center; width:100%; height:40px; margin-top:6px; padding:0 12px; border:1px solid var(--uiBorder); border-radius:10px; background:rgba(255,255,255,.04); color:var(--uiText); font:600 13px Inter, system-ui, sans-serif; cursor:pointer; }
+  .sbDayOpt span:first-child{ color:var(--uiMuted); font-weight:500; }
+  .sbDayOpt.on{ border-color:rgba(255,255,255,.3); }
+  .sbDayB{ display:none !important; }
+  .sbDayB.open{ display:flex !important; padding-top:8px; }
 }
 @page{ size:A4 portrait; margin:10mm; }
 @media print{
@@ -1026,7 +1044,8 @@ function sbView(c){
           <span class="sbTot"><span class="cap"${tipAttr(P.fmtEighths(x.eighths) + " of " + P.fmtEighths(st.maxEighths) + " pages (the daily limit in Settings)")}><i style="width:${pct}%"></i></span>${P.fmtEighths(x.eighths)} / ${P.fmtEighths(st.maxEighths)} pg · ${x.scenes} sc · ${x.cast.length} cast</span>
           ${dw.length ? `<span class="sbDW${bad ? " warn" : ""}"${tipAttr(dw.map((y) => "• " + y.text).join("\n"))} tabindex="0">${bad ? "⚠" : "ⓘ"} ${dw.length} ${bad ? "to check" : "note" + (dw.length === 1 ? "" : "s")}</span>` : ""}
         </div>
-        <div class="sbDayB">
+        <button type="button" class="sbDayOpt${SB.dayOpen[i] ? " on" : ""}" data-sb="dayopts" data-i="${i}" aria-expanded="${!!SB.dayOpen[i]}"><span>Call ${esc(fmtTime(d.call || st.call))}</span><span>Day options ${SB.dayOpen[i] ? "▴" : "▾"}</span></button>
+        <div class="sbDayB${SB.dayOpen[i] ? " open" : ""}">
           <span class="sbTimes"><label class="sbT">Call${timeSelect(d.call || st.call, 'data-call="' + i + '"', dis)}</label>
           <label class="sbT"${tipAttr("Auto lets Camp place the meal break. No meal takes it off this day")}>Meal${autoTimeSelect(d.lunch || "", 'data-lunch="' + i + '"', dis).replace('<option value=""', '<option value="none"' + (d.noMeal ? " selected" : "") + '>No meal</option><option value=""').replace(d.noMeal ? '<option value="" selected>' : '\u0000', '<option value="">')}</label>
           <label class="sbT"${tipAttr("Auto lets Camp work out the wrap")}>Wrap${autoTimeSelect(d.wrapAt || "", 'data-wrapat="' + i + '"', dis)}</label></span>
@@ -1054,10 +1073,13 @@ function sbView(c){
       <span class="sbSp"></span><button type="button" class="btn sm" data-sb="clear">Clear</button></div>` : "";
   const tools = `<div class="sbTools">
       <input type="search" class="sbQ" data-sbq placeholder="Find a scene, place, cast or description" value="${esc(SB.q)}" aria-label="Find a scene">
+      <button type="button" class="btn sm sbFiltBtn${SB.filtOpen ? " on" : ""}" data-sb="filters" aria-expanded="${SB.filtOpen}">Filters${(() => { const n = [SB.ie, SB.dn, SB.cast, SB.hi].filter(Boolean).length; return n ? ` <b>${n}</b>` : ""; })()}</button>
+      <div class="sbFilt${SB.filtOpen ? " open" : ""}">
       <select data-sbf="ie" aria-label="Interior or exterior"><option value="">INT + EXT</option><option value="INT"${SB.ie === "INT" ? " selected" : ""}>INT</option><option value="EXT"${SB.ie === "EXT" ? " selected" : ""}>EXT</option></select>
       <select data-sbf="dn" aria-label="Day or night"><option value="">Day + night</option><option value="D"${SB.dn === "D" ? " selected" : ""}>Day</option><option value="M"${SB.dn === "M" ? " selected" : ""}>Dawn / dusk</option><option value="N"${SB.dn === "N" ? " selected" : ""}>Night</option></select>
       <select data-sbf="cast" aria-label="Only scenes with"><option value="">Any cast</option>${castOpts.map((o) => `<option value="${esc(o.name)}"${SB.cast === o.name ? " selected" : ""}>Only ${esc(o.name)}</option>`).join("")}</select>
       <select data-sbf="hi" aria-label="Highlight a cast member"><option value="">Highlight cast…</option>${castOpts.map((o) => `<option value="${esc(o.name)}"${SB.hi === o.name ? " selected" : ""}>${o.no}. ${esc(o.name)}</option>`).join("")}</select>
+      </div>
       <span class="sbSp"></span>
       <button type="button" class="btn sm" data-sb="foldall">${Object.keys(fold).some((k) => fold[k]) ? "Unfold all" : "Fold all"}</button>
       <button type="button" class="btn sm" data-sb="print"${tipAttr("Print the stripboard, or save it as a PDF")}>Print</button>
@@ -1187,6 +1209,8 @@ function sbClick(e, pid, canEdit){
     const k = a.dataset.sb;
     if(k === "sec"){ SB.sec = a.dataset.v; render(pid); return true; }
     if(k === "fold"){ const f = SB.fold[pid] = SB.fold[pid] || {}, i = a.dataset.i; f[i] = !f[i]; render(pid); return true; }
+    if(k === "filters"){ SB.filtOpen = !SB.filtOpen; render(pid); return true; }
+    if(k === "dayopts"){ const i = Number(a.dataset.i); SB.dayOpen[i] = !SB.dayOpen[i]; render(pid); return true; }
     if(k === "foldall"){ const f = SB.fold[pid] = SB.fold[pid] || {}, any = Object.keys(f).some((x) => f[x]); SB.fold[pid] = {}; if(!any) planOf(pid).days.forEach((d, i) => { SB.fold[pid][i] = true; }); render(pid); return true; }
     if(k === "clear"){ sbSetSel([], null); render(pid); return true; }
     if(k === "unfilter"){ SB.q = ""; SB.ie = ""; SB.dn = ""; SB.cast = ""; render(pid); return true; }
