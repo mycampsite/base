@@ -478,6 +478,7 @@
           <div class="actions">
             <button id="syncBtn" class="btn hidden" type="button" title="Sync: writes the plan to your Google Sheets (Schedule, Day Out of Days, Budget, call sheets). To only re-read the latest script and shots, use Refresh in the Schedule tab."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="lbl">Sync</span></button>
             <button id="createDocs" class="btn hidden" type="button" title="Build a budget, schedule, shot list or crew docs from the script"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Create</span></button>
+            <button id="viewToggle" class="btn hidden" type="button" title="Switch between cards and the Sheet's grid"><span class="lbl">Grid</span></button>
             <a id="open" class="btn hidden" target="_blank" rel="noopener" title="Open in Google Sheets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><span class="lbl">Open in Sheets</span></a>
             <button id="sheetMenu" class="btn primary" type="button" aria-haspopup="menu" aria-label="Sheet options" title="Sheet options: toolbar, dark view, downloads, shortcuts"><span class="lbl">Sheet</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg></button>
           </div>
@@ -492,6 +493,7 @@
         </div>
         <div id="budgetHint" class="hidden"><b>Rates</b><span>Compare rates on this sheet's <b>Settings</b> tab: <b>Pay basis</b> (Indie broke / Indie low–high / MEAA / Award) and <b>Prices</b> (Low / Typical / High). Indie broke = bare-bones, well under $4k for most shorts.</span><button id="hintX" class="iconBtn" type="button" aria-label="Hide" title="Hide">✕</button></div>
         <div id="frames"><div class="empty" id="empty"></div></div>
+        <div id="docCards"></div>
       </div>
     </div>
   </main>
@@ -527,11 +529,12 @@ try { var s0 = JSON.parse(localStorage.getItem("Camp_HUB_SESSION_V1") || "null")
 <script src="production.js?v=6" defer></script>
 <script src="shottime.js?v=3" defer></script>
 <script src="elements.js?v=7" defer></script>
-<script src="prodpanel.js?v=10" defer></script>
-<script src="bdpanel.js?v=18" defer></script>
+<script src="prodpanel.js?v=11" defer></script>
+<script src="bdpanel.js?v=19" defer></script>
 <script src="board.js?v=2" defer></script>
 <script src="boardpanel.js?v=2" defer></script>
-<script src="layouts.js?v=2" defer></script>
+<script src="layouts.js?v=3" defer></script>
+<script src="docscards.js?v=1" defer></script>
 <script src="calendar.js?v=2" defer></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -1462,6 +1465,7 @@ function showFrame() {
   $("sheetMenu").classList.toggle("hidden", !s);
   $("budgetHint").classList.toggle("hidden", !s || !/budget/i.test(s.name || "") || lsGet(HINT_KEY) === "1");
   $("empty").classList.toggle("hidden", !!s || pseudo);
+  $("prodPane").classList.remove("cards"); $("viewToggle").classList.add("hidden");
   if (pseudo) return;
   Object.values(frames).forEach(f => f.classList.toggle("dark", DARK));
   if (!s) {
@@ -1472,6 +1476,18 @@ function showFrame() {
     else if (isOwner(p)) setEmpty("No production docs yet", "Make a budget, schedule, shot list and crew docs from your script.", [{ label: "Create production docs…", primary: true, onclick: () => createDocsFlow($("createDocs")) }, retry], why);
     else setEmpty("No production docs yet", "The owner hasn't created any yet.", [retry], why);
     return;
+  }
+  // Phones: the Sheet as readable cards (docscards.js) unless this device picked the grid
+  if (PHONE_MQ.matches && window.CampDocCards) {
+    const cards = lsGet(CARDS_KEY) !== "grid";
+    $("viewToggle").classList.remove("hidden");
+    $("viewToggle").querySelector(".lbl").textContent = cards ? "Grid" : "Cards";
+    if (cards) {
+      $("prodPane").classList.add("cards");
+      $("open").href = sheetUrl(s.id, false);
+      window.CampDocCards.show($("docCards"), { pid: current.pid, sheet: { id: s.id, name: s.name }, ripGet: params => ripGet(params, 45000), onGrid: () => { lsSet(CARDS_KEY, "grid"); showFrame(); } });
+      return;
+    }
   }
   const fk = current.pid + ":" + s.id;
   if (!frames[fk]) {
@@ -1495,6 +1511,10 @@ function showFrame() {
 // Google Sheets grabs focus when it loads, which makes the browser scroll the page to it.
 // Remember where every scrolled box was and put it back for a moment afterwards.
 const HINT_KEY = "Camp_HUB_BUDGETHINT_V1";
+const CARDS_KEY = "Camp_DOCS_VIEW_V1";            // "grid" = this phone shows the Sheet itself instead of cards
+const PHONE_MQ = window.matchMedia("(max-width:760px)");
+$("viewToggle").onclick = () => { lsSet(CARDS_KEY, lsGet(CARDS_KEY) === "grid" ? "cards" : "grid"); showFrame(); };
+PHONE_MQ.addEventListener?.("change", () => { if (current.tab === "docs" && me) showFrame(); });
 const POPOUT = new URLSearchParams(location.search).get("popout") === "1";
 function holdScroll(ms) {
   const boxes = [document.scrollingElement].concat(Array.from(document.querySelectorAll("#app, #app *")).filter(el => el.scrollTop > 0 && el.tagName !== "IFRAME"));
