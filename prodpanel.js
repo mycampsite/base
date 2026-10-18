@@ -260,6 +260,27 @@ const css = `
   .ctlSet label:first-child:nth-last-child(5), .ctlSet label:has(input[type=date]){ grid-column:auto; }
   .ctlSet input[type=date]{ min-width:0; width:100%; }
   .ctlSet input, .ctlSet select{ height:40px; width:100%; font-size:16px; }
+  /* Settings on phones: a clean list — each setting is one row, its name on the left and its control on the right */
+  #ctl .ctlSet{ display:block; margin:4px 0 12px; padding:0 14px; border:1px solid var(--uiBorder); border-radius:12px; background:#1c1d20; }
+  #ctl .ctlSet > label, #ctl .tmRow > label{ display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:12px; min-height:54px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.07); font-size:14.5px; font-weight:500; text-transform:none; letter-spacing:0; color:var(--uiText); }
+  #ctl .ctlSet > label > :is(input, select, .ctlStep, .ctlTime){ flex:0 0 auto; width:auto; max-width:58%; }
+  #ctl .ctlSet select, #ctl .ctlSet input:not([type=number]){ height:38px; min-width:132px; padding:0 10px; border-radius:9px; font-size:15px !important; text-align:right; text-align-last:right; }
+  #ctl .ctlSet input[type=date]{ min-width:150px; }
+  #ctl .ctlStep{ height:38px; border-radius:10px; }
+  #ctl .ctlStep button{ width:38px; font-size:18px; }
+  #ctl .ctlStep input{ width:48px; height:38px; font-size:16px !important; }
+  #ctl .ctlTime{ gap:6px; } #ctl .ctlTime select{ min-width:112px; } #ctl .ctlTime .h24{ height:38px; padding:0 10px; }
+  #ctl .ctlSet > label.wide{ flex-wrap:wrap; }
+  #ctl .ctlSet > label.wide input{ flex:1 1 100%; max-width:none; min-width:0; text-align:left !important; }
+  #ctl .tmSet{ border-bottom:0; }
+  #ctl .tmSet > summary{ display:flex; align-items:center; justify-content:space-between; min-height:54px; padding:0; font-size:14.5px; font-weight:500; text-transform:none; letter-spacing:0; color:var(--uiText); list-style:none; }
+  #ctl .tmSet > summary::-webkit-details-marker{ display:none; }
+  #ctl .tmSet > summary::after{ content:"\\203A"; font-size:22px; color:var(--uiMuted); transition:transform .15s; }
+  #ctl .tmSet[open] > summary::after{ transform:rotate(90deg); }
+  #ctl .tmRow{ display:block; margin:0 0 0 12px; padding-left:12px; border-left:2px solid rgba(255,255,255,.08); }
+  #ctl .tmRow > label{ font-size:13.5px; color:#cfd0d4; }
+  #ctl .tmRow input{ width:76px !important; height:38px; text-align:right; font-size:16px !important; }
+  #ctl .tmRow > label:last-child{ border-bottom:0; }
   .dayTabs{ display:flex; gap:6px; overflow-x:auto; padding:10px 0 6px; margin:0 -10px; padding-left:10px; padding-right:10px; scrollbar-width:none; position:sticky; top:0; z-index:4; background:#171717; }
   .dayTabs::-webkit-scrollbar{ display:none; }
   .dayTabs button{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; min-width:64px; height:46px; padding:0 12px; border-radius:11px; border:1px solid var(--uiBorder); background:rgba(255,255,255,.04); color:var(--uiText); font:600 13px Inter,system-ui,sans-serif; cursor:pointer; }
