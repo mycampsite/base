@@ -10808,7 +10808,7 @@ function getPreferredCloudName_(doc, route){
   
   const body = await __saveBody(payload);
   const ctl = new AbortController();
-  const t = setTimeout(()=>ctl.abort(), 20000);
+  const t = setTimeout(()=>ctl.abort(), 45000);   // Apps Script can be slow (cold start, backgrounded tab)
   try{
     const r = await fetch(ep, {
       method:"POST",
@@ -10921,7 +10921,7 @@ let AUTOSAVE_ENABLED = true;
 
       const name = getPreferredCloudName_(d, { name: __cloud.name });
       const baseRev = Number(__cloud.lastKnownRemoteRev || 0);
-      try{ if(d.meta) d.meta.rev = baseRev + 1; }catch(_e){}
+      try{ if(d.meta){ d.meta.rev = baseRev + 1; d.meta.saveId = __newSaveId(); } }catch(_e){}
       const payloadObj = {
         action: "save",
         key: getCloudKey(),
@@ -11054,9 +11054,32 @@ let __saveError = "";
   var __offline = (typeof navigator !== "undefined" && navigator.onLine === false);
   const __isNetErr = (m) => /failed to fetch|networkerror|load failed|took too long|couldn't reach|network|timeout/i.test(String(m || ""));
   const __unsyncKey = () => "SCRIPTY_UNSYNCED_V1:" + String((__cloud && (__cloud.fileId || __cloud.pid)) || location.search);
+  // Every save carries a one-off ID. A save Drive finished after we stopped waiting (slow Apps Script,
+  // a backgrounded tab) is then recognised as ours instead of "changed somewhere else".
+  const __mySaveIds = [];
+  function __newSaveId(){
+    const id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("s" + Date.now().toString(36) + Math.random().toString(36).slice(2));
+    __mySaveIds.push(id); if(__mySaveIds.length > 60) __mySaveIds.shift();
+    try{ const rec = JSON.parse(lsGetRaw(__unsyncKey()) || "null"); if(rec){ rec.sent = __mySaveIds.slice(); lsSet(__unsyncKey(), JSON.stringify(rec)); } }catch(_e){}
+    return id;
+  }
+  function __isMySave(meta, extraIds){
+    const id = meta && meta.saveId;
+    return !!id && (__mySaveIds.includes(id) || (Array.isArray(extraIds) && extraIds.includes(id)));
+  }
   function __markUnsynced(){
     try{ persistDocToStorage({ quiet:true, source:"offline" }); }catch(_e){}
-    try{ lsSet(__unsyncKey(), JSON.stringify({ at: new Date().toISOString(), baseRev: Number(__cloud.lastKnownRemoteRev || 0), fileId: __cloud.fileId || "", pid: __cloud.pid || "", storeKey: STORAGE_KEY_V2 })); }catch(_e){}
+    try{ lsSet(__unsyncKey(), JSON.stringify({ at: new Date().toISOString(), baseRev: Number(__cloud.lastKnownRemoteRev || 0), fileId: __cloud.fileId || "", pid: __cloud.pid || "", storeKey: STORAGE_KEY_V2, sent: __mySaveIds.slice() })); }catch(_e){}
+  }
+  // Save was refused as "newer version in Drive": was that newer version our own late save?
+  async function __adoptOwnLateSave(baseRev){
+    try{
+      if(!__cloud || !__cloud.fileId) return false;
+      const doc = extractDocFromPayload_(await driveLoadDoc_(__cloud.endpoint, { fileId: __cloud.fileId }));
+      const rev = Number(doc && doc.meta && doc.meta.rev || 0);
+      if(rev > baseRev && __isMySave(doc.meta)){ __cloud.lastKnownRemoteRev = rev; return true; }
+    }catch(_e){}
+    return false;
   }
   function __clearUnsynced(){ try{ lsRemove(__unsyncKey()); }catch(_e){} }
   window.addEventListener("offline", () => {
@@ -11084,6 +11107,17 @@ let __saveError = "";
     }catch(_e){}
     const driveRev = Number((driveDoc && driveDoc.meta && driveDoc.meta.rev) || 0);
     const when = new Date(rec.at).toLocaleString();
+    // The "newer" Drive version is a save from this device that landed after we stopped waiting:
+    // nobody else has touched it, so bring back the later changes kept here and save them.
+    if(driveRev > Number(rec.baseRev || 0) && __isMySave(driveDoc && driveDoc.meta, rec.sent)){
+      local.meta = Object.assign({}, local.meta || {}, driveDoc.meta || {});
+      applyState(local, null);
+      try{ window.__scriptY_updateTopTitle && window.__scriptY_updateTopTitle(); }catch(_e){}
+      requestAnimationFrame(() => { try{ snapshot("offline-restore"); markDirty(); }catch(_e){} });
+      try{ showSaveToast("ok", "Brought back changes from this device that hadn't reached Drive. Saving now…", 4000); }catch(_e){}
+      __clearUnsynced();
+      return;
+    }
     if(driveRev <= Number(rec.baseRev || 0)){
       if(confirm(`Some changes you made offline on this device (${when}) never reached Drive.\n\nOK = bring them back and save them now\nCancel = throw them away`)){
         local.meta = Object.assign({}, local.meta || {}, driveDoc.meta || {});
@@ -11172,7 +11206,7 @@ function __setUrlFileId(fileId){
 // Set to keep a version of what's in Drive before the next save overwrites it (Version History)
 var __forceVersionNext = false;
 
-async function __doCloudSave(source){
+async function __doCloudSave(source, __adopted){
   __cloudSaving = true;
   try{
     clearTimeout(__autosaveTimer);
@@ -11185,6 +11219,7 @@ async function __doCloudSave(source){
     d.meta.pid = String(d.meta.pid || __cloud.pid || "");
     d.meta.fileId = String(__cloud.fileId || d.meta.fileId || "");
     d.meta.updatedAt = new Date().toISOString();
+    d.meta.saveId = __newSaveId();
     // Real page count, shown on the Library card
     try{ if(window.__scriptPages > 0) d.meta.pages = window.__scriptPages; }catch(_e){}
     const name = getPreferredCloudName_(d, { name: __cloud.name });
@@ -11197,7 +11232,10 @@ async function __doCloudSave(source){
     const res = await driveSaveDoc_(__cloud.endpoint, payload);
 
     if(!res || res.ok !== true){
-      if(res && res.conflict) return await __handleConflict(source, d, name);
+      if(res && res.conflict){
+        if(!__adopted && await __adoptOwnLateSave(baseRev)) return await __doCloudSave(source, true);
+        return await __handleConflict(source, d, name);
+      }
       if(res && res.auth === false){
         if(await __askCloudPassword(true)) return await __doCloudSave(source);
         throw new Error("Locked: enter your password to save.");
@@ -11228,7 +11266,7 @@ async function __doCloudSave(source){
       const wasOffline = __offline;
       __offline = true;
       __markUnsynced();
-      if(!wasOffline) showSaveToast("err", "Can't reach Drive right now. Your changes are kept on this device and will be saved when the connection is back.", 6000);
+      if(!wasOffline) showSaveToast("err", /took too long/i.test(msg) ? "Drive is slow to answer. Your changes are kept on this device and will be saved shortly." : "Can't reach Drive right now. Your changes are kept on this device and will be saved when the connection is back.", 6000);
     }else if(source !== "manual") showSaveToast("err", "Auto-save failed: " + msg, 5000);
     clearTimeout(__autosaveTimer);
     __autosaveTimer = setTimeout(() => { try{ scheduleAutosave(); }catch(_e){} }, 15000);
@@ -11531,7 +11569,12 @@ function markDirty(){
         if(__cloud && __cloud.endpoint && __cloud.fileId && !__cloudPaused) persistDocToCloud({ source:"autosave" });
       }catch(_e){}
     };
-    document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") flushNow(); });
+    document.addEventListener("visibilitychange", () => {
+      if(document.visibilityState === "hidden") flushNow();
+      else if(__saveError && __autosaveDirty && __cloud && __cloud.fileId && !__cloudPaused && !__cloudBlocked && !window.__scriptyReadOnly){
+        try{ persistDocToCloud({ source:"autosave" }); }catch(_e){}
+      }
+    });
     window.addEventListener("pagehide", () => {
       if(!__autosaveDirty || __cloudBlocked) return;
       try{ const d = syncDOCFromDOM({ force:true }); persistDocToStorage({ state:d, quiet:true, source:"pagehide" }); tryBeaconCloudSave_(d, "pagehide"); }catch(_e){}
